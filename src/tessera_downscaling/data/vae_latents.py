@@ -1,11 +1,11 @@
-"""Pre-computed TESSERA VAE latent loading.
+"""Pre-computed per-station vector loading (TESSERA VAE latents and friends).
 
-This module is the counterpart to :mod:`tessera_downscaling.data.tessera` for
-runs that use a *frozen* pre-trained VAE latent representation instead of an
-end-to-end CNN encoder. The VAE is trained in a separate repository on the
-global 64x64 TESSERA patch set; its encoder is then used to produce one
-latent vector per station, saved as a ``(n_stations, latent_dim)`` numpy
-array row-aligned with a station CSV.
+The model consumes one *frozen* vector per station rather than raw TESSERA
+patches. In the paper that vector is the latent of a VAE trained (in the
+``tessera_patch_encoder`` repository) on the global 64x64 TESSERA patch set;
+the same loader also serves the control inputs built with the same
+``(n_stations, d)`` + station-CSV convention — shuffled latents, patch summary
+statistics and the extra terrain/land-cover descriptors.
 
 At training time:
 
@@ -57,6 +57,7 @@ def load_vae_latents(
           - ``id_to_row``: dict mapping station_id string to row index.
           - ``valid_mask``: boolean array of length ``n_stations``, True
             where the latent row has no NaNs.
+
     """
     latents_path = Path(latents_path)
     station_csv_path = Path(station_csv_path)
@@ -99,6 +100,7 @@ def zscore_latents(
 
     Returns:
         Normalised array with same shape as input.
+
     """
     return ((latents - mean) / std).astype(np.float32)
 
@@ -109,12 +111,10 @@ def compute_or_load_global_vae_stats(
     """Compute or load global VAE latent z-score stats.
 
     Uses EVERY valid (non-NaN) row in the latents file to compute
-    (mean, std). Independent of any split — meant for the 'global'
-    normalisation policy where a single set of stats is used across
-    all regions, train and test.
+    (mean, std). Independent of any split or region: a single set of
+    stats is used across all regions, train and test.
 
-    Slight simplification vs the per-region / joint-train-only flow:
-    this includes test-split station rows in the stats. Minor mean/std
+    This includes test-split station rows in the stats. Minor mean/std
     shift since test stations are a small fraction of the total, and
     the stats don't carry predictive information (climatological
     normalisation constants). Matches WeatherBench2-style convention.
@@ -127,6 +127,7 @@ def compute_or_load_global_vae_stats(
 
     Returns:
         Tuple ``(mean, std)`` of float32 arrays, each shape ``(d,)``.
+
     """
     latents_path = Path(latents_path)
     cache_path = latents_path.with_name(latents_path.stem + "_global_stats.npz")

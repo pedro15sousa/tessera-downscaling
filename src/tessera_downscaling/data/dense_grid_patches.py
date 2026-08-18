@@ -1,16 +1,18 @@
-"""TESSERA patch extraction at dense regular grid points.
+"""TESSERA patch extraction at dense regular grid points (map inference).
 
-Counterpart to :mod:`tessera_downscaling.data.tessera`'s
-:func:`extract_patch_embeddings`, which is optimised for sparse stations
-scattered across the globe (38k stations on different continents) where
-disk-thrifty per-station fetch+delete is the right strategy.
+Produces the ``(N_grid_points, 64, 64, 128)`` patch array that the frozen VAE
+encoder turns into per-grid-point latents for the dense 0.05° downscaled maps
+(``scripts/maps/extract_dense_grid_patches.py`` → ``generate_maps.py``). Tiles
+are downloaded and mosaicked with ``geotessera``.
 
-For dense regular grids (e.g. evaluating a model on a 0.05° grid over
-Iberia → ~40k grid points clustered in one region), the access pattern
-is fundamentally different:
+The per-station patch file (``patch_embeddings_2024.npy``) is produced by
+``scripts/data/extract_tessera_patches_local.py``, which reads the TESSERA
+mount directly and is optimised for sparse stations scattered across the
+globe. For dense regular grids (e.g. a 0.05° grid over Iberia → ~40k grid
+points clustered in one region) the access pattern is fundamentally different:
 
-  * Adjacent grid points share many tiles. The per-point fetch+delete
-    pattern would re-download each tile dozens of times.
+  * Adjacent grid points share many tiles. A per-point fetch pattern would
+    re-download each tile dozens of times.
   * Storage isn't the constraint — we have plenty of disk; throughput is.
   * Ordering grid points by spatial locality lets us fetch each tile
     once, extract all patches within, then discard.
@@ -23,7 +25,7 @@ grid points. Within a sub-bbox we issue a single mosaic fetch, then slice
 inside the bbox.
 
 CRS consistency: we keep ``target_crs="EPSG:4326"`` to match the
-projection used by :func:`extract_patch_embeddings` when building the
+projection used by the station extractor when building the
 ``patch_embeddings_2024.npy`` file the pre-trained VAE was fit on. Using
 native UTM here would produce subtly out-of-distribution patches.
 
@@ -37,7 +39,6 @@ import json
 import logging
 import math
 from pathlib import Path
-from typing import Iterable
 
 import numpy as np
 import pandas as pd
@@ -68,6 +69,7 @@ def compute_grid_points(
         Rows are ordered row-major: scanning ``lon`` left-to-right, with
         ``lat`` running top-down (north to south). This ordering helps
         spatial-locality processing downstream.
+
     """
     n_lat = int(round((lat_max - lat_min) / resolution_deg)) + 1
     n_lon = int(round((lon_max - lon_min) / resolution_deg)) + 1
@@ -136,6 +138,7 @@ def _extract_patches_from_mosaic(
 
     Returns:
         Number of patches successfully written.
+
     """
     from rasterio.transform import rowcol
 
@@ -217,6 +220,7 @@ def extract_dense_grid_patches(
             across runs, so partial progress isn't lost on restart.
         resume: If True and an existing ``progress.json`` is present,
             skip sub-bboxes already marked complete.
+
     """
     import geotessera
 
@@ -248,10 +252,8 @@ def extract_dense_grid_patches(
             output_path, mode="w+",
             dtype=np.float32, shape=shape,
         ).flush()
-        logger.info(
-            f"Pre-allocating {n_points * patch_size * patch_size * embed_dim * 4 / 1e9:.1f} GB "
-            f"output at {output_path}"
-        )
+        size_gb = n_points * patch_size * patch_size * embed_dim * 4 / 1e9
+        logger.info(f"Pre-allocating {size_gb:.1f} GB output at {output_path}")
     patches = np.load(output_path, mmap_mode="r+")
 
     # ---- Save grid_points + metadata for downstream consumers ----
@@ -263,7 +265,7 @@ def extract_dense_grid_patches(
         "n_grid_points": n_points,
         "bbox": list(bbox),
         "sub_bbox_size_deg": sub_bbox_size_deg,
-        "target_crs": "EPSG:4326",  # matches extract_patch_embeddings
+        "target_crs": "EPSG:4326",  # matches the station patch extractor
     }
     with open(output_dir / "extraction_metadata.json", "w") as f:
         json.dump(metadata, f, indent=2)
@@ -329,8 +331,8 @@ def extract_dense_grid_patches(
         # Expand the fetch bbox by one patch radius (in degrees) so that
         # patches centred near the sub-bbox edge can be fully sliced
         # without crossing into a neighbouring (uncached) tile region.
-        # Mirrors the latitude-aware logic in ``_compute_patch_bbox``
-        # (``data/tessera.py``): a half-patch spans
+        # Mirrors the latitude-aware logic in ``compute_bbox`` of
+        # ``scripts/data/extract_tessera_patches_local.py``: a half-patch spans
         # ``(patch_size / 2) * pixel_res_m`` metres, which is fewer
         # degrees of longitude as |lat| grows. Latitude radius is
         # uniform (~111.32 km/deg); longitude radius uses the
