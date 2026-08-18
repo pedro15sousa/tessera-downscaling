@@ -1,86 +1,69 @@
-"""Tests for the v4 ConvCNP downscaler with per-variable likelihood heads.
+"""Tests for the ConvCNP downscaler with per-variable likelihood heads.
 
-Two main areas are covered:
-
-1. **Construction + forward.** The model must build cleanly for the
-   single-task baseline, multi-task with mixed distributions (Gaussian +
-   Weibull + Bernoulli-Gamma), and FiLM injection. Forward passes return
-   the expected nested-dict structure with valid distribution-parameter
-   constraints.
-
-2. **The migration round-trip property.** The legacy code packed all
-   variables' (μ, log_var) pairs row-wise into one
-   ``Linear(H, 2V)`` projection at the end of the decoder body; the v4
-   code splits that into per-variable ``Linear(H, n_params)`` heads. The
-   migration script's correctness claim is that for any hidden state
-   ``h``, applying ``Linear(H, 2V)`` then splitting into pairs is
-   bit-for-bit identical to running the per-variable heads on the same
-   ``h``. These tests verify that property at both the heads-only level
-   and through a full end-to-end forward pass.
+Covers construction + forward for the configurations the paper uses
+(bilinear baseline, bilinear + concatenated 16-d TESSERA latent, Gaussian
+and truncated-normal heads), the vanilla SetConv interpolator, argument
+validation, and the state-dict key layout that checkpoints on disk rely on.
 """
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
+
 import pytest
+import torch
 
 from tessera_downscaling.model.convcnp import (
+    BilinearInterp,
     ConvCNPDownscaler,
     DecoderMLP,
-    FiLMDecoderMLP,
-)
-from tessera_downscaling.model.heads import (
-    BernoulliGammaHead,
-    GaussianHead,
-    WeibullHead,
+    RBFSetConv,
 )
 
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
 
-# ---------------------------------------------------------------------------
-# Test fixtures
-# ---------------------------------------------------------------------------
 
 def _synthetic_batch(B=2, C=8, Nlat=6, Nlon=6, N=4):
-    """Build a synthetic forward-pass input (no TESSERA)."""
+    """Build a synthetic forward-pass input (no TESSERA, no mTPI)."""
     return dict(
         context_grid=torch.randn(B, C, Nlat, Nlon),
         grid_lats=torch.linspace(45.0, 60.0, Nlat),
         grid_lons=torch.linspace(0.0, 15.0, Nlon),
-        target_coords=torch.stack([
-            torch.linspace(46.0, 59.0, N).repeat(B, 1),
-            torch.linspace(1.0, 14.0, N).repeat(B, 1),
-        ], dim=-1),
+        target_coords=torch.stack(
+            [
+                torch.linspace(46.0, 59.0, N).repeat(B, 1),
+                torch.linspace(1.0, 14.0, N).repeat(B, 1),
+            ],
+            dim=-1,
+        ),
         target_elev=torch.randn(B, N) * 100.0,
         target_delta_elev=torch.randn(B, N) * 50.0,
         target_mask=torch.ones(B, N, dtype=torch.bool),
     )
 
 
-class _FakeTesseraEncoder(nn.Module):
-    """Minimal TesseraPatchEncoder stand-in for testing."""
-
-    def __init__(self, dim=8, patch_size=4, embed_dim=128):
-        super().__init__()
-        self.output_dim = dim
-        self.linear = nn.Linear(embed_dim * patch_size * patch_size, dim)
-
-    def forward(self, x):
-        return self.linear(x.reshape(x.shape[0], -1))
+def _small_model(**overrides):
+    kwargs = dict(
+        n_context_channels=8,
+        cnn_hidden=12,
+        cnn_layers=3,
+        mlp_hidden=8,
+        mlp_n_hidden=2,
+        target_variables=["t2m"],
+    )
+    kwargs.update(overrides)
+    return ConvCNPDownscaler(**kwargs)
 
 
 # ---------------------------------------------------------------------------
 # Construction + forward
 # ---------------------------------------------------------------------------
 
+
 def test_single_task_baseline_forward():
-    """Single-task all-Gaussian (the legacy default) builds and forwards."""
+    """Single-task all-Gaussian (the default) builds and forwards."""
     torch.manual_seed(0)
-    model = ConvCNPDownscaler(
-        n_context_channels=8, cnn_hidden=12, cnn_layers=3,
-        mlp_hidden=8, mlp_n_hidden=2,
-        target_variables=["t2m"],
-        likelihood_per_variable=None,   # default → all-Gaussian
-    )
+    model = _small_model(likelihood_per_variable=None)  # default → all-Gaussian
     assert model.likelihood_per_variable == {"t2m": "gaussian"}
+    assert isinstance(model.interp, BilinearInterp)  # bilinear is the default
     out = model(**_synthetic_batch())
     assert set(out.keys()) == {"t2m"}
     assert set(out["t2m"].keys()) == {"mu", "log_var"}
@@ -89,279 +72,161 @@ def test_single_task_baseline_forward():
 
 
 def test_multi_task_mixed_distributions_forward():
-    """Multi-task Gaussian+Weibull+B-G with FiLM injection forwards correctly."""
+    """t2m (Gaussian) + wind (truncated normal) with a concatenated 16-d
+    precomputed TESSERA latent and mTPI — the paper's model family."""
     torch.manual_seed(0)
-    enc = _FakeTesseraEncoder(dim=8)
-    model = ConvCNPDownscaler(
-        n_context_channels=8, cnn_hidden=12, cnn_layers=3,
-        mlp_hidden=8, mlp_n_hidden=2,
-        target_variables=["t2m", "wind", "precip"],
-        likelihood_per_variable={
-            "t2m": "gaussian",
-            "wind": "weibull",
-            "precip": "bernoulli_gamma",
-        },
-        tessera_encoder=enc,
-        tessera_injection="film",
+    model = _small_model(
+        target_variables=["t2m", "wind"],
+        likelihood_per_variable={"t2m": "gaussian", "wind": "truncated_normal"},
+        n_elev_features=3,
+        tessera_features_precomputed=True,
+        precomputed_tessera_dim=16,
+        tessera_injection="concat",
     )
+    # Decoder input = 12 grid features + 3 topographic + 16 latent.
+    assert model.mlp.net[0].in_features == 12 + 3 + 16
+
     B, N = 2, 4
     batch = _synthetic_batch(B=B, N=N)
-    batch["target_tessera"] = torch.randn(B, N, 128, 4, 4)
+    batch["target_tessera"] = torch.randn(B, N, 16)
+    batch["target_mtpi"] = torch.randn(B, N) * 30.0
 
     out = model(**batch)
-    assert list(out.keys()) == ["t2m", "wind", "precip"]
-    assert set(out["t2m"].keys()) == {"mu", "log_var"}
-    assert set(out["wind"].keys()) == {"k", "lam"}
-    assert set(out["precip"].keys()) == {"rho", "alpha", "beta"}
-
-    # Distribution-parameter constraints.
-    assert (out["wind"]["k"] > 0).all()
-    assert (out["wind"]["lam"] > 0).all()
-    assert (0 < out["precip"]["rho"]).all() and (out["precip"]["rho"] < 1).all()
-    assert (out["precip"]["alpha"] > 0).all()
-    assert (out["precip"]["beta"] > 0).all()
+    assert list(out.keys()) == ["t2m", "wind"]
+    for var in ("t2m", "wind"):
+        assert set(out[var].keys()) == {"mu", "log_var"}
+        assert out[var]["mu"].shape == (B, N)
+        assert out[var]["log_var"].shape == (B, N)
+    # Truncated-normal point predictions live on [0, ∞).
+    assert (model.heads.heads["wind"].median(out["wind"]) >= 0).all()
 
 
-def test_hypernet_injection_rejected():
-    """tessera_injection='hypernet' is no longer accepted."""
-    with pytest.raises(ValueError, match="hypernet"):
-        ConvCNPDownscaler(
-            n_context_channels=8, cnn_hidden=12, cnn_layers=3,
-            mlp_hidden=8, mlp_n_hidden=2,
-            target_variables=["t2m"],
-            tessera_injection="hypernet",
+def test_precomputed_latent_required_and_dim_checked():
+    """A precomputed-latent model refuses a missing or mis-sized latent."""
+    model = _small_model(tessera_features_precomputed=True, precomputed_tessera_dim=16)
+    batch = _synthetic_batch()
+    with pytest.raises(ValueError, match="target_tessera"):
+        model(**batch)
+    batch["target_tessera"] = torch.randn(2, 4, 8)
+    with pytest.raises(ValueError, match="precomputed_tessera_dim"):
+        model(**batch)
+
+
+def test_tessera_injection_none_ignores_latent():
+    """``tessera_injection='none'`` (cross-lead baselines) leaves the decoder
+    input at grid + topography width and produces the baseline output."""
+    model = _small_model(
+        tessera_features_precomputed=True,
+        precomputed_tessera_dim=16,
+        tessera_injection="none",
+    )
+    assert model.mlp.net[0].in_features == 12 + 2
+    batch = _synthetic_batch()
+    batch["target_tessera"] = torch.randn(2, 4, 16)
+    out = model(**batch)
+    assert out["t2m"]["mu"].shape == (2, 4)
+
+
+def test_mtpi_required_when_three_elev_features():
+    model = _small_model(n_elev_features=3)
+    with pytest.raises(ValueError, match="target_mtpi"):
+        model(**_synthetic_batch())
+
+
+@pytest.mark.parametrize("interpolation", ["bilinear", "setconv"])
+def test_interpolation_variants_forward(interpolation):
+    """Both interpolators build and forward; only SetConv has a parameter."""
+    torch.manual_seed(0)
+    model = _small_model(interpolation=interpolation, setconv_length_scale=0.7)
+    expected = RBFSetConv if interpolation == "setconv" else BilinearInterp
+    assert isinstance(model.interp, expected)
+    out = model(**_synthetic_batch())
+    assert out["t2m"]["mu"].shape == (2, 4)
+    assert torch.isfinite(out["t2m"]["mu"]).all()
+    interp_params = dict(model.interp.named_parameters())
+    if interpolation == "setconv":
+        assert set(interp_params) == {"log_scale"}
+        assert interp_params["log_scale"].item() == pytest.approx(
+            torch.tensor(0.7).log().item()
         )
+    else:
+        assert interp_params == {}
+
+
+# ---------------------------------------------------------------------------
+# Argument validation
+# ---------------------------------------------------------------------------
 
 
 def test_target_variables_required_and_non_empty():
     """target_variables must be a non-empty list."""
     with pytest.raises(ValueError, match="target_variables"):
-        ConvCNPDownscaler(
-            n_context_channels=8, cnn_hidden=12, cnn_layers=3,
-            mlp_hidden=8, mlp_n_hidden=2,
-            target_variables=None,
-        )
+        _small_model(target_variables=None)
     with pytest.raises(ValueError, match="target_variables"):
-        ConvCNPDownscaler(
-            n_context_channels=8, cnn_hidden=12, cnn_layers=3,
-            mlp_hidden=8, mlp_n_hidden=2,
-            target_variables=[],
-        )
+        _small_model(target_variables=[])
 
 
-def test_decoder_mlp_emits_hidden_state_not_2v():
-    """DecoderMLP body must emit (..., hidden_dim), not (..., 2V).
+@pytest.mark.parametrize("bad", ["hypernet", "film"])
+def test_removed_injection_modes_rejected(bad):
+    """Only 'concat' and 'none' are supported."""
+    with pytest.raises(ValueError, match="tessera_injection"):
+        _small_model(tessera_injection=bad)
 
-    The legacy body had a final ``Linear(hidden, 2V)``; v4 lifts that
-    out into the heads. If this regresses, the body would output
-    ``2 * len(target_variables)`` instead of ``hidden_dim``, which would
-    silently break the head-dispatcher input shape.
-    """
+
+def test_unknown_interpolation_rejected():
+    with pytest.raises(ValueError, match="interpolation"):
+        _small_model(interpolation="cubic")
+
+
+def test_precomputed_dim_required():
+    with pytest.raises(ValueError, match="precomputed_tessera_dim"):
+        _small_model(tessera_features_precomputed=True, precomputed_tessera_dim=0)
+
+
+# ---------------------------------------------------------------------------
+# Structure / state-dict layout
+# ---------------------------------------------------------------------------
+
+
+def test_decoder_mlp_emits_hidden_state():
+    """DecoderMLP body emits (..., hidden_dim); the heads own the projections."""
     body = DecoderMLP(in_features=10, hidden_dim=16, n_hidden_layers=3)
-    x = torch.randn(2, 5, 10)
-    out = body(x)
+    out = body(torch.randn(2, 5, 10))
     assert out.shape == (2, 5, 16)
 
 
-def test_film_decoder_mlp_emits_hidden_state_not_2v():
-    """FiLMDecoderMLP body emits hidden state (no output_layer)."""
-    body = FiLMDecoderMLP(
-        in_features=10, hidden_dim=16, n_hidden_layers=3, tessera_dim=8,
-    )
-    x = torch.randn(2, 5, 10)
-    t = torch.randn(2, 5, 8)
-    out = body(x, tessera_features=t)
-    assert out.shape == (2, 5, 16)
-    # And without TESSERA features (baseline mode where FiLM decays to identity).
-    out_baseline = body(x, tessera_features=None)
-    assert out_baseline.shape == (2, 5, 16)
+@pytest.mark.parametrize("interpolation", ["bilinear", "setconv"])
+def test_state_dict_layout(interpolation):
+    """The state-dict key names checkpoints on disk use must not change.
 
-
-def test_film_decoder_mlp_no_output_layer_attribute():
-    """The legacy `output_layer` attribute must be gone — its weights now
-    live in the heads dispatcher."""
-    body = FiLMDecoderMLP(
-        in_features=10, hidden_dim=16, n_hidden_layers=3, tessera_dim=8,
-    )
-    assert not hasattr(body, "output_layer"), (
-        "FiLMDecoderMLP still has an output_layer; the heads dispatcher "
-        "should own the per-variable projections instead."
-    )
-
-
-# ---------------------------------------------------------------------------
-# Migration round-trip property — the property the migration script depends on
-#
-# Two distinct levels of equality are at play here:
-#
-#   1. TENSOR level (bit-for-bit). The migration script's pre-write check
-#      stacks the heads' per-variable Linear weights and asserts
-#      ``torch.equal`` against the original legacy ``[2V, H]`` tensor.
-#      That's a pure tensor copy operation — no float arithmetic — so it
-#      really is bit-for-bit identical, and the migration script refuses
-#      to write if it ever isn't. ``test_state_dict_layout_for_migration_target``
-#      below covers the structural side of this.
-#
-#   2. PREDICTION level (~1e-7 absolute). Calling ``model.heads(h)`` (which
-#      runs V × ``nn.Linear(H, 2)`` via ``F.linear`` → ``addmm``) is
-#      numerically equivalent — but NOT bit-for-bit identical — to running
-#      one ``nn.Linear(H, 2V)`` over the same hidden state. The GEMM
-#      kernel dispatcher picks different code paths for output dim 2 vs
-#      2V, and the fused-multiply-add accumulation rounds differently in
-#      the last bit on some inputs. The resulting differences are at
-#      ~1e-8 absolute (well below machine precision for our prediction
-#      ranges) but ``torch.equal`` will detect them on some seeds.
-#
-# The tests below check level 2 with ``torch.allclose(atol=1e-6)``. Level 1
-# is what the migration script actually enforces and is also tested
-# directly in ``tests/test_migration.py``.
-# ---------------------------------------------------------------------------
-
-def _legacy_arithmetic(W_legacy, b_legacy, hidden, target_variables):
-    """Apply legacy `Linear(H, 2V)` then split into pairs.
-
-    This replicates what the legacy DecoderMLP / FiLMDecoderMLP
-    output_layer + the legacy multitask split did:
-      - Apply nn.Linear with weight [2V, H] and bias [2V]
-      - var_i mean = output[..., 2i], var_i log_var = output[..., 2i+1]
-
-    Uses ``F.linear`` (the function ``nn.Linear`` calls internally) so
-    that this is bit-for-bit identical to what an actual
-    ``nn.Linear(H, 2V)`` would produce — ``F.linear`` uses ``addmm``
-    which fuses the matmul + bias add and would differ at the ULP
-    level from a manual ``hidden @ W.T + b``.
+    Prefixes: ``cnn.net.*``, ``interp.log_scale`` (SetConv only),
+    ``mlp.net.*`` and ``heads.heads.<var>.linear.{weight,bias}``.
     """
-    flat = F.linear(hidden, W_legacy, b_legacy)
-    out = {}
-    for i, var in enumerate(target_variables):
-        out[var] = {
-            "mu":      flat[..., 2 * i],
-            "log_var": flat[..., 2 * i + 1],
-        }
-    return out
-
-
-@pytest.mark.parametrize("seed", [0, 1, 42, 2024])
-def test_migration_roundtrip_at_heads_level(seed):
-    """For any hidden state, heads(h) ≈ legacy single-Linear-then-split.
-
-    Numerical equality at ~1e-6 absolute (see module-level comment for
-    why this isn't bit-for-bit). The structural correctness — which
-    rows of the legacy tensor map to which heads — is the real claim,
-    and that is enforced bit-for-bit by the migration script's
-    pre-write tensor-equality check.
-    """
-    torch.manual_seed(seed)
     target_vars = ["t2m", "wind"]
-    model = ConvCNPDownscaler(
-        n_context_channels=8, cnn_hidden=12, cnn_layers=3,
-        mlp_hidden=8, mlp_n_hidden=2,
+    model = _small_model(
         target_variables=target_vars,
-        likelihood_per_variable={var: "gaussian" for var in target_vars},
-    )
-    B, N, H = 3, 7, 8
-    hidden = torch.randn(B, N, H)
-
-    new_out = model.heads(hidden)
-
-    # Reconstruct legacy weights by stacking the heads' per-variable Linears.
-    W_legacy = torch.cat(
-        [model.heads.heads[var].linear.weight for var in target_vars], dim=0,
-    )  # shape [2V, H]
-    b_legacy = torch.cat(
-        [model.heads.heads[var].linear.bias for var in target_vars], dim=0,
-    )  # shape [2V]
-
-    legacy_out = _legacy_arithmetic(W_legacy, b_legacy, hidden, target_vars)
-
-    for var in target_vars:
-        for p in ("mu", "log_var"):
-            torch.testing.assert_close(
-                new_out[var][p], legacy_out[var][p],
-                atol=1e-6, rtol=0,
-                msg=f"Round-trip mismatch on {var}.{p} (seed={seed})",
-            )
-
-
-@pytest.mark.parametrize("seed", [0, 7, 42])
-def test_migration_roundtrip_full_forward(seed):
-    """End-to-end forward parity with the legacy body+single-Linear+split path.
-
-    This is the integration version of the heads-only round-trip: the
-    full ConvCNP forward (CNN → interp → MLP body → heads) produces the
-    same output as the same body + a synthetic Linear(H, 2V) + split.
-    """
-    torch.manual_seed(seed)
-    target_vars = ["t2m", "wind"]
-    model = ConvCNPDownscaler(
-        n_context_channels=8, cnn_hidden=12, cnn_layers=3,
-        mlp_hidden=8, mlp_n_hidden=2,
-        target_variables=target_vars,
-        likelihood_per_variable={var: "gaussian" for var in target_vars},
-    )
-    model.eval()
-    batch = _synthetic_batch()
-
-    with torch.no_grad():
-        full_out = model(**batch)
-
-    # Recover hidden state by replicating the model's pre-heads forward.
-    W_legacy = torch.cat(
-        [model.heads.heads[var].linear.weight for var in target_vars], dim=0,
-    )
-    b_legacy = torch.cat(
-        [model.heads.heads[var].linear.bias for var in target_vars], dim=0,
-    )
-
-    with torch.no_grad():
-        grid_features = model.cnn(batch["context_grid"])
-        interp_features = model.interp(
-            grid_features,
-            batch["grid_lats"], batch["grid_lons"],
-            batch["target_coords"][:, :, 0], batch["target_coords"][:, :, 1],
-        ).permute(0, 2, 1)
-        elev = (batch["target_elev"] / 1000.0).unsqueeze(-1)
-        delta = (batch["target_delta_elev"] / 1000.0).unsqueeze(-1)
-        mlp_input = torch.cat([interp_features, elev, delta], dim=-1)
-        body_hidden = model.mlp(mlp_input)
-        legacy_pred = _legacy_arithmetic(
-            W_legacy, b_legacy, body_hidden, target_vars,
-        )
-
-    for var in target_vars:
-        for p in ("mu", "log_var"):
-            torch.testing.assert_close(
-                full_out[var][p], legacy_pred[var][p],
-                atol=1e-6, rtol=0,
-                msg=f"Full-forward mismatch on {var}.{p} (seed={seed})",
-            )
-
-
-def test_state_dict_layout_for_migration_target():
-    """v4 model's state_dict has keys the migration script expects to write."""
-    target_vars = ["t2m", "wind"]
-    model = ConvCNPDownscaler(
-        n_context_channels=8, cnn_hidden=12, cnn_layers=3,
-        mlp_hidden=8, mlp_n_hidden=2,
-        target_variables=target_vars,
-        likelihood_per_variable={var: "gaussian" for var in target_vars},
+        likelihood_per_variable={"t2m": "gaussian", "wind": "truncated_normal"},
+        interpolation=interpolation,
     )
     sd = model.state_dict()
+    prefixes = {"cnn.", "interp.", "mlp.", "heads."}
+    assert all(any(k.startswith(p) for p in prefixes) for k in sd), sorted(sd)
+
+    # Grid CNN: cnn_layers=3 → input conv, one residual block, 1×1 output conv.
+    assert sd["cnn.net.0.weight"].shape == (12, 8, 3, 3)
+    assert {"cnn.net.2.conv1.weight", "cnn.net.2.conv2.weight"} <= set(sd)
+    assert sd["cnn.net.3.weight"].shape == (12, 12, 1, 1)
+
+    interp_keys = {k for k in sd if k.startswith("interp.")}
+    assert interp_keys == (
+        {"interp.log_scale"} if interpolation == "setconv" else set()
+    )
+
+    # Decoder body: mlp_n_hidden=2 → Linear at net.0 and net.2, nothing after.
+    assert sd["mlp.net.0.weight"].shape == (8, 12 + 2)
+    assert sd["mlp.net.2.weight"].shape == (8, 8)
+    assert "mlp.net.4.weight" not in sd
+
     for var in target_vars:
-        assert f"heads.heads.{var}.linear.weight" in sd
-        assert f"heads.heads.{var}.linear.bias" in sd
         assert sd[f"heads.heads.{var}.linear.weight"].shape == (2, 8)
         assert sd[f"heads.heads.{var}.linear.bias"].shape == (2,)
-    # Body should NOT have a final 2V projection any more.
-    assert "mlp.output_layer.weight" not in sd
-    # The highest-indexed mlp.net.<N>.weight should output hidden_dim, not 2V.
-    body_keys = sorted(
-        (int(k.split(".")[2]), k)
-        for k in sd
-        if k.startswith("mlp.net.") and k.endswith(".weight")
-    )
-    last_idx, last_key = body_keys[-1]
-    assert sd[last_key].shape == (8, 8) or sd[last_key].shape[0] == 8, (
-        f"Body's final layer {last_key} has shape {sd[last_key].shape}, "
-        f"expected first dim hidden_dim=8 (not 2V=4)"
-    )
