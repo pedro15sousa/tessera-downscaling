@@ -24,3 +24,6 @@ wandb/
 .idea/
 *.swp
 .DS_Store
+
+# Regenerable PNG previews written by scripts/paper/make_paper_figures.py
+paper/figures/preview/
