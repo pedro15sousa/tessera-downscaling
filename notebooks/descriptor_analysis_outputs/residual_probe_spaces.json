@@ -1,0 +1,54 @@
+{
+  "t2m": {
+    "europe": {
+      "geographic": 0.11926905182994019,
+      "elevation+mTPI": 0.7455567665561086,
+      "ERA5-static": 0.1972170513293151,
+      "terrain stats (7f)": 0.2246398258674629,
+      "land cover (10f)": 0.15588839208803928,
+      "extended surface (17f)": 0.4506715288540325,
+      "elev+mTPI + extended (20f)": 0.787130044419825,
+      "TESSERA": 0.30185794924652487,
+      "_n_stations": 5934,
+      "_residual_std": 1.4418731061622752
+    },
+    "us": {
+      "geographic": 0.10856930191314074,
+      "elevation+mTPI": 0.26977768285390447,
+      "ERA5-static": 0.14762179390963603,
+      "terrain stats (7f)": 0.08198850093431442,
+      "land cover (10f)": 0.05198169380504192,
+      "extended surface (17f)": 0.15847106194998295,
+      "elev+mTPI + extended (20f)": 0.3402504283911616,
+      "TESSERA": 0.11925791758724458,
+      "_n_stations": 2046,
+      "_residual_std": 1.1058122929695444
+    }
+  },
+  "wind": {
+    "europe": {
+      "geographic": 0.1677666160058996,
+      "elevation+mTPI": 0.2697909894246914,
+      "ERA5-static": 0.24882153475237123,
+      "terrain stats (7f)": 0.18125183261464184,
+      "land cover (10f)": 0.3289473739522608,
+      "extended surface (17f)": 0.4057425255996193,
+      "elev+mTPI + extended (20f)": 0.4926554378827208,
+      "TESSERA": 0.4267654318823836,
+      "_n_stations": 3664,
+      "_residual_std": 1.4300863190608066
+    },
+    "us": {
+      "geographic": 0.25911223542819095,
+      "elevation+mTPI": 0.27030253286956063,
+      "ERA5-static": 0.30868699761665663,
+      "terrain stats (7f)": 0.18066737212887896,
+      "land cover (10f)": 0.22374064569359942,
+      "extended surface (17f)": 0.26052568979330537,
+      "elev+mTPI + extended (20f)": 0.34305229135281323,
+      "TESSERA": 0.2878393427022057,
+      "_n_stations": 1979,
+      "_residual_std": 1.3488713304353537
+    }
+  }
+}

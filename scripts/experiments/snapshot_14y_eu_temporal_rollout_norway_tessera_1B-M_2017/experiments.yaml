@@ -1,0 +1,48 @@
+#
+# Norway temporal-rollout — TESSERA 1B-M (v2, 2017) candidate latents
+# (crop64_lat16_auxon), mTPI architecture. TESSERA ARM ONLY.
+#
+# Identical experiment DESIGN to snapshot_14y_eu_temporal_rollout_norway_lat16_mtpi:
+# same probe set, same rollout_schedule.json (byte-identical copies in this
+# folder: same T_0, T_rollout, activation order, per-sweep train_end_override),
+# same architectures/hyperparameters. The ONLY difference is the latents file,
+# swapped via submit.sh's VAE_LATENTS_PATH export.
+#
+# The no-TESSERA baseline arm and the era5_interp reference are NOT re-run
+# here — they are latents-independent; reuse them from
+# training_runs_snapshot_14y_eu_temporal_rollout_norway_lat16_mtpi.
+#
+sweep_points:
+- label: r0
+  description: "0 months elapsed (rollout anchor T_0): no probes online \u2014 pre-deployment European-only baseline"
+- label: r1mo
+  description: "1 month elapsed since rollout started \u2014 ~3% online"
+- label: r3mo
+  description: "3 months elapsed \u2014 ~8% online"
+- label: r6mo
+  description: "6 months elapsed \u2014 ~17% online"
+- label: r1y
+  description: "1 year elapsed \u2014 ~33% online"
+- label: r2y
+  description: "2 years elapsed \u2014 ~67% online"
+- label: r3y
+  description: '3 years elapsed (= T_rollout): rollout complete, all online'
+- label: r4y
+  description: '4 years elapsed (= T_rollout + 1y): all online for at least 1y'
+- label: r5y
+  description: '5 years elapsed (= T_rollout + 2y): all online for at least 2y'
+- label: r6y
+  description: '6 years elapsed (= T_rollout + 3y): all online for at least 3y'
+architectures:
+- name: t2m_snap_vae_lat16_concat_with_elev_mtpi_no_static_wd
+  label: t2m snap VAE-lat16 concat DIRECT (with elev + mTPI, no static, wd=1e-4)
+  family: tessera
+  target_variables:
+  - t2m
+  extra_args: --interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --no-static-fields --use-mtpi --weight-decay 1e-4
+- name: wind_truncnormal_snap_vae_lat16_concat_with_elev_mtpi_no_static_wd
+  label: "wind snap VAE-lat16 concat DIRECT (with elev + mTPI, no static, wd=1e-4) \u2014 truncated-normal head"
+  family: tessera
+  target_variables:
+  - wind
+  extra_args: --interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --no-static-fields --use-mtpi --weight-decay 1e-4 --likelihood wind=truncated_normal

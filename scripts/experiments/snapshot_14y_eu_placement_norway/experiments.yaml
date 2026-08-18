@@ -1,0 +1,75 @@
+#
+# Norway PLACEMENT experiment (active-learning-style station selection).
+#
+# Same architectures, probe set, dataset and rollout mechanics as
+# snapshot_14y_eu_temporal_rollout_norway_lat16_mtpi. The ONLY difference is
+# the probe DEPLOYMENT ORDER: instead of a single random activation order, we
+# sweep NINE orderings (see ./schedules/, built by rank_probes_by_coverage.py +
+# build_rollout_schedule.py --order-ids-json):
+#
+#   random                              (baseline: the temporal rollout's order)
+#   {kcenter, maxcov} x {geographic, elevation_mtpi, era5_static, tessera}
+#
+# Question: does choosing WHERE to place stations by descriptor-space coverage
+# (esp. TESSERA) make the held-out Norwegian region generalisable with fewer
+# stations / less deployment time than random placement? The realistic
+# temporal coupling is kept (a station only accrues observations from its
+# deployment onward), so both #online-stations and per-station record length
+# grow over the rollout. submit.sh drives one schedule per strategy into a
+# per-strategy results subtree; the strategy dimension lives in submit.sh, not
+# here, so this YAML is identical in shape to the temporal-rollout folder.
+#
+# Sweep trimmed to the DEPLOYMENT PHASE (r1mo..r3y): after r3y all probes are
+# online, so orderings only differ in per-station history thereafter (r4y..r6y
+# are the record-length-saturation regime — add them later if wanted). The
+# schedules on disk still use the full grid for T_0 anchoring, so r1mo..r3y
+# land at exactly the same timestamps as the random rollout.
+
+sweep_points:
+  - label: r1mo
+    description: "1 month elapsed since rollout started — ~3% online"
+  - label: r3mo
+    description: "3 months elapsed — ~8% online"
+  - label: r6mo
+    description: "6 months elapsed — ~17% online"
+  - label: r1y
+    description: "1 year elapsed — ~33% online"
+  - label: r2y
+    description: "2 years elapsed — ~67% online"
+  - label: r3y
+    description: "3 years elapsed (= T_rollout): rollout complete, all online"
+
+architectures:
+
+  # ------- t2m (Gaussian) -------
+  - name: t2m_snap_vae_lat16_concat_with_elev_mtpi_no_static_wd
+    label: "t2m snap VAE-lat16 concat DIRECT (with elev + mTPI, no static, wd=1e-4)"
+    family: tessera
+    target_variables: [t2m]
+    extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --no-static-fields --use-mtpi --weight-decay 1e-4"
+
+  - name: t2m_snap_bilinear_baseline_mtpi_wd
+    label: "t2m snap ConvCNP no-TESSERA (with elev + mTPI + static, wd=1e-4)"
+    family: baseline
+    target_variables: [t2m]
+    extra_args: "--interpolation bilinear --use-mtpi --weight-decay 1e-4"
+
+  # ------- wind (truncated-normal) -------
+  - name: wind_truncnormal_snap_vae_lat16_concat_with_elev_mtpi_no_static_wd
+    label: "wind snap VAE-lat16 concat DIRECT (with elev + mTPI, no static, wd=1e-4) — truncated-normal head"
+    family: tessera
+    target_variables: [wind]
+    extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --no-static-fields --use-mtpi --weight-decay 1e-4 --likelihood wind=truncated_normal"
+
+  - name: wind_truncnormal_snap_bilinear_baseline_mtpi_wd
+    label: "wind snap ConvCNP no-TESSERA (with elev + mTPI + static, wd=1e-4) — truncated-normal head"
+    family: baseline
+    target_variables: [wind]
+    extra_args: "--interpolation bilinear --use-mtpi --weight-decay 1e-4 --likelihood wind=truncated_normal"
+
+# No simple_baselines here: the ERA5-interp reference (deterministic, a
+# constant horizontal line) is already computed in the temporal-rollout tree
+# (training_runs_snapshot_14y_eu_temporal_rollout_norway_lat16_mtpi), same as
+# the 'random' baseline. The Phase-2 analysis pulls both from there rather than
+# recomputing. Add a simple_baselines: block back if you want this folder
+# self-contained.

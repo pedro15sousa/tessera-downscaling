@@ -1,0 +1,5 @@
+[project]
+name = "tessera-downscaling"
+description = "Climate downscaling with TESSERA land surface embeddings via Convolutional Neural Processes"
+readme = "README.md"
+version = "0.1.0"

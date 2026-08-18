@@ -1,0 +1,104 @@
+# snapshot_14y_eu_station_count_efficiency experiments
+#
+# Station-count data-efficiency experiment for EU 14y.
+#
+# Design (decided with Will + Rich on May 21–22 thread):
+#
+#   * For each K_train ∈ sweep_points, randomly sub-sample K_train
+#     stations from the EU 85% spatial-train pool. The 15% spatial
+#     test set is held out unchanged.
+#   * Subset selection is PER SEED — so each model-init seed sees a
+#     different random K_train-sized subset. This propagates both
+#     "which stations you picked" variance and model-init variance
+#     into the curve's seed std, which is the honest accounting.
+#   * Eval is on the 15% spatial test stations during the held-out
+#     test year — directly comparable to existing 14y EU baselines
+#     at K_train=full.
+#   * Architectures: rank-1 vanilla TESSERA winner per variable +
+#     ConvCNP bilinear no-TESSERA baseline + ERA5 bilinear interp
+#     (constant). t2m and wind only, both Gaussian heads.
+#
+# Submit-script cross-product:
+#
+#   architectures × sweep_points × seeds → sbatch jobs
+#
+# At submit time, submit.sh:
+#   1. For each (sweep_point, seed), samples K_train station_ids
+#      from EU 85% train with a per-(K, seed) numpy seed derived as
+#      ``hash(f"{K_train}:{seed}") & 0xFFFFFFFF``. This way:
+#        - The same (K, seed) always picks the same subset (reruns
+#          and partial re-submissions are deterministic).
+#        - Different seeds at the same K pick different subsets
+#          (subset-choice variance enters the curve).
+#        - Different K's at the same seed are not nested — that's
+#          fine, they're separate experiments anyway.
+#      Writes ``train_station_allowlist_K{K_train}_seed{seed}.json``
+#      next to this YAML, one per (K, seed). Files are cached: if a
+#      file already exists, it's left untouched. Delete to regenerate.
+#   2. Issues one sbatch per (architecture, sweep_point, seed).
+#   3. ERA5 bilinear interp baseline runs once per variable
+#      (station-count independent — it's just grid interpolation).
+
+# Sub-sample-set fraction is irrelevant for this experiment — we vary
+# the absolute count. Sub-sample sources from EU 85% train pool, which
+# in 14y EU has ~558 TESSERA-filtered stations.
+sample_pool:
+  source_region: europe
+  source_spatial_split: train
+
+# K_train values to sweep, in display order. The "full" sentinel means
+# "no allowlist — use every TESSERA+VAE-valid train-split station"
+# (i.e. the existing 14y EU setup; no new file is written, and
+# train_station_allowlist is left unset for those runs).
+sweep_points:
+  - label: K10
+    k_train: 10
+  - label: K25
+    k_train: 25
+  - label: K75
+    k_train: 75
+  - label: K200
+    k_train: 200
+  - label: Kfull
+    k_train: null   # "use every train-split station"; no allowlist file written
+
+# Architectures — same as the temporal-axis experiment, since the
+# headline comparison is the same: rank-1 TESSERA winner vs bilinear
+# baseline per variable.
+architectures:
+
+  # ------- t2m -------
+  - name: t2m_snap_vae_lat16_proj8_concat_with_elev_no_static_wd
+    label: "t2m snap VAE-lat16→proj8 concat (with elev, no static, wd=1e-4) — rank-1 TESSERA"
+    family: tessera
+    target_variables: [t2m]
+    extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+  - name: t2m_snap_bilinear_baseline_wd
+    label: "t2m snap ConvCNP no-TESSERA (with elev + static, wd=1e-4)"
+    family: baseline
+    target_variables: [t2m]
+    extra_args: "--interpolation bilinear --weight-decay 1e-4"
+
+  # ------- wind -------
+  - name: wind_snap_vae_lat16_proj8_concat_with_elev_no_static_wd
+    label: "wind snap VAE-lat16→proj8 concat (with elev, no static, wd=1e-4) — matched-arch (tied with rank-1 within seed noise)"
+    family: tessera
+    target_variables: [wind]
+    extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+  - name: wind_snap_bilinear_baseline_wd
+    label: "wind snap ConvCNP no-TESSERA (with elev + static, wd=1e-4)"
+    family: baseline
+    target_variables: [wind]
+    extra_args: "--interpolation bilinear --weight-decay 1e-4"
+
+# ERA5 interpolation baseline — one run per variable, evaluated on the
+# 15% spatial test (same as the trained runs), no K-sweep.
+simple_baselines:
+  - name: t2m_snap_era5_interp_baseline
+    baseline: era5_interp
+    target_variables: [t2m]
+  - name: wind_snap_era5_interp_baseline
+    baseline: era5_interp
+    target_variables: [wind]

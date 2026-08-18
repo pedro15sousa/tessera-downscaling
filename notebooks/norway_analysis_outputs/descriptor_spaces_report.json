@@ -1,0 +1,116 @@
+{
+  "norway_test": {
+    "geographic\n(lat, lon)": {
+      "isolation": 43.7275386578009,
+      "reachability": 0.010344827586206896,
+      "auc": 0.9765015704596295,
+      "median_nn": 0.479602478255895,
+      "indist_nn": 0.010967973340761886,
+      "n_query": 290,
+      "n_ref": 8679
+    },
+    "elevation\n+ mTPI": {
+      "isolation": 0.9408140294515658,
+      "reachability": 0.9482758620689655,
+      "auc": 0.6691931085840389,
+      "median_nn": 0.03586742165568073,
+      "indist_nn": 0.038123816751105565,
+      "n_query": 290,
+      "n_ref": 8679
+    },
+    "ERA5 static\n(interp)": {
+      "isolation": 3.2242389185170897,
+      "reachability": 0.506896551724138,
+      "auc": 0.9586925902938341,
+      "median_nn": 1.2178949301863389,
+      "indist_nn": 0.3777309811601927,
+      "n_query": 290,
+      "n_ref": 8679
+    },
+    "TESSERA\nlat16 embedding": {
+      "isolation": 1.136001823935236,
+      "reachability": 0.9655172413793104,
+      "auc": 0.9551942510133187,
+      "median_nn": 1.9791316986083984,
+      "indist_nn": 1.7421905994415283,
+      "n_query": 290,
+      "n_ref": 8679
+    }
+  },
+  "norway_probe": {
+    "geographic\n(lat, lon)": {
+      "isolation": 43.73973024279388,
+      "reachability": 0.018094089264173704,
+      "auc": 0.9766475000504637,
+      "median_nn": 0.47973619523507977,
+      "indist_nn": 0.010967973340761886,
+      "n_query": 1658,
+      "n_ref": 8679
+    },
+    "elevation\n+ mTPI": {
+      "isolation": 0.9574373131413577,
+      "reachability": 0.9487334137515079,
+      "auc": 0.6147145557816365,
+      "median_nn": 0.036501164676872,
+      "indist_nn": 0.038123816751105565,
+      "n_query": 1658,
+      "n_ref": 8679
+    },
+    "ERA5 static\n(interp)": {
+      "isolation": 3.330562559253644,
+      "reachability": 0.49819059107358266,
+      "auc": 0.9620036441343611,
+      "median_nn": 1.2580566633222814,
+      "indist_nn": 0.3777309811601927,
+      "n_query": 1658,
+      "n_ref": 8679
+    },
+    "TESSERA\nlat16 embedding": {
+      "isolation": 1.156413189208511,
+      "reachability": 0.9613992762364294,
+      "auc": 0.9600864893474419,
+      "median_nn": 2.014692187309265,
+      "indist_nn": 1.7421905994415283,
+      "n_query": 1658,
+      "n_ref": 8679
+    }
+  },
+  "nonnorway_test": {
+    "geographic\n(lat, lon)": {
+      "isolation": 0.9677918078974392,
+      "reachability": 0.9466145833333334,
+      "auc": 0.4986435314432738,
+      "median_nn": 0.010614714748426863,
+      "indist_nn": 0.010967973340761886,
+      "n_query": 1536,
+      "n_ref": 8679
+    },
+    "elevation\n+ mTPI": {
+      "isolation": 0.96571542115931,
+      "reachability": 0.9466145833333334,
+      "auc": 0.498612955973304,
+      "median_nn": 0.03681675774999427,
+      "indist_nn": 0.038123816751105565,
+      "n_query": 1536,
+      "n_ref": 8679
+    },
+    "ERA5 static\n(interp)": {
+      "isolation": 0.9590927761209153,
+      "reachability": 0.9479166666666666,
+      "auc": 0.5207978137710081,
+      "median_nn": 0.36227905534780636,
+      "indist_nn": 0.3777309811601927,
+      "n_query": 1536,
+      "n_ref": 8679
+    },
+    "TESSERA\nlat16 embedding": {
+      "isolation": 0.999568820232215,
+      "reachability": 0.9505208333333334,
+      "auc": 0.4966638021126575,
+      "median_nn": 1.741439402103424,
+      "indist_nn": 1.7421905994415283,
+      "n_query": 1536,
+      "n_ref": 8679
+    }
+  }
+}

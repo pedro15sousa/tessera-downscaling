@@ -1,0 +1,2832 @@
+# snapshot_14y_eu experiments
+#
+# Single-region snapshot-cadence experiments for Europe.
+# Companion output dir: training_runs_snapshot_14y_eu.
+# Dataset region: europe
+#
+# -----------------------------------------------------------------------
+# SIBLING FILES — keep the 28-config matrix in sync with:
+#
+#   projects/tessera_downscaling/scripts/experiments/snapshot_14y_us/experiments.yaml
+#   projects/tessera_downscaling/scripts/experiments/snapshot_14y_east_asia/experiments.yaml
+#   projects/tessera_downscaling/scripts/experiments/snapshot_14y_australia/experiments.yaml
+#   projects/tessera_downscaling/scripts/experiments/snapshot_14y_southern_africa/experiments.yaml
+#   projects/tessera_downscaling/scripts/experiments/snapshot_6y_eu/experiments.yaml
+#
+# Edits to the 28-config matrix below should also be applied
+# to every sibling, since they all run the same matrix and
+# any divergence should be deliberate and documented.
+# -----------------------------------------------------------------------
+#
+# Scope: full architecture matrix crossing:
+#   * latent_dim ∈ {16, 64}
+#   * projection_dim ∈ {direct, 8, 16, 32}  (lat16 only with direct or proj8;
+#                                            projecting to ≥latent_dim has no compression)
+#   * projection_style ∈ {linear, MLP}      (only when projection_dim > 0)
+#   * injection ∈ {concat, FiLM}
+#   * elev ∈ {with, no}
+#   * target ∈ {t2m, wind}                  (single-task)
+#                                           OR [t2m, wind] (multi-task, joint)
+#
+# Plus a single-task and a multi-task bilinear baseline (no TESSERA, with elev,
+# with static fields), and a static-fields ablation on the top-3 winning
+# architectures (lat16 concat, lat64 proj16 concat, lat64 proj8 FiLM) with
+# --static-fields ON, both elev settings, both single-task and multi-task.
+#
+# Totals:
+#   - 2 single-task baselines
+#   - 80 single-task VAE configs (main matrix, no-static)
+#   - 12 single-task VAE configs (static-fields ablation)
+#   - 1 multi-task baseline
+#   - 40 multi-task VAE configs (main matrix, no-static)
+#   - 6 multi-task VAE configs (static-fields ablation)
+#   = 141 configs × 3 seeds = 423 jobs.
+#
+# Every entry specifies `extra_args` as it would be passed to train.py
+# (same shape as the original submit_snapshot_experiments.sh entries).
+# The submit script expands VAE_LATENTS_PATH / VAE_LATENTS_PATH_LAT64 /
+# VAE_LATENTS_CSV via env-var substitution at submit time.
+#
+# Fields consumed by the submit script:
+#   name, target_variables, extra_args
+# Fields consumed by the notebook (future migration):
+#   name, label, colour, target_variables
+
+# =========================================================================
+# Single-task baselines (no TESSERA, with static)
+# =========================================================================
+
+
+- name: wind_snap_bilinear_baseline_wd
+  label: "Wind snap bilinear baseline (with elev, with static, wd=1e-4)"
+  colour: "#999999"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --weight-decay 1e-4"
+
+
+- name: t2m_snap_bilinear_baseline_wd
+  label: "t2m snap bilinear baseline (with elev, with static, wd=1e-4)"
+  colour: "#999999"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --weight-decay 1e-4"
+
+
+# =========================================================================
+# lat16 direct (no projection) — both injections, both elev settings, both targets
+# =========================================================================
+# Feeds the 16-d VAE latent straight into the model with no projection layer.
+# Tests whether projection is necessary or whether the raw latent suffices.
+
+
+- name: wind_snap_vae_lat16_concat_with_elev_no_static_wd
+  label: "Wind snap VAE-lat16 concat (with elev, no static, wd=1e-4)"
+  colour: "#1f77b4"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat16_concat_no_elev_no_static_wd
+  label: "Wind snap VAE-lat16 concat (no elev, no static, wd=1e-4)"
+  colour: "#6baed6"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat16_concat_with_elev_no_static_wd
+  label: "t2m snap VAE-lat16 concat (with elev, no static, wd=1e-4)"
+  colour: "#1f77b4"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat16_concat_no_elev_no_static_wd
+  label: "t2m snap VAE-lat16 concat (no elev, no static, wd=1e-4)"
+  colour: "#6baed6"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat16_film_with_elev_no_static_wd
+  label: "Wind snap VAE-lat16 FiLM (with elev, no static, wd=1e-4)"
+  colour: "#ff7f0e"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat16_film_no_elev_no_static_wd
+  label: "Wind snap VAE-lat16 FiLM (no elev, no static, wd=1e-4)"
+  colour: "#fdae6b"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat16_film_with_elev_no_static_wd
+  label: "t2m snap VAE-lat16 FiLM (with elev, no static, wd=1e-4)"
+  colour: "#ff7f0e"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat16_film_no_elev_no_static_wd
+  label: "t2m snap VAE-lat16 FiLM (no elev, no static, wd=1e-4)"
+  colour: "#fdae6b"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+# =========================================================================
+# lat16 → proj8 (linear projection) — both injections, both elev settings, both targets
+# =========================================================================
+
+
+- name: wind_snap_vae_lat16_proj8_concat_with_elev_no_static_wd
+  label: "Wind snap VAE-lat16→proj8 concat (with elev, no static, wd=1e-4)"
+  colour: "#1f77b4"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat16_proj8_concat_no_elev_no_static_wd
+  label: "Wind snap VAE-lat16→proj8 concat (no elev, no static, wd=1e-4)"
+  colour: "#6baed6"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat16_proj8_concat_with_elev_no_static_wd
+  label: "t2m snap VAE-lat16→proj8 concat (with elev, no static, wd=1e-4)"
+  colour: "#1f77b4"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat16_proj8_concat_no_elev_no_static_wd
+  label: "t2m snap VAE-lat16→proj8 concat (no elev, no static, wd=1e-4)"
+  colour: "#6baed6"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat16_proj8_film_with_elev_no_static_wd
+  label: "Wind snap VAE-lat16→proj8 FiLM (with elev, no static, wd=1e-4)"
+  colour: "#ff7f0e"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat16_proj8_film_no_elev_no_static_wd
+  label: "Wind snap VAE-lat16→proj8 FiLM (no elev, no static, wd=1e-4)"
+  colour: "#fdae6b"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat16_proj8_film_with_elev_no_static_wd
+  label: "t2m snap VAE-lat16→proj8 FiLM (with elev, no static, wd=1e-4)"
+  colour: "#ff7f0e"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat16_proj8_film_no_elev_no_static_wd
+  label: "t2m snap VAE-lat16→proj8 FiLM (no elev, no static, wd=1e-4)"
+  colour: "#fdae6b"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+# =========================================================================
+# lat16 → proj8 (MLP projection) — both injections, both elev settings, both targets
+# =========================================================================
+
+
+- name: wind_snap_vae_lat16_proj8_mlp_concat_with_elev_no_static_wd
+  label: "Wind snap VAE-lat16→proj8-MLP concat (with elev, no static, wd=1e-4)"
+  colour: "#1f77b4"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --vae-latents-proj-mlp --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat16_proj8_mlp_concat_no_elev_no_static_wd
+  label: "Wind snap VAE-lat16→proj8-MLP concat (no elev, no static, wd=1e-4)"
+  colour: "#6baed6"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --vae-latents-proj-mlp --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat16_proj8_mlp_concat_with_elev_no_static_wd
+  label: "t2m snap VAE-lat16→proj8-MLP concat (with elev, no static, wd=1e-4)"
+  colour: "#1f77b4"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --vae-latents-proj-mlp --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat16_proj8_mlp_concat_no_elev_no_static_wd
+  label: "t2m snap VAE-lat16→proj8-MLP concat (no elev, no static, wd=1e-4)"
+  colour: "#6baed6"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --vae-latents-proj-mlp --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat16_proj8_mlp_film_with_elev_no_static_wd
+  label: "Wind snap VAE-lat16→proj8-MLP FiLM (with elev, no static, wd=1e-4)"
+  colour: "#ff7f0e"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --vae-latents-proj-mlp --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat16_proj8_mlp_film_no_elev_no_static_wd
+  label: "Wind snap VAE-lat16→proj8-MLP FiLM (no elev, no static, wd=1e-4)"
+  colour: "#fdae6b"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --vae-latents-proj-mlp --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat16_proj8_mlp_film_with_elev_no_static_wd
+  label: "t2m snap VAE-lat16→proj8-MLP FiLM (with elev, no static, wd=1e-4)"
+  colour: "#ff7f0e"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --vae-latents-proj-mlp --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat16_proj8_mlp_film_no_elev_no_static_wd
+  label: "t2m snap VAE-lat16→proj8-MLP FiLM (no elev, no static, wd=1e-4)"
+  colour: "#fdae6b"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --vae-latents-proj-mlp --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+# =========================================================================
+# lat64 direct (no projection) — both injections, both elev settings, both targets
+# =========================================================================
+# Feeds the 64-d VAE latent straight into the model with no projection layer.
+# Tests whether projection is necessary or whether the raw latent suffices.
+
+
+- name: wind_snap_vae_lat64_concat_with_elev_no_static_wd
+  label: "Wind snap VAE-lat64 concat (with elev, no static, wd=1e-4)"
+  colour: "#2ca02c"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat64_concat_no_elev_no_static_wd
+  label: "Wind snap VAE-lat64 concat (no elev, no static, wd=1e-4)"
+  colour: "#98df8a"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat64_concat_with_elev_no_static_wd
+  label: "t2m snap VAE-lat64 concat (with elev, no static, wd=1e-4)"
+  colour: "#2ca02c"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat64_concat_no_elev_no_static_wd
+  label: "t2m snap VAE-lat64 concat (no elev, no static, wd=1e-4)"
+  colour: "#98df8a"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat64_film_with_elev_no_static_wd
+  label: "Wind snap VAE-lat64 FiLM (with elev, no static, wd=1e-4)"
+  colour: "#17becf"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat64_film_no_elev_no_static_wd
+  label: "Wind snap VAE-lat64 FiLM (no elev, no static, wd=1e-4)"
+  colour: "#9edae5"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat64_film_with_elev_no_static_wd
+  label: "t2m snap VAE-lat64 FiLM (with elev, no static, wd=1e-4)"
+  colour: "#17becf"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat64_film_no_elev_no_static_wd
+  label: "t2m snap VAE-lat64 FiLM (no elev, no static, wd=1e-4)"
+  colour: "#9edae5"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+# =========================================================================
+# lat64 → proj8 (linear projection) — both injections, both elev settings, both targets
+# =========================================================================
+
+
+- name: wind_snap_vae_lat64_proj8_concat_with_elev_no_static_wd
+  label: "Wind snap VAE-lat64→proj8 concat (with elev, no static, wd=1e-4)"
+  colour: "#2ca02c"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat64_proj8_concat_no_elev_no_static_wd
+  label: "Wind snap VAE-lat64→proj8 concat (no elev, no static, wd=1e-4)"
+  colour: "#98df8a"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat64_proj8_concat_with_elev_no_static_wd
+  label: "t2m snap VAE-lat64→proj8 concat (with elev, no static, wd=1e-4)"
+  colour: "#2ca02c"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat64_proj8_concat_no_elev_no_static_wd
+  label: "t2m snap VAE-lat64→proj8 concat (no elev, no static, wd=1e-4)"
+  colour: "#98df8a"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat64_proj8_film_with_elev_no_static_wd
+  label: "Wind snap VAE-lat64→proj8 FiLM (with elev, no static, wd=1e-4)"
+  colour: "#17becf"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat64_proj8_film_no_elev_no_static_wd
+  label: "Wind snap VAE-lat64→proj8 FiLM (no elev, no static, wd=1e-4)"
+  colour: "#9edae5"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat64_proj8_film_with_elev_no_static_wd
+  label: "t2m snap VAE-lat64→proj8 FiLM (with elev, no static, wd=1e-4)"
+  colour: "#17becf"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat64_proj8_film_no_elev_no_static_wd
+  label: "t2m snap VAE-lat64→proj8 FiLM (no elev, no static, wd=1e-4)"
+  colour: "#9edae5"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+# =========================================================================
+# lat64 → proj8 (MLP projection) — both injections, both elev settings, both targets
+# =========================================================================
+
+
+- name: wind_snap_vae_lat64_proj8_mlp_concat_with_elev_no_static_wd
+  label: "Wind snap VAE-lat64→proj8-MLP concat (with elev, no static, wd=1e-4)"
+  colour: "#2ca02c"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --vae-latents-proj-mlp --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat64_proj8_mlp_concat_no_elev_no_static_wd
+  label: "Wind snap VAE-lat64→proj8-MLP concat (no elev, no static, wd=1e-4)"
+  colour: "#98df8a"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --vae-latents-proj-mlp --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat64_proj8_mlp_concat_with_elev_no_static_wd
+  label: "t2m snap VAE-lat64→proj8-MLP concat (with elev, no static, wd=1e-4)"
+  colour: "#2ca02c"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --vae-latents-proj-mlp --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat64_proj8_mlp_concat_no_elev_no_static_wd
+  label: "t2m snap VAE-lat64→proj8-MLP concat (no elev, no static, wd=1e-4)"
+  colour: "#98df8a"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --vae-latents-proj-mlp --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat64_proj8_mlp_film_with_elev_no_static_wd
+  label: "Wind snap VAE-lat64→proj8-MLP FiLM (with elev, no static, wd=1e-4)"
+  colour: "#17becf"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --vae-latents-proj-mlp --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat64_proj8_mlp_film_no_elev_no_static_wd
+  label: "Wind snap VAE-lat64→proj8-MLP FiLM (no elev, no static, wd=1e-4)"
+  colour: "#9edae5"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --vae-latents-proj-mlp --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat64_proj8_mlp_film_with_elev_no_static_wd
+  label: "t2m snap VAE-lat64→proj8-MLP FiLM (with elev, no static, wd=1e-4)"
+  colour: "#17becf"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --vae-latents-proj-mlp --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat64_proj8_mlp_film_no_elev_no_static_wd
+  label: "t2m snap VAE-lat64→proj8-MLP FiLM (no elev, no static, wd=1e-4)"
+  colour: "#9edae5"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --vae-latents-proj-mlp --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+# =========================================================================
+# lat64 → proj16 (linear projection) — both injections, both elev settings, both targets
+# =========================================================================
+
+
+- name: wind_snap_vae_lat64_proj16_concat_with_elev_no_static_wd
+  label: "Wind snap VAE-lat64→proj16 concat (with elev, no static, wd=1e-4)"
+  colour: "#2ca02c"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat64_proj16_concat_no_elev_no_static_wd
+  label: "Wind snap VAE-lat64→proj16 concat (no elev, no static, wd=1e-4)"
+  colour: "#98df8a"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 16 --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat64_proj16_concat_with_elev_no_static_wd
+  label: "t2m snap VAE-lat64→proj16 concat (with elev, no static, wd=1e-4)"
+  colour: "#2ca02c"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat64_proj16_concat_no_elev_no_static_wd
+  label: "t2m snap VAE-lat64→proj16 concat (no elev, no static, wd=1e-4)"
+  colour: "#98df8a"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 16 --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat64_proj16_film_with_elev_no_static_wd
+  label: "Wind snap VAE-lat64→proj16 FiLM (with elev, no static, wd=1e-4)"
+  colour: "#17becf"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat64_proj16_film_no_elev_no_static_wd
+  label: "Wind snap VAE-lat64→proj16 FiLM (no elev, no static, wd=1e-4)"
+  colour: "#9edae5"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 16 --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat64_proj16_film_with_elev_no_static_wd
+  label: "t2m snap VAE-lat64→proj16 FiLM (with elev, no static, wd=1e-4)"
+  colour: "#17becf"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat64_proj16_film_no_elev_no_static_wd
+  label: "t2m snap VAE-lat64→proj16 FiLM (no elev, no static, wd=1e-4)"
+  colour: "#9edae5"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 16 --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+# =========================================================================
+# lat64 → proj16 (MLP projection) — both injections, both elev settings, both targets
+# =========================================================================
+
+
+- name: wind_snap_vae_lat64_proj16_mlp_concat_with_elev_no_static_wd
+  label: "Wind snap VAE-lat64→proj16-MLP concat (with elev, no static, wd=1e-4)"
+  colour: "#2ca02c"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 16 --vae-latents-proj-mlp --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat64_proj16_mlp_concat_no_elev_no_static_wd
+  label: "Wind snap VAE-lat64→proj16-MLP concat (no elev, no static, wd=1e-4)"
+  colour: "#98df8a"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 16 --vae-latents-proj-mlp --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat64_proj16_mlp_concat_with_elev_no_static_wd
+  label: "t2m snap VAE-lat64→proj16-MLP concat (with elev, no static, wd=1e-4)"
+  colour: "#2ca02c"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 16 --vae-latents-proj-mlp --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat64_proj16_mlp_concat_no_elev_no_static_wd
+  label: "t2m snap VAE-lat64→proj16-MLP concat (no elev, no static, wd=1e-4)"
+  colour: "#98df8a"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 16 --vae-latents-proj-mlp --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat64_proj16_mlp_film_with_elev_no_static_wd
+  label: "Wind snap VAE-lat64→proj16-MLP FiLM (with elev, no static, wd=1e-4)"
+  colour: "#17becf"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 16 --vae-latents-proj-mlp --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat64_proj16_mlp_film_no_elev_no_static_wd
+  label: "Wind snap VAE-lat64→proj16-MLP FiLM (no elev, no static, wd=1e-4)"
+  colour: "#9edae5"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 16 --vae-latents-proj-mlp --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat64_proj16_mlp_film_with_elev_no_static_wd
+  label: "t2m snap VAE-lat64→proj16-MLP FiLM (with elev, no static, wd=1e-4)"
+  colour: "#17becf"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 16 --vae-latents-proj-mlp --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat64_proj16_mlp_film_no_elev_no_static_wd
+  label: "t2m snap VAE-lat64→proj16-MLP FiLM (no elev, no static, wd=1e-4)"
+  colour: "#9edae5"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 16 --vae-latents-proj-mlp --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+# =========================================================================
+# lat64 → proj32 (linear projection) — both injections, both elev settings, both targets
+# =========================================================================
+
+
+- name: wind_snap_vae_lat64_proj32_concat_with_elev_no_static_wd
+  label: "Wind snap VAE-lat64→proj32 concat (with elev, no static, wd=1e-4)"
+  colour: "#2ca02c"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 32 --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat64_proj32_concat_no_elev_no_static_wd
+  label: "Wind snap VAE-lat64→proj32 concat (no elev, no static, wd=1e-4)"
+  colour: "#98df8a"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 32 --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat64_proj32_concat_with_elev_no_static_wd
+  label: "t2m snap VAE-lat64→proj32 concat (with elev, no static, wd=1e-4)"
+  colour: "#2ca02c"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 32 --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat64_proj32_concat_no_elev_no_static_wd
+  label: "t2m snap VAE-lat64→proj32 concat (no elev, no static, wd=1e-4)"
+  colour: "#98df8a"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 32 --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat64_proj32_film_with_elev_no_static_wd
+  label: "Wind snap VAE-lat64→proj32 FiLM (with elev, no static, wd=1e-4)"
+  colour: "#17becf"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 32 --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat64_proj32_film_no_elev_no_static_wd
+  label: "Wind snap VAE-lat64→proj32 FiLM (no elev, no static, wd=1e-4)"
+  colour: "#9edae5"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 32 --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat64_proj32_film_with_elev_no_static_wd
+  label: "t2m snap VAE-lat64→proj32 FiLM (with elev, no static, wd=1e-4)"
+  colour: "#17becf"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 32 --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat64_proj32_film_no_elev_no_static_wd
+  label: "t2m snap VAE-lat64→proj32 FiLM (no elev, no static, wd=1e-4)"
+  colour: "#9edae5"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 32 --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+# =========================================================================
+# lat64 → proj32 (MLP projection) — both injections, both elev settings, both targets
+# =========================================================================
+
+
+- name: wind_snap_vae_lat64_proj32_mlp_concat_with_elev_no_static_wd
+  label: "Wind snap VAE-lat64→proj32-MLP concat (with elev, no static, wd=1e-4)"
+  colour: "#2ca02c"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 32 --vae-latents-proj-mlp --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat64_proj32_mlp_concat_no_elev_no_static_wd
+  label: "Wind snap VAE-lat64→proj32-MLP concat (no elev, no static, wd=1e-4)"
+  colour: "#98df8a"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 32 --vae-latents-proj-mlp --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat64_proj32_mlp_concat_with_elev_no_static_wd
+  label: "t2m snap VAE-lat64→proj32-MLP concat (with elev, no static, wd=1e-4)"
+  colour: "#2ca02c"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 32 --vae-latents-proj-mlp --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat64_proj32_mlp_concat_no_elev_no_static_wd
+  label: "t2m snap VAE-lat64→proj32-MLP concat (no elev, no static, wd=1e-4)"
+  colour: "#98df8a"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 32 --vae-latents-proj-mlp --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat64_proj32_mlp_film_with_elev_no_static_wd
+  label: "Wind snap VAE-lat64→proj32-MLP FiLM (with elev, no static, wd=1e-4)"
+  colour: "#17becf"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 32 --vae-latents-proj-mlp --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat64_proj32_mlp_film_no_elev_no_static_wd
+  label: "Wind snap VAE-lat64→proj32-MLP FiLM (no elev, no static, wd=1e-4)"
+  colour: "#9edae5"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 32 --vae-latents-proj-mlp --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat64_proj32_mlp_film_with_elev_no_static_wd
+  label: "t2m snap VAE-lat64→proj32-MLP FiLM (with elev, no static, wd=1e-4)"
+  colour: "#17becf"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 32 --vae-latents-proj-mlp --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat64_proj32_mlp_film_no_elev_no_static_wd
+  label: "t2m snap VAE-lat64→proj32-MLP FiLM (no elev, no static, wd=1e-4)"
+  colour: "#9edae5"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 32 --vae-latents-proj-mlp --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+# =========================================================================
+# Static-fields ablation (single-task) — top-3 architectures with --static-fields ON
+# =========================================================================
+# These re-run the strongest TESSERA architectures while keeping the static fields
+# (elevation_static, dem_etc) attached. Expected to *underperform* the no-static counterparts,
+# demonstrating that static fields are redundant once TESSERA encodes the land surface.
+
+
+- name: wind_snap_vae_lat16_concat_with_elev_with_static_wd
+  label: "Wind snap VAE-lat16 concat (with elev, with static, wd=1e-4)"
+  colour: "#1f77b4"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat16_concat_no_elev_with_static_wd
+  label: "Wind snap VAE-lat16 concat (no elev, with static, wd=1e-4)"
+  colour: "#6baed6"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --no-elevation --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat16_concat_with_elev_with_static_wd
+  label: "t2m snap VAE-lat16 concat (with elev, with static, wd=1e-4)"
+  colour: "#1f77b4"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat16_concat_no_elev_with_static_wd
+  label: "t2m snap VAE-lat16 concat (no elev, with static, wd=1e-4)"
+  colour: "#6baed6"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --no-elevation --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat64_proj16_concat_with_elev_with_static_wd
+  label: "Wind snap VAE-lat64→proj16 concat (with elev, with static, wd=1e-4)"
+  colour: "#2ca02c"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 16 --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat64_proj16_concat_no_elev_with_static_wd
+  label: "Wind snap VAE-lat64→proj16 concat (no elev, with static, wd=1e-4)"
+  colour: "#98df8a"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 16 --no-elevation --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat64_proj16_concat_with_elev_with_static_wd
+  label: "t2m snap VAE-lat64→proj16 concat (with elev, with static, wd=1e-4)"
+  colour: "#2ca02c"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 16 --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat64_proj16_concat_no_elev_with_static_wd
+  label: "t2m snap VAE-lat64→proj16 concat (no elev, with static, wd=1e-4)"
+  colour: "#98df8a"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 16 --no-elevation --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat64_proj8_film_with_elev_with_static_wd
+  label: "Wind snap VAE-lat64→proj8 FiLM (with elev, with static, wd=1e-4)"
+  colour: "#17becf"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat64_proj8_film_no_elev_with_static_wd
+  label: "Wind snap VAE-lat64→proj8 FiLM (no elev, with static, wd=1e-4)"
+  colour: "#9edae5"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --no-elevation --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat64_proj8_film_with_elev_with_static_wd
+  label: "t2m snap VAE-lat64→proj8 FiLM (with elev, with static, wd=1e-4)"
+  colour: "#17becf"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat64_proj8_film_no_elev_with_static_wd
+  label: "t2m snap VAE-lat64→proj8 FiLM (no elev, with static, wd=1e-4)"
+  colour: "#9edae5"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --no-elevation --weight-decay 1e-4"
+
+
+# =========================================================================
+# Multi-task baseline (no TESSERA, with elev, with static)
+# =========================================================================
+
+
+- name: multitask_snap_bilinear_baseline_wd
+  label: "Multi-task snap bilinear baseline (with elev, with static, wd=1e-4)"
+  colour: "#999999"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --weight-decay 1e-4"
+
+
+# =========================================================================
+# Multi-task — lat16 direct (no projection)
+# =========================================================================
+
+
+- name: multitask_snap_vae_lat16_concat_with_elev_no_static_wd
+  label: "Multi-task snap VAE-lat16 concat (with elev, no static, wd=1e-4)"
+  colour: "#1f77b4"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --no-static-fields --weight-decay 1e-4"
+
+
+- name: multitask_snap_vae_lat16_concat_no_elev_no_static_wd
+  label: "Multi-task snap VAE-lat16 concat (no elev, no static, wd=1e-4)"
+  colour: "#6baed6"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+- name: multitask_snap_vae_lat16_film_with_elev_no_static_wd
+  label: "Multi-task snap VAE-lat16 FiLM (with elev, no static, wd=1e-4)"
+  colour: "#ff7f0e"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --no-static-fields --weight-decay 1e-4"
+
+
+- name: multitask_snap_vae_lat16_film_no_elev_no_static_wd
+  label: "Multi-task snap VAE-lat16 FiLM (no elev, no static, wd=1e-4)"
+  colour: "#fdae6b"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+# =========================================================================
+# Multi-task — lat16 → proj8 (linear)
+# =========================================================================
+
+
+- name: multitask_snap_vae_lat16_proj8_concat_with_elev_no_static_wd
+  label: "Multi-task snap VAE-lat16→proj8 concat (with elev, no static, wd=1e-4)"
+  colour: "#1f77b4"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+
+- name: multitask_snap_vae_lat16_proj8_concat_no_elev_no_static_wd
+  label: "Multi-task snap VAE-lat16→proj8 concat (no elev, no static, wd=1e-4)"
+  colour: "#6baed6"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+- name: multitask_snap_vae_lat16_proj8_film_with_elev_no_static_wd
+  label: "Multi-task snap VAE-lat16→proj8 FiLM (with elev, no static, wd=1e-4)"
+  colour: "#ff7f0e"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+
+- name: multitask_snap_vae_lat16_proj8_film_no_elev_no_static_wd
+  label: "Multi-task snap VAE-lat16→proj8 FiLM (no elev, no static, wd=1e-4)"
+  colour: "#fdae6b"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+# =========================================================================
+# Multi-task — lat16 → proj8 (MLP)
+# =========================================================================
+
+
+- name: multitask_snap_vae_lat16_proj8_mlp_concat_with_elev_no_static_wd
+  label: "Multi-task snap VAE-lat16→proj8-MLP concat (with elev, no static, wd=1e-4)"
+  colour: "#1f77b4"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --vae-latents-proj-mlp --no-static-fields --weight-decay 1e-4"
+
+
+- name: multitask_snap_vae_lat16_proj8_mlp_concat_no_elev_no_static_wd
+  label: "Multi-task snap VAE-lat16→proj8-MLP concat (no elev, no static, wd=1e-4)"
+  colour: "#6baed6"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --vae-latents-proj-mlp --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+- name: multitask_snap_vae_lat16_proj8_mlp_film_with_elev_no_static_wd
+  label: "Multi-task snap VAE-lat16→proj8-MLP FiLM (with elev, no static, wd=1e-4)"
+  colour: "#ff7f0e"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --vae-latents-proj-mlp --no-static-fields --weight-decay 1e-4"
+
+
+- name: multitask_snap_vae_lat16_proj8_mlp_film_no_elev_no_static_wd
+  label: "Multi-task snap VAE-lat16→proj8-MLP FiLM (no elev, no static, wd=1e-4)"
+  colour: "#fdae6b"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --vae-latents-proj-mlp --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+# =========================================================================
+# Multi-task — lat64 direct (no projection)
+# =========================================================================
+
+
+- name: multitask_snap_vae_lat64_concat_with_elev_no_static_wd
+  label: "Multi-task snap VAE-lat64 concat (with elev, no static, wd=1e-4)"
+  colour: "#2ca02c"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --no-static-fields --weight-decay 1e-4"
+
+
+- name: multitask_snap_vae_lat64_concat_no_elev_no_static_wd
+  label: "Multi-task snap VAE-lat64 concat (no elev, no static, wd=1e-4)"
+  colour: "#98df8a"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+- name: multitask_snap_vae_lat64_film_with_elev_no_static_wd
+  label: "Multi-task snap VAE-lat64 FiLM (with elev, no static, wd=1e-4)"
+  colour: "#17becf"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --no-static-fields --weight-decay 1e-4"
+
+
+- name: multitask_snap_vae_lat64_film_no_elev_no_static_wd
+  label: "Multi-task snap VAE-lat64 FiLM (no elev, no static, wd=1e-4)"
+  colour: "#9edae5"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+# =========================================================================
+# Multi-task — lat64 → proj8 (linear)
+# =========================================================================
+
+
+- name: multitask_snap_vae_lat64_proj8_concat_with_elev_no_static_wd
+  label: "Multi-task snap VAE-lat64→proj8 concat (with elev, no static, wd=1e-4)"
+  colour: "#2ca02c"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+
+- name: multitask_snap_vae_lat64_proj8_concat_no_elev_no_static_wd
+  label: "Multi-task snap VAE-lat64→proj8 concat (no elev, no static, wd=1e-4)"
+  colour: "#98df8a"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+- name: multitask_snap_vae_lat64_proj8_film_with_elev_no_static_wd
+  label: "Multi-task snap VAE-lat64→proj8 FiLM (with elev, no static, wd=1e-4)"
+  colour: "#17becf"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+
+- name: multitask_snap_vae_lat64_proj8_film_no_elev_no_static_wd
+  label: "Multi-task snap VAE-lat64→proj8 FiLM (no elev, no static, wd=1e-4)"
+  colour: "#9edae5"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+# =========================================================================
+# Multi-task — lat64 → proj8 (MLP)
+# =========================================================================
+
+
+- name: multitask_snap_vae_lat64_proj8_mlp_concat_with_elev_no_static_wd
+  label: "Multi-task snap VAE-lat64→proj8-MLP concat (with elev, no static, wd=1e-4)"
+  colour: "#2ca02c"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --vae-latents-proj-mlp --no-static-fields --weight-decay 1e-4"
+
+
+- name: multitask_snap_vae_lat64_proj8_mlp_concat_no_elev_no_static_wd
+  label: "Multi-task snap VAE-lat64→proj8-MLP concat (no elev, no static, wd=1e-4)"
+  colour: "#98df8a"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --vae-latents-proj-mlp --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+- name: multitask_snap_vae_lat64_proj8_mlp_film_with_elev_no_static_wd
+  label: "Multi-task snap VAE-lat64→proj8-MLP FiLM (with elev, no static, wd=1e-4)"
+  colour: "#17becf"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --vae-latents-proj-mlp --no-static-fields --weight-decay 1e-4"
+
+
+- name: multitask_snap_vae_lat64_proj8_mlp_film_no_elev_no_static_wd
+  label: "Multi-task snap VAE-lat64→proj8-MLP FiLM (no elev, no static, wd=1e-4)"
+  colour: "#9edae5"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --vae-latents-proj-mlp --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+# =========================================================================
+# Multi-task — lat64 → proj16 (linear)
+# =========================================================================
+
+
+- name: multitask_snap_vae_lat64_proj16_concat_with_elev_no_static_wd
+  label: "Multi-task snap VAE-lat64→proj16 concat (with elev, no static, wd=1e-4)"
+  colour: "#2ca02c"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4"
+
+
+- name: multitask_snap_vae_lat64_proj16_concat_no_elev_no_static_wd
+  label: "Multi-task snap VAE-lat64→proj16 concat (no elev, no static, wd=1e-4)"
+  colour: "#98df8a"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 16 --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+- name: multitask_snap_vae_lat64_proj16_film_with_elev_no_static_wd
+  label: "Multi-task snap VAE-lat64→proj16 FiLM (with elev, no static, wd=1e-4)"
+  colour: "#17becf"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4"
+
+
+- name: multitask_snap_vae_lat64_proj16_film_no_elev_no_static_wd
+  label: "Multi-task snap VAE-lat64→proj16 FiLM (no elev, no static, wd=1e-4)"
+  colour: "#9edae5"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 16 --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+# =========================================================================
+# Multi-task — lat64 → proj16 (MLP)
+# =========================================================================
+
+
+- name: multitask_snap_vae_lat64_proj16_mlp_concat_with_elev_no_static_wd
+  label: "Multi-task snap VAE-lat64→proj16-MLP concat (with elev, no static, wd=1e-4)"
+  colour: "#2ca02c"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 16 --vae-latents-proj-mlp --no-static-fields --weight-decay 1e-4"
+
+
+- name: multitask_snap_vae_lat64_proj16_mlp_concat_no_elev_no_static_wd
+  label: "Multi-task snap VAE-lat64→proj16-MLP concat (no elev, no static, wd=1e-4)"
+  colour: "#98df8a"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 16 --vae-latents-proj-mlp --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+- name: multitask_snap_vae_lat64_proj16_mlp_film_with_elev_no_static_wd
+  label: "Multi-task snap VAE-lat64→proj16-MLP FiLM (with elev, no static, wd=1e-4)"
+  colour: "#17becf"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 16 --vae-latents-proj-mlp --no-static-fields --weight-decay 1e-4"
+
+
+- name: multitask_snap_vae_lat64_proj16_mlp_film_no_elev_no_static_wd
+  label: "Multi-task snap VAE-lat64→proj16-MLP FiLM (no elev, no static, wd=1e-4)"
+  colour: "#9edae5"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 16 --vae-latents-proj-mlp --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+# =========================================================================
+# Multi-task — lat64 → proj32 (linear)
+# =========================================================================
+
+
+- name: multitask_snap_vae_lat64_proj32_concat_with_elev_no_static_wd
+  label: "Multi-task snap VAE-lat64→proj32 concat (with elev, no static, wd=1e-4)"
+  colour: "#2ca02c"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 32 --no-static-fields --weight-decay 1e-4"
+
+
+- name: multitask_snap_vae_lat64_proj32_concat_no_elev_no_static_wd
+  label: "Multi-task snap VAE-lat64→proj32 concat (no elev, no static, wd=1e-4)"
+  colour: "#98df8a"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 32 --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+- name: multitask_snap_vae_lat64_proj32_film_with_elev_no_static_wd
+  label: "Multi-task snap VAE-lat64→proj32 FiLM (with elev, no static, wd=1e-4)"
+  colour: "#17becf"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 32 --no-static-fields --weight-decay 1e-4"
+
+
+- name: multitask_snap_vae_lat64_proj32_film_no_elev_no_static_wd
+  label: "Multi-task snap VAE-lat64→proj32 FiLM (no elev, no static, wd=1e-4)"
+  colour: "#9edae5"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 32 --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+# =========================================================================
+# Multi-task — lat64 → proj32 (MLP)
+# =========================================================================
+
+
+- name: multitask_snap_vae_lat64_proj32_mlp_concat_with_elev_no_static_wd
+  label: "Multi-task snap VAE-lat64→proj32-MLP concat (with elev, no static, wd=1e-4)"
+  colour: "#2ca02c"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 32 --vae-latents-proj-mlp --no-static-fields --weight-decay 1e-4"
+
+
+- name: multitask_snap_vae_lat64_proj32_mlp_concat_no_elev_no_static_wd
+  label: "Multi-task snap VAE-lat64→proj32-MLP concat (no elev, no static, wd=1e-4)"
+  colour: "#98df8a"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 32 --vae-latents-proj-mlp --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+- name: multitask_snap_vae_lat64_proj32_mlp_film_with_elev_no_static_wd
+  label: "Multi-task snap VAE-lat64→proj32-MLP FiLM (with elev, no static, wd=1e-4)"
+  colour: "#17becf"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 32 --vae-latents-proj-mlp --no-static-fields --weight-decay 1e-4"
+
+
+- name: multitask_snap_vae_lat64_proj32_mlp_film_no_elev_no_static_wd
+  label: "Multi-task snap VAE-lat64→proj32-MLP FiLM (no elev, no static, wd=1e-4)"
+  colour: "#9edae5"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 32 --vae-latents-proj-mlp --no-elevation --no-static-fields --weight-decay 1e-4"
+
+
+# =========================================================================
+# Static-fields ablation (multi-task) — top-3 architectures with --static-fields ON
+# =========================================================================
+
+
+- name: multitask_snap_vae_lat16_concat_with_elev_with_static_wd
+  label: "Multi-task snap VAE-lat16 concat (with elev, with static, wd=1e-4)"
+  colour: "#1f77b4"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --weight-decay 1e-4"
+
+
+- name: multitask_snap_vae_lat16_concat_no_elev_with_static_wd
+  label: "Multi-task snap VAE-lat16 concat (no elev, with static, wd=1e-4)"
+  colour: "#6baed6"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --no-elevation --weight-decay 1e-4"
+
+
+- name: multitask_snap_vae_lat64_proj16_concat_with_elev_with_static_wd
+  label: "Multi-task snap VAE-lat64→proj16 concat (with elev, with static, wd=1e-4)"
+  colour: "#2ca02c"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 16 --weight-decay 1e-4"
+
+
+- name: multitask_snap_vae_lat64_proj16_concat_no_elev_with_static_wd
+  label: "Multi-task snap VAE-lat64→proj16 concat (no elev, with static, wd=1e-4)"
+  colour: "#98df8a"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 16 --no-elevation --weight-decay 1e-4"
+
+
+- name: multitask_snap_vae_lat64_proj8_film_with_elev_with_static_wd
+  label: "Multi-task snap VAE-lat64→proj8 FiLM (with elev, with static, wd=1e-4)"
+  colour: "#17becf"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --weight-decay 1e-4"
+
+
+- name: multitask_snap_vae_lat64_proj8_film_no_elev_with_static_wd
+  label: "Multi-task snap VAE-lat64→proj8 FiLM (no elev, with static, wd=1e-4)"
+  colour: "#9edae5"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --no-elevation --weight-decay 1e-4"
+
+# =========================================================================
+# Simple non-ML baselines (no GPU required) — see 
+# scripts/baselines/evaluate_simple_baselines.py for implementation.
+# =========================================================================
+# - era5_interp: bilinearly interpolate raw ERA5 to station coords
+#                (with K→°C conversion for t2m, sqrt(u²+v²) for wind).
+# - persistence: predict the most recent valid GHCNh observation at
+#                the same station within a 24h lookback window.
+#
+# These carry a `baseline_kind` field that submit.sh detects and
+# routes to the baselines evaluator. They are deterministic, so all
+# 3 seeds produce identical numbers — kept seed×3 only because the
+# analysis loader expects ≥3 seeds per experiment.
+
+- name: t2m_snap_era5_interp_baseline
+  label: "t2m snap ERA5 interpolation (no model, K→°C)"
+  colour: "#cccccc"
+  target_variables: [t2m]
+  extra_args: ""
+  baseline_kind: era5_interp
+
+- name: wind_snap_era5_interp_baseline
+  label: "Wind snap ERA5 interpolation (no model, sqrt(u²+v²))"
+  colour: "#cccccc"
+  target_variables: [wind]
+  extra_args: ""
+  baseline_kind: era5_interp
+
+- name: t2m_snap_persistence_baseline
+  label: "t2m snap persistence (most recent valid obs ≤24h)"
+  colour: "#dddddd"
+  target_variables: [t2m]
+  extra_args: ""
+  baseline_kind: persistence
+
+- name: wind_snap_persistence_baseline
+  label: "Wind snap persistence (most recent valid obs ≤24h)"
+  colour: "#dddddd"
+  target_variables: [wind]
+  extra_args: ""
+  baseline_kind: persistence
+
+
+# =========================================================================
+# NEW LIKELIHOOD EXPERIMENTS — appended to snapshot_14y_eu/experiments.yaml
+# =========================================================================
+#
+# Sources (transcribed from verify_post_fix_shortlist.py screenshots):
+#   |L1|  = 10 (top-10 t2m, full names)
+#   |L2|  = 10 (top-10 wind, full names)
+#   |L3'| = 4 (multitask specialists not in L1∪L2)
+#
+# Set archs after dedup:
+#   Set A  (wind-Weibull single-task)         : 4 archs
+#   Set B  (precip-BG single-task)            : 8 archs
+#   Set C1 (multitask t2m+wind, G+W)          : 10 archs
+#   Set C2 (multitask t2m+wind+precip, G+W+BG): 10 archs
+
+# -----------------------------------------------------------------------
+# Set A — Wind (Weibull) single-task
+# -----------------------------------------------------------------------
+
+- name: wind_weibull_snap_era5_interp_baseline
+  label: "Wind (Weibull) snap ERA5 interpolation (no model)"
+  colour: "#cccccc"
+  target_variables: [wind]
+  extra_args: ""
+  baseline_kind: era5_interp
+
+- name: wind_weibull_snap_persistence_baseline
+  label: "Wind (Weibull) snap persistence (most recent valid obs ≤24h)"
+  colour: "#dddddd"
+  target_variables: [wind]
+  extra_args: ""
+  baseline_kind: persistence
+
+- name: wind_weibull_snap_bilinear_baseline_wd
+  label: "Wind (Weibull) snap bilinear baseline (with elev, with static, wd=1e-4)"
+  colour: "#999999"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --weight-decay 1e-4 --likelihood wind=weibull"
+
+
+- name: wind_weibull_snap_vae_lat16_proj8_mlp_film_with_elev_no_static_wd
+  label: "Wind (Weibull) snap VAE-lat16→proj8-MLP FiLM (with elev, no static, wd=1e-4)"
+  colour: "#ff7f0e"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --vae-latents-proj-mlp --no-static-fields --weight-decay 1e-4 --likelihood wind=weibull"
+
+
+- name: wind_weibull_snap_vae_lat16_concat_with_elev_no_static_wd
+  label: "Wind (Weibull) snap VAE-lat16 concat (with elev, no static, wd=1e-4)"
+  colour: "#1f77b4"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --no-static-fields --weight-decay 1e-4 --likelihood wind=weibull"
+
+
+- name: wind_weibull_snap_vae_lat64_proj16_concat_with_elev_no_static_wd
+  label: "Wind (Weibull) snap VAE-lat64→proj16 concat (with elev, no static, wd=1e-4)"
+  colour: "#2ca02c"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4 --likelihood wind=weibull"
+
+
+- name: wind_weibull_snap_vae_lat64_proj8_film_with_elev_no_static_wd
+  label: "Wind (Weibull) snap VAE-lat64→proj8 FiLM (with elev, no static, wd=1e-4)"
+  colour: "#17becf"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4 --likelihood wind=weibull"
+
+# -----------------------------------------------------------------------
+# Set B — Precipitation (Bernoulli-Gamma) single-task
+# -----------------------------------------------------------------------
+
+- name: precip_snap_era5_interp_baseline
+  label: "Precip (B-G) snap ERA5 interpolation (no model)"
+  colour: "#cccccc"
+  target_variables: [precip]
+  extra_args: ""
+  baseline_kind: era5_interp
+
+- name: precip_snap_persistence_baseline
+  label: "Precip (B-G) snap persistence (most recent valid obs ≤24h)"
+  colour: "#dddddd"
+  target_variables: [precip]
+  extra_args: ""
+  baseline_kind: persistence
+
+- name: precip_snap_bilinear_baseline_wd
+  label: "Precip (B-G) snap bilinear baseline (with elev, with static, wd=1e-4)"
+  colour: "#999999"
+  target_variables: [precip]
+  extra_args: "--interpolation bilinear --weight-decay 1e-4 --likelihood precip=bernoulli_gamma"
+
+
+- name: precip_snap_vae_lat64_proj16_concat_with_elev_no_static_wd
+  label: "Precip (B-G) snap VAE-lat64→proj16 concat (with elev, no static, wd=1e-4)"
+  colour: "#2ca02c"
+  target_variables: [precip]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4 --likelihood precip=bernoulli_gamma"
+
+
+- name: precip_snap_vae_lat64_proj16_mlp_concat_with_elev_no_static_wd
+  label: "Precip (B-G) snap VAE-lat64→proj16-MLP concat (with elev, no static, wd=1e-4)"
+  colour: "#2ca02c"
+  target_variables: [precip]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 16 --vae-latents-proj-mlp --no-static-fields --weight-decay 1e-4 --likelihood precip=bernoulli_gamma"
+
+
+- name: precip_snap_vae_lat64_proj16_mlp_film_with_elev_no_static_wd
+  label: "Precip (B-G) snap VAE-lat64→proj16-MLP FiLM (with elev, no static, wd=1e-4)"
+  colour: "#17becf"
+  target_variables: [precip]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 16 --vae-latents-proj-mlp --no-static-fields --weight-decay 1e-4 --likelihood precip=bernoulli_gamma"
+
+
+- name: precip_snap_vae_lat64_proj8_film_with_elev_no_static_wd
+  label: "Precip (B-G) snap VAE-lat64→proj8 FiLM (with elev, no static, wd=1e-4)"
+  colour: "#17becf"
+  target_variables: [precip]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4 --likelihood precip=bernoulli_gamma"
+
+
+- name: precip_snap_vae_lat64_proj32_film_with_elev_no_static_wd
+  label: "Precip (B-G) snap VAE-lat64→proj32 FiLM (with elev, no static, wd=1e-4)"
+  colour: "#17becf"
+  target_variables: [precip]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 32 --no-static-fields --weight-decay 1e-4 --likelihood precip=bernoulli_gamma"
+
+
+- name: precip_snap_vae_lat16_proj8_mlp_film_with_elev_no_static_wd
+  label: "Precip (B-G) snap VAE-lat16→proj8-MLP FiLM (with elev, no static, wd=1e-4)"
+  colour: "#ff7f0e"
+  target_variables: [precip]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --vae-latents-proj-mlp --no-static-fields --weight-decay 1e-4 --likelihood precip=bernoulli_gamma"
+
+
+- name: precip_snap_vae_lat64_proj32_concat_with_elev_no_static_wd
+  label: "Precip (B-G) snap VAE-lat64→proj32 concat (with elev, no static, wd=1e-4)"
+  colour: "#2ca02c"
+  target_variables: [precip]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 32 --no-static-fields --weight-decay 1e-4 --likelihood precip=bernoulli_gamma"
+
+
+- name: precip_snap_vae_lat16_concat_with_elev_no_static_wd
+  label: "Precip (B-G) snap VAE-lat16 concat (with elev, no static, wd=1e-4)"
+  colour: "#1f77b4"
+  target_variables: [precip]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --no-static-fields --weight-decay 1e-4 --likelihood precip=bernoulli_gamma"
+
+# -----------------------------------------------------------------------
+# Set C1 — Multitask [t2m, wind] mixed likelihoods (G + W)
+# -----------------------------------------------------------------------
+
+- name: multitask_mixed_snap_era5_interp_baseline
+  label: "Multi-task mixed (G+W) snap ERA5 interpolation (no model)"
+  colour: "#cccccc"
+  target_variables: [t2m, wind]
+  extra_args: ""
+  baseline_kind: era5_interp
+
+- name: multitask_mixed_snap_persistence_baseline
+  label: "Multi-task mixed (G+W) snap persistence (most recent valid obs ≤24h)"
+  colour: "#dddddd"
+  target_variables: [t2m, wind]
+  extra_args: ""
+  baseline_kind: persistence
+
+- name: multitask_mixed_snap_bilinear_baseline_wd
+  label: "Multi-task mixed (G+W) snap bilinear baseline (with elev, with static, wd=1e-4)"
+  colour: "#999999"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --weight-decay 1e-4 --likelihood t2m=gaussian,wind=weibull"
+
+
+- name: multitask_mixed_snap_vae_lat64_proj16_film_with_elev_no_static_wd
+  label: "Multi-task mixed (G+W) snap VAE-lat64→proj16 FiLM (with elev, no static, wd=1e-4)"
+  colour: "#17becf"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4 --likelihood t2m=gaussian,wind=weibull"
+
+
+- name: multitask_mixed_snap_vae_lat16_proj8_film_with_elev_no_static_wd
+  label: "Multi-task mixed (G+W) snap VAE-lat16→proj8 FiLM (with elev, no static, wd=1e-4)"
+  colour: "#ff7f0e"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4 --likelihood t2m=gaussian,wind=weibull"
+
+
+- name: multitask_mixed_snap_vae_lat64_proj16_concat_with_elev_no_static_wd
+  label: "Multi-task mixed (G+W) snap VAE-lat64→proj16 concat (with elev, no static, wd=1e-4)"
+  colour: "#2ca02c"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4 --likelihood t2m=gaussian,wind=weibull"
+
+
+- name: multitask_mixed_snap_vae_lat16_film_with_elev_no_static_wd
+  label: "Multi-task mixed (G+W) snap VAE-lat16 FiLM (with elev, no static, wd=1e-4)"
+  colour: "#ff7f0e"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --no-static-fields --weight-decay 1e-4 --likelihood t2m=gaussian,wind=weibull"
+
+
+- name: multitask_mixed_snap_vae_lat16_concat_with_elev_no_static_wd
+  label: "Multi-task mixed (G+W) snap VAE-lat16 concat (with elev, no static, wd=1e-4)"
+  colour: "#1f77b4"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --no-static-fields --weight-decay 1e-4 --likelihood t2m=gaussian,wind=weibull"
+
+
+- name: multitask_mixed_snap_vae_lat64_proj32_concat_with_elev_no_static_wd
+  label: "Multi-task mixed (G+W) snap VAE-lat64→proj32 concat (with elev, no static, wd=1e-4)"
+  colour: "#2ca02c"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 32 --no-static-fields --weight-decay 1e-4 --likelihood t2m=gaussian,wind=weibull"
+
+
+- name: multitask_mixed_snap_vae_lat16_proj8_mlp_concat_with_elev_no_static_wd
+  label: "Multi-task mixed (G+W) snap VAE-lat16→proj8-MLP concat (with elev, no static, wd=1e-4)"
+  colour: "#1f77b4"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --vae-latents-proj-mlp --no-static-fields --weight-decay 1e-4 --likelihood t2m=gaussian,wind=weibull"
+
+
+- name: multitask_mixed_snap_vae_lat16_proj8_concat_with_elev_no_static_wd
+  label: "Multi-task mixed (G+W) snap VAE-lat16→proj8 concat (with elev, no static, wd=1e-4)"
+  colour: "#1f77b4"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4 --likelihood t2m=gaussian,wind=weibull"
+
+
+- name: multitask_mixed_snap_vae_lat64_concat_with_elev_no_static_wd
+  label: "Multi-task mixed (G+W) snap VAE-lat64 concat (with elev, no static, wd=1e-4)"
+  colour: "#2ca02c"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --no-static-fields --weight-decay 1e-4 --likelihood t2m=gaussian,wind=weibull"
+
+
+- name: multitask_mixed_snap_vae_lat64_proj8_film_with_elev_no_static_wd
+  label: "Multi-task mixed (G+W) snap VAE-lat64→proj8 FiLM (with elev, no static, wd=1e-4)"
+  colour: "#17becf"
+  target_variables: [t2m, wind]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4 --likelihood t2m=gaussian,wind=weibull"
+
+# -----------------------------------------------------------------------
+# Set C2 — Multitask [t2m, wind, precip] full mixed (G + W + BG)
+# -----------------------------------------------------------------------
+
+- name: multitask_full_snap_era5_interp_baseline
+  label: "Multi-task full (G+W+BG) snap ERA5 interpolation (no model)"
+  colour: "#cccccc"
+  target_variables: [t2m, wind, precip]
+  extra_args: ""
+  baseline_kind: era5_interp
+
+- name: multitask_full_snap_persistence_baseline
+  label: "Multi-task full (G+W+BG) snap persistence (most recent valid obs ≤24h)"
+  colour: "#dddddd"
+  target_variables: [t2m, wind, precip]
+  extra_args: ""
+  baseline_kind: persistence
+
+- name: multitask_full_snap_bilinear_baseline_wd
+  label: "Multi-task full (G+W+BG) snap bilinear baseline (with elev, with static, wd=1e-4)"
+  colour: "#999999"
+  target_variables: [t2m, wind, precip]
+  extra_args: "--interpolation bilinear --weight-decay 1e-4 --likelihood t2m=gaussian,wind=weibull,precip=bernoulli_gamma"
+
+
+- name: multitask_full_snap_vae_lat64_proj16_film_with_elev_no_static_wd
+  label: "Multi-task full (G+W+BG) snap VAE-lat64→proj16 FiLM (with elev, no static, wd=1e-4)"
+  colour: "#17becf"
+  target_variables: [t2m, wind, precip]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4 --likelihood t2m=gaussian,wind=weibull,precip=bernoulli_gamma"
+
+
+- name: multitask_full_snap_vae_lat16_proj8_film_with_elev_no_static_wd
+  label: "Multi-task full (G+W+BG) snap VAE-lat16→proj8 FiLM (with elev, no static, wd=1e-4)"
+  colour: "#ff7f0e"
+  target_variables: [t2m, wind, precip]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4 --likelihood t2m=gaussian,wind=weibull,precip=bernoulli_gamma"
+
+
+- name: multitask_full_snap_vae_lat64_proj16_concat_with_elev_no_static_wd
+  label: "Multi-task full (G+W+BG) snap VAE-lat64→proj16 concat (with elev, no static, wd=1e-4)"
+  colour: "#2ca02c"
+  target_variables: [t2m, wind, precip]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4 --likelihood t2m=gaussian,wind=weibull,precip=bernoulli_gamma"
+
+
+- name: multitask_full_snap_vae_lat16_film_with_elev_no_static_wd
+  label: "Multi-task full (G+W+BG) snap VAE-lat16 FiLM (with elev, no static, wd=1e-4)"
+  colour: "#ff7f0e"
+  target_variables: [t2m, wind, precip]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --no-static-fields --weight-decay 1e-4 --likelihood t2m=gaussian,wind=weibull,precip=bernoulli_gamma"
+
+
+- name: multitask_full_snap_vae_lat16_concat_with_elev_no_static_wd
+  label: "Multi-task full (G+W+BG) snap VAE-lat16 concat (with elev, no static, wd=1e-4)"
+  colour: "#1f77b4"
+  target_variables: [t2m, wind, precip]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --no-static-fields --weight-decay 1e-4 --likelihood t2m=gaussian,wind=weibull,precip=bernoulli_gamma"
+
+
+- name: multitask_full_snap_vae_lat64_proj32_concat_with_elev_no_static_wd
+  label: "Multi-task full (G+W+BG) snap VAE-lat64→proj32 concat (with elev, no static, wd=1e-4)"
+  colour: "#2ca02c"
+  target_variables: [t2m, wind, precip]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 32 --no-static-fields --weight-decay 1e-4 --likelihood t2m=gaussian,wind=weibull,precip=bernoulli_gamma"
+
+
+- name: multitask_full_snap_vae_lat16_proj8_mlp_concat_with_elev_no_static_wd
+  label: "Multi-task full (G+W+BG) snap VAE-lat16→proj8-MLP concat (with elev, no static, wd=1e-4)"
+  colour: "#1f77b4"
+  target_variables: [t2m, wind, precip]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --vae-latents-proj-mlp --no-static-fields --weight-decay 1e-4 --likelihood t2m=gaussian,wind=weibull,precip=bernoulli_gamma"
+
+
+- name: multitask_full_snap_vae_lat16_proj8_concat_with_elev_no_static_wd
+  label: "Multi-task full (G+W+BG) snap VAE-lat16→proj8 concat (with elev, no static, wd=1e-4)"
+  colour: "#1f77b4"
+  target_variables: [t2m, wind, precip]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4 --likelihood t2m=gaussian,wind=weibull,precip=bernoulli_gamma"
+
+
+- name: multitask_full_snap_vae_lat64_concat_with_elev_no_static_wd
+  label: "Multi-task full (G+W+BG) snap VAE-lat64 concat (with elev, no static, wd=1e-4)"
+  colour: "#2ca02c"
+  target_variables: [t2m, wind, precip]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --no-static-fields --weight-decay 1e-4 --likelihood t2m=gaussian,wind=weibull,precip=bernoulli_gamma"
+
+
+- name: multitask_full_snap_vae_lat64_proj8_film_with_elev_no_static_wd
+  label: "Multi-task full (G+W+BG) snap VAE-lat64→proj8 FiLM (with elev, no static, wd=1e-4)"
+  colour: "#17becf"
+  target_variables: [t2m, wind, precip]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4 --likelihood t2m=gaussian,wind=weibull,precip=bernoulli_gamma"
+  
+  
+
+# =========================================================================
+# No-TESSERA SetConv baselines
+# =========================================================================
+# Same role as the existing bilinear baselines (no --vae-* args; the
+# TESSERA-patch station filter from COMMON_ARGS in submit.sh still
+# applies), but with SetConv interpolation instead of bilinear so the
+# comparison against TESSERA-augmented SetConv runs is on a matched
+# interpolation backbone.
+
+- name: wind_snap_setconv_baseline_wd
+  label: "Wind snap SetConv baseline (with elev, with static, wd=1e-4)"
+  colour: "#999999"
+  target_variables: [wind]
+  extra_args: "--interpolation setconv --weight-decay 1e-4"
+
+
+- name: t2m_snap_setconv_baseline_wd
+  label: "t2m snap SetConv baseline (with elev, with static, wd=1e-4)"
+  colour: "#999999"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --weight-decay 1e-4"
+
+
+# =========================================================================
+# Embedding-aware decoder mechanisms — mechanism × injection × latent
+# =========================================================================
+#
+# Three axes, fully crossed.
+#
+# Axis 1 — decoder mechanism (5 levels):
+#   baseline               No embedding-aware mechanism. The TESSERA
+#                          latent enters only via the optional final-layer
+#                          concat injection (axis 2).
+#   kernelcond             Per-target lengthscale on the decoder SetConv.
+#                          A small MLP maps each target's embedding to a
+#                          delta-log-lengthscale; the kernel is otherwise
+#                          identical to the standard RBFSetConv.
+#                          (--decoder-kernel embedding_conditioned)
+#   embedstream            A second SetConv aggregates the target-station
+#                          embeddings onto the internal CNN grid; the
+#                          result is concatenated channel-wise to the
+#                          CNN's output before the decoder SetConv reads
+#                          from it. (--use-target-embed-stream)
+#   kernelcond_embedstream Both kernelcond and embedstream active
+#                          together.
+#   attnembed              Self-attention over the target set weighted by
+#                          cosine similarity of embeddings only (no
+#                          spatial term); the per-target attention output
+#                          is concatenated to the MLP input alongside the
+#                          SetConv output.
+#                          (--target-embed-attention embedding)
+#
+# Axis 2 — final-layer injection of the per-target embedding (2 levels):
+#   concat   Embedding is concatenated to the per-target MLP input.
+#   noinj    Embedding does not enter the MLP input directly; whatever
+#            the mechanism on axis 1 carries is the only TESSERA signal.
+#
+# Axis 3 — latent dim and linear projection (3 levels):
+#   vae_lat16          16-d VAE latent, consumed directly (no projection).
+#   vae_lat16_proj8    16-d VAE latent, linear projection to 8-d.
+#   vae_lat64_proj16   64-d VAE latent, linear projection to 16-d.
+#
+# Full grid: 5 × 2 × 3 = 30 cells.
+#
+# Intentionally omitted
+# ---------------------
+# (baseline, noinj, vae_lat16_proj8) and (baseline, noinj, vae_lat64_proj16)
+# are functionally equivalent to wind_snap_setconv_baseline_no_static_wd
+# and its t2m sibling above: no TESSERA path consumes the latent, so the
+# projection head's parameters never receive gradient and the predictions
+# are equivalent to a no-TESSERA model on the same station set.
+#
+# Alternative-attention sibling
+# -----------------------------
+# The hybridattn cells use cosine similarity AND a Gaussian spatial term
+# (--target-embed-attention hybrid). They sit outside the 30-cell matrix
+# (which restricts the attention path to cosine-similarity-only) but are
+# kept in the file as already-run reference points; included under the
+# vae_lat16 / concat section below.
+# =========================================================================
+
+
+# -------------------------------------------------------------------------
+# latent = vae_lat16  (raw 16-d, no projection)
+# injection = concat
+# -------------------------------------------------------------------------
+
+- name: wind_snap_vae_lat16_setconv_concat_with_elev_no_static_wd
+  label: "Wind snap VAE-lat16 SetConv concat (wd=1e-4)"
+  colour: "#444444"
+  target_variables: [wind]
+  extra_args: "--interpolation setconv --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat16_setconv_concat_with_elev_no_static_wd
+  label: "t2m snap VAE-lat16 SetConv concat (wd=1e-4)"
+  colour: "#444444"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat16_setconv_concat_kernelcond_with_elev_no_static_wd
+  label: "Wind snap VAE-lat16 SetConv concat + kernel-cond (wd=1e-4)"
+  colour: "#2ca02c"
+  target_variables: [wind]
+  extra_args: "--interpolation setconv --decoder-kernel embedding_conditioned --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat16_setconv_concat_kernelcond_with_elev_no_static_wd
+  label: "t2m snap VAE-lat16 SetConv concat + kernel-cond (wd=1e-4)"
+  colour: "#2ca02c"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --decoder-kernel embedding_conditioned --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat16_setconv_concat_embedstream_with_elev_no_static_wd
+  label: "Wind snap VAE-lat16 SetConv concat + embed-stream (wd=1e-4)"
+  colour: "#d62728"
+  target_variables: [wind]
+  extra_args: "--interpolation setconv --use-target-embed-stream --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat16_setconv_concat_embedstream_with_elev_no_static_wd
+  label: "t2m snap VAE-lat16 SetConv concat + embed-stream (wd=1e-4)"
+  colour: "#d62728"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --use-target-embed-stream --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat16_setconv_concat_kernelcond_embedstream_with_elev_no_static_wd
+  label: "Wind snap VAE-lat16 SetConv concat + kernel-cond + embed-stream (wd=1e-4)"
+  colour: "#9467bd"
+  target_variables: [wind]
+  extra_args: "--interpolation setconv --decoder-kernel embedding_conditioned --use-target-embed-stream --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat16_setconv_concat_kernelcond_embedstream_with_elev_no_static_wd
+  label: "t2m snap VAE-lat16 SetConv concat + kernel-cond + embed-stream (wd=1e-4)"
+  colour: "#9467bd"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --decoder-kernel embedding_conditioned --use-target-embed-stream --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat16_setconv_concat_attnembed_with_elev_no_static_wd
+  label: "Wind snap VAE-lat16 SetConv concat + attention-embedding (wd=1e-4)"
+  colour: "#ff7f0e"
+  target_variables: [wind]
+  extra_args: "--interpolation setconv --target-embed-attention embedding --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat16_setconv_concat_attnembed_with_elev_no_static_wd
+  label: "t2m snap VAE-lat16 SetConv concat + attention-embedding (wd=1e-4)"
+  colour: "#ff7f0e"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --target-embed-attention embedding --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --no-static-fields --weight-decay 1e-4"
+
+
+# Alternative attention mechanism (cosine similarity + spatial term).
+# Not part of the 30-cell matrix above but kept here as an already-run
+# sibling to attnembed.
+
+- name: wind_snap_vae_lat16_setconv_concat_hybridattn_with_elev_no_static_wd
+  label: "Wind snap VAE-lat16 SetConv concat + hybrid attention (wd=1e-4)"
+  colour: "#e377c2"
+  target_variables: [wind]
+  extra_args: "--interpolation setconv --target-embed-attention hybrid --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat16_setconv_concat_hybridattn_with_elev_no_static_wd
+  label: "t2m snap VAE-lat16 SetConv concat + hybrid attention (wd=1e-4)"
+  colour: "#e377c2"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --target-embed-attention hybrid --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --no-static-fields --weight-decay 1e-4"
+
+
+# -------------------------------------------------------------------------
+# latent = vae_lat16  (raw 16-d, no projection)
+# injection = noinj
+# -------------------------------------------------------------------------
+# The (baseline, noinj, vae_lat16) cell is wind/t2m_snap_setconv_baseline_no_static_wd
+# above — no entry repeated here.
+
+- name: wind_snap_vae_lat16_setconv_noinj_kernelcond_with_elev_no_static_wd
+  label: "Wind snap VAE-lat16 SetConv noinj + kernel-cond (wd=1e-4)"
+  colour: "#2ca02c"
+  target_variables: [wind]
+  extra_args: "--interpolation setconv --decoder-kernel embedding_conditioned --tessera-injection none --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat16_setconv_noinj_kernelcond_with_elev_no_static_wd
+  label: "t2m snap VAE-lat16 SetConv noinj + kernel-cond (wd=1e-4)"
+  colour: "#2ca02c"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --decoder-kernel embedding_conditioned --tessera-injection none --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat16_setconv_noinj_embedstream_with_elev_no_static_wd
+  label: "Wind snap VAE-lat16 SetConv noinj + embed-stream (wd=1e-4)"
+  colour: "#d62728"
+  target_variables: [wind]
+  extra_args: "--interpolation setconv --use-target-embed-stream --tessera-injection none --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat16_setconv_noinj_embedstream_with_elev_no_static_wd
+  label: "t2m snap VAE-lat16 SetConv noinj + embed-stream (wd=1e-4)"
+  colour: "#d62728"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --use-target-embed-stream --tessera-injection none --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat16_setconv_noinj_kernelcond_embedstream_with_elev_no_static_wd
+  label: "Wind snap VAE-lat16 SetConv noinj + kernel-cond + embed-stream (wd=1e-4)"
+  colour: "#9467bd"
+  target_variables: [wind]
+  extra_args: "--interpolation setconv --decoder-kernel embedding_conditioned --use-target-embed-stream --tessera-injection none --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat16_setconv_noinj_kernelcond_embedstream_with_elev_no_static_wd
+  label: "t2m snap VAE-lat16 SetConv noinj + kernel-cond + embed-stream (wd=1e-4)"
+  colour: "#9467bd"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --decoder-kernel embedding_conditioned --use-target-embed-stream --tessera-injection none --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat16_setconv_noinj_attnembed_with_elev_no_static_wd
+  label: "Wind snap VAE-lat16 SetConv noinj + attention-embedding (wd=1e-4)"
+  colour: "#ff7f0e"
+  target_variables: [wind]
+  extra_args: "--interpolation setconv --target-embed-attention embedding --tessera-injection none --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat16_setconv_noinj_attnembed_with_elev_no_static_wd
+  label: "t2m snap VAE-lat16 SetConv noinj + attention-embedding (wd=1e-4)"
+  colour: "#ff7f0e"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --target-embed-attention embedding --tessera-injection none --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --no-static-fields --weight-decay 1e-4"
+
+
+# -------------------------------------------------------------------------
+# latent = vae_lat16_proj8  (16-d latent → linear projection to 8-d)
+# injection = concat
+# -------------------------------------------------------------------------
+
+- name: wind_snap_vae_lat16_proj8_setconv_concat_with_elev_no_static_wd
+  label: "Wind snap VAE-lat16→proj8 SetConv concat (wd=1e-4)"
+  colour: "#444444"
+  target_variables: [wind]
+  extra_args: "--interpolation setconv --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat16_proj8_setconv_concat_with_elev_no_static_wd
+  label: "t2m snap VAE-lat16→proj8 SetConv concat (wd=1e-4)"
+  colour: "#444444"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat16_proj8_setconv_concat_kernelcond_with_elev_no_static_wd
+  label: "Wind snap VAE-lat16→proj8 SetConv concat + kernel-cond (wd=1e-4)"
+  colour: "#2ca02c"
+  target_variables: [wind]
+  extra_args: "--interpolation setconv --decoder-kernel embedding_conditioned --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat16_proj8_setconv_concat_kernelcond_with_elev_no_static_wd
+  label: "t2m snap VAE-lat16→proj8 SetConv concat + kernel-cond (wd=1e-4)"
+  colour: "#2ca02c"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --decoder-kernel embedding_conditioned --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat16_proj8_setconv_concat_embedstream_with_elev_no_static_wd
+  label: "Wind snap VAE-lat16→proj8 SetConv concat + embed-stream (wd=1e-4)"
+  colour: "#d62728"
+  target_variables: [wind]
+  extra_args: "--interpolation setconv --use-target-embed-stream --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat16_proj8_setconv_concat_embedstream_with_elev_no_static_wd
+  label: "t2m snap VAE-lat16→proj8 SetConv concat + embed-stream (wd=1e-4)"
+  colour: "#d62728"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --use-target-embed-stream --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat16_proj8_setconv_concat_kernelcond_embedstream_with_elev_no_static_wd
+  label: "Wind snap VAE-lat16→proj8 SetConv concat + kernel-cond + embed-stream (wd=1e-4)"
+  colour: "#9467bd"
+  target_variables: [wind]
+  extra_args: "--interpolation setconv --decoder-kernel embedding_conditioned --use-target-embed-stream --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat16_proj8_setconv_concat_kernelcond_embedstream_with_elev_no_static_wd
+  label: "t2m snap VAE-lat16→proj8 SetConv concat + kernel-cond + embed-stream (wd=1e-4)"
+  colour: "#9467bd"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --decoder-kernel embedding_conditioned --use-target-embed-stream --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat16_proj8_setconv_concat_attnembed_with_elev_no_static_wd
+  label: "Wind snap VAE-lat16→proj8 SetConv concat + attention-embedding (wd=1e-4)"
+  colour: "#ff7f0e"
+  target_variables: [wind]
+  extra_args: "--interpolation setconv --target-embed-attention embedding --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat16_proj8_setconv_concat_attnembed_with_elev_no_static_wd
+  label: "t2m snap VAE-lat16→proj8 SetConv concat + attention-embedding (wd=1e-4)"
+  colour: "#ff7f0e"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --target-embed-attention embedding --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+- name: wind_snap_vae_lat16_proj8_setconv_concat_attnembed_detached_with_elev_no_static_wd
+  label: "Wind snap VAE-lat16→proj8 SetConv concat + attention-embedding (detached, wd=1e-4)"
+  colour: "#9467bd"
+  target_variables: [wind]
+  extra_args: "--interpolation setconv --target-embed-attention embedding --detach-attn-embed --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+- name: t2m_snap_vae_lat16_proj8_setconv_concat_attnembed_detached_with_elev_no_static_wd
+  label: "t2m snap VAE-lat16→proj8 SetConv concat + attention-embedding (detached, wd=1e-4)"
+  colour: "#9467bd"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --target-embed-attention embedding --detach-attn-embed --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+- name: wind_snap_vae_lat16_proj8_setconv_concat_hybridattn_with_elev_no_static_wd
+  label: "Wind snap VAE-lat16→proj8 SetConv concat + hybrid attention (wd=1e-4)"
+  colour: "#e377c2"
+  target_variables: [wind]
+  extra_args: "--interpolation setconv --target-embed-attention hybrid --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+- name: t2m_snap_vae_lat16_proj8_setconv_concat_hybridattn_with_elev_no_static_wd
+  label: "t2m snap VAE-lat16→proj8 SetConv concat + hybrid attention (wd=1e-4)"
+  colour: "#e377c2"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --target-embed-attention hybrid --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+- name: wind_snap_vae_lat16_proj8_setconv_concat_attnembed_kernelcond_with_elev_no_static_wd
+  label: "Wind snap VAE-lat16→proj8 SetConv concat + attention-embedding + kernel-cond (wd=1e-4)"
+  colour: "#17becf"
+  target_variables: [wind]
+  extra_args: "--interpolation setconv --decoder-kernel embedding_conditioned --target-embed-attention embedding --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+- name: t2m_snap_vae_lat16_proj8_setconv_concat_attnembed_kernelcond_with_elev_no_static_wd
+  label: "t2m snap VAE-lat16→proj8 SetConv concat + attention-embedding + kernel-cond (wd=1e-4)"
+  colour: "#17becf"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --decoder-kernel embedding_conditioned --target-embed-attention embedding --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+
+# -------------------------------------------------------------------------
+# latent = vae_lat16_proj8  (16-d latent → linear projection to 8-d)
+# injection = noinj
+# -------------------------------------------------------------------------
+# (baseline-at-noinj cell is intentionally omitted; see header.)
+
+- name: wind_snap_vae_lat16_proj8_setconv_noinj_kernelcond_with_elev_no_static_wd
+  label: "Wind snap VAE-lat16→proj8 SetConv noinj + kernel-cond (wd=1e-4)"
+  colour: "#2ca02c"
+  target_variables: [wind]
+  extra_args: "--interpolation setconv --decoder-kernel embedding_conditioned --tessera-injection none --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat16_proj8_setconv_noinj_kernelcond_with_elev_no_static_wd
+  label: "t2m snap VAE-lat16→proj8 SetConv noinj + kernel-cond (wd=1e-4)"
+  colour: "#2ca02c"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --decoder-kernel embedding_conditioned --tessera-injection none --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat16_proj8_setconv_noinj_embedstream_with_elev_no_static_wd
+  label: "Wind snap VAE-lat16→proj8 SetConv noinj + embed-stream (wd=1e-4)"
+  colour: "#d62728"
+  target_variables: [wind]
+  extra_args: "--interpolation setconv --use-target-embed-stream --tessera-injection none --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat16_proj8_setconv_noinj_embedstream_with_elev_no_static_wd
+  label: "t2m snap VAE-lat16→proj8 SetConv noinj + embed-stream (wd=1e-4)"
+  colour: "#d62728"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --use-target-embed-stream --tessera-injection none --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat16_proj8_setconv_noinj_kernelcond_embedstream_with_elev_no_static_wd
+  label: "Wind snap VAE-lat16→proj8 SetConv noinj + kernel-cond + embed-stream (wd=1e-4)"
+  colour: "#9467bd"
+  target_variables: [wind]
+  extra_args: "--interpolation setconv --decoder-kernel embedding_conditioned --use-target-embed-stream --tessera-injection none --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat16_proj8_setconv_noinj_kernelcond_embedstream_with_elev_no_static_wd
+  label: "t2m snap VAE-lat16→proj8 SetConv noinj + kernel-cond + embed-stream (wd=1e-4)"
+  colour: "#9467bd"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --decoder-kernel embedding_conditioned --use-target-embed-stream --tessera-injection none --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat16_proj8_setconv_noinj_attnembed_with_elev_no_static_wd
+  label: "Wind snap VAE-lat16→proj8 SetConv noinj + attention-embedding (wd=1e-4)"
+  colour: "#ff7f0e"
+  target_variables: [wind]
+  extra_args: "--interpolation setconv --target-embed-attention embedding --tessera-injection none --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat16_proj8_setconv_noinj_attnembed_with_elev_no_static_wd
+  label: "t2m snap VAE-lat16→proj8 SetConv noinj + attention-embedding (wd=1e-4)"
+  colour: "#ff7f0e"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --target-embed-attention embedding --tessera-injection none --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+- name: wind_snap_vae_lat16_proj8_setconv_noinj_hybridattn_with_elev_no_static_wd
+  label: "Wind snap VAE-lat16→proj8 SetConv noinj + hybrid attention (wd=1e-4)"
+  colour: "#e377c2"
+  target_variables: [wind]
+  extra_args: "--interpolation setconv --target-embed-attention hybrid --tessera-injection none --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+- name: t2m_snap_vae_lat16_proj8_setconv_noinj_hybridattn_with_elev_no_static_wd
+  label: "t2m snap VAE-lat16→proj8 SetConv noinj + hybrid attention (wd=1e-4)"
+  colour: "#e377c2"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --target-embed-attention hybrid --tessera-injection none --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+- name: wind_snap_vae_lat16_proj8_setconv_noinj_attnembed_kernelcond_with_elev_no_static_wd
+  label: "Wind snap VAE-lat16→proj8 SetConv noinj + attention-embedding + kernel-cond (wd=1e-4)"
+  colour: "#9edae5"
+  target_variables: [wind]
+  extra_args: "--interpolation setconv --decoder-kernel embedding_conditioned --target-embed-attention embedding --tessera-injection none --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+- name: t2m_snap_vae_lat16_proj8_setconv_noinj_attnembed_kernelcond_with_elev_no_static_wd
+  label: "t2m snap VAE-lat16→proj8 SetConv noinj + attention-embedding + kernel-cond (wd=1e-4)"
+  colour: "#9edae5"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --decoder-kernel embedding_conditioned --target-embed-attention embedding --tessera-injection none --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+
+# -------------------------------------------------------------------------
+# latent = vae_lat64_proj16  (64-d latent → linear projection to 16-d)
+# injection = concat
+# -------------------------------------------------------------------------
+
+- name: wind_snap_vae_lat64_proj16_setconv_concat_with_elev_no_static_wd
+  label: "Wind snap VAE-lat64→proj16 SetConv concat (wd=1e-4)"
+  colour: "#444444"
+  target_variables: [wind]
+  extra_args: "--interpolation setconv --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat64_proj16_setconv_concat_with_elev_no_static_wd
+  label: "t2m snap VAE-lat64→proj16 SetConv concat (wd=1e-4)"
+  colour: "#444444"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat64_proj16_setconv_concat_kernelcond_with_elev_no_static_wd
+  label: "Wind snap VAE-lat64→proj16 SetConv concat + kernel-cond (wd=1e-4)"
+  colour: "#2ca02c"
+  target_variables: [wind]
+  extra_args: "--interpolation setconv --decoder-kernel embedding_conditioned --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat64_proj16_setconv_concat_kernelcond_with_elev_no_static_wd
+  label: "t2m snap VAE-lat64→proj16 SetConv concat + kernel-cond (wd=1e-4)"
+  colour: "#2ca02c"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --decoder-kernel embedding_conditioned --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat64_proj16_setconv_concat_embedstream_with_elev_no_static_wd
+  label: "Wind snap VAE-lat64→proj16 SetConv concat + embed-stream (wd=1e-4)"
+  colour: "#d62728"
+  target_variables: [wind]
+  extra_args: "--interpolation setconv --use-target-embed-stream --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat64_proj16_setconv_concat_embedstream_with_elev_no_static_wd
+  label: "t2m snap VAE-lat64→proj16 SetConv concat + embed-stream (wd=1e-4)"
+  colour: "#d62728"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --use-target-embed-stream --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat64_proj16_setconv_concat_kernelcond_embedstream_with_elev_no_static_wd
+  label: "Wind snap VAE-lat64→proj16 SetConv concat + kernel-cond + embed-stream (wd=1e-4)"
+  colour: "#9467bd"
+  target_variables: [wind]
+  extra_args: "--interpolation setconv --decoder-kernel embedding_conditioned --use-target-embed-stream --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat64_proj16_setconv_concat_kernelcond_embedstream_with_elev_no_static_wd
+  label: "t2m snap VAE-lat64→proj16 SetConv concat + kernel-cond + embed-stream (wd=1e-4)"
+  colour: "#9467bd"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --decoder-kernel embedding_conditioned --use-target-embed-stream --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat64_proj16_setconv_concat_attnembed_with_elev_no_static_wd
+  label: "Wind snap VAE-lat64→proj16 SetConv concat + attention-embedding (wd=1e-4)"
+  colour: "#ff7f0e"
+  target_variables: [wind]
+  extra_args: "--interpolation setconv --target-embed-attention embedding --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat64_proj16_setconv_concat_attnembed_with_elev_no_static_wd
+  label: "t2m snap VAE-lat64→proj16 SetConv concat + attention-embedding (wd=1e-4)"
+  colour: "#ff7f0e"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --target-embed-attention embedding --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4"
+
+- name: t2m_snap_vae_lat64_proj16_setconv_concat_attnembed_detached_with_elev_no_static_wd
+  label: "t2m snap VAE-lat64→proj16 SetConv concat + attention-embedding (detached, wd=1e-4)"
+  colour: "#9467bd"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --target-embed-attention embedding --detach-attn-embed --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4"
+
+- name: wind_snap_vae_lat64_proj16_setconv_concat_hybridattn_with_elev_no_static_wd
+  label: "Wind snap VAE-lat64→proj16 SetConv concat + hybrid attention (wd=1e-4)"
+  colour: "#e377c2"
+  target_variables: [wind]
+  extra_args: "--interpolation setconv --target-embed-attention hybrid --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4"
+
+- name: t2m_snap_vae_lat64_proj16_setconv_concat_hybridattn_with_elev_no_static_wd
+  label: "t2m snap VAE-lat64→proj16 SetConv concat + hybrid attention (wd=1e-4)"
+  colour: "#e377c2"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --target-embed-attention hybrid --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4"
+
+- name: wind_snap_vae_lat64_proj16_setconv_concat_attnembed_kernelcond_with_elev_no_static_wd
+  label: "Wind snap VAE-lat64→proj16 SetConv concat + attention-embedding + kernel-cond (wd=1e-4)"
+  colour: "#bcbd22"
+  target_variables: [wind]
+  extra_args: "--interpolation setconv --decoder-kernel embedding_conditioned --target-embed-attention embedding --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4"
+
+- name: t2m_snap_vae_lat64_proj16_setconv_concat_attnembed_kernelcond_with_elev_no_static_wd
+  label: "t2m snap VAE-lat64→proj16 SetConv concat + attention-embedding + kernel-cond (wd=1e-4)"
+  colour: "#bcbd22"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --decoder-kernel embedding_conditioned --target-embed-attention embedding --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4"
+
+
+# -------------------------------------------------------------------------
+# latent = vae_lat64_proj16  (64-d latent → linear projection to 16-d)
+# injection = noinj
+# -------------------------------------------------------------------------
+# (baseline-at-noinj cell is intentionally omitted; see header.)
+
+- name: wind_snap_vae_lat64_proj16_setconv_noinj_kernelcond_with_elev_no_static_wd
+  label: "Wind snap VAE-lat64→proj16 SetConv noinj + kernel-cond (wd=1e-4)"
+  colour: "#2ca02c"
+  target_variables: [wind]
+  extra_args: "--interpolation setconv --decoder-kernel embedding_conditioned --tessera-injection none --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat64_proj16_setconv_noinj_kernelcond_with_elev_no_static_wd
+  label: "t2m snap VAE-lat64→proj16 SetConv noinj + kernel-cond (wd=1e-4)"
+  colour: "#2ca02c"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --decoder-kernel embedding_conditioned --tessera-injection none --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat64_proj16_setconv_noinj_embedstream_with_elev_no_static_wd
+  label: "Wind snap VAE-lat64→proj16 SetConv noinj + embed-stream (wd=1e-4)"
+  colour: "#d62728"
+  target_variables: [wind]
+  extra_args: "--interpolation setconv --use-target-embed-stream --tessera-injection none --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat64_proj16_setconv_noinj_embedstream_with_elev_no_static_wd
+  label: "t2m snap VAE-lat64→proj16 SetConv noinj + embed-stream (wd=1e-4)"
+  colour: "#d62728"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --use-target-embed-stream --tessera-injection none --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat64_proj16_setconv_noinj_kernelcond_embedstream_with_elev_no_static_wd
+  label: "Wind snap VAE-lat64→proj16 SetConv noinj + kernel-cond + embed-stream (wd=1e-4)"
+  colour: "#9467bd"
+  target_variables: [wind]
+  extra_args: "--interpolation setconv --decoder-kernel embedding_conditioned --use-target-embed-stream --tessera-injection none --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat64_proj16_setconv_noinj_kernelcond_embedstream_with_elev_no_static_wd
+  label: "t2m snap VAE-lat64→proj16 SetConv noinj + kernel-cond + embed-stream (wd=1e-4)"
+  colour: "#9467bd"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --decoder-kernel embedding_conditioned --use-target-embed-stream --tessera-injection none --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat64_proj16_setconv_noinj_attnembed_with_elev_no_static_wd
+  label: "Wind snap VAE-lat64→proj16 SetConv noinj + attention-embedding (wd=1e-4)"
+  colour: "#ff7f0e"
+  target_variables: [wind]
+  extra_args: "--interpolation setconv --target-embed-attention embedding --tessera-injection none --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat64_proj16_setconv_noinj_attnembed_with_elev_no_static_wd
+  label: "t2m snap VAE-lat64→proj16 SetConv noinj + attention-embedding (wd=1e-4)"
+  colour: "#ff7f0e"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --target-embed-attention embedding --tessera-injection none --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4"
+
+- name: wind_snap_vae_lat64_proj16_setconv_noinj_hybridattn_with_elev_no_static_wd
+  label: "Wind snap VAE-lat64→proj16 SetConv noinj + hybrid attention (wd=1e-4)"
+  colour: "#e377c2"
+  target_variables: [wind]
+  extra_args: "--interpolation setconv --target-embed-attention hybrid --tessera-injection none --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat64_proj16_setconv_noinj_hybridattn_with_elev_no_static_wd
+  label: "t2m snap VAE-lat64→proj16 SetConv noinj + hybrid attention (wd=1e-4)"
+  colour: "#e377c2"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --target-embed-attention hybrid --tessera-injection none --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4"
+
+- name: wind_snap_vae_lat64_proj16_setconv_noinj_attnembed_kernelcond_with_elev_no_static_wd
+  label: "Wind snap VAE-lat64→proj16 SetConv noinj + attention-embedding + kernel-cond (wd=1e-4)"
+  colour: "#dbdb8d"
+  target_variables: [wind]
+  extra_args: "--interpolation setconv --decoder-kernel embedding_conditioned --target-embed-attention embedding --tessera-injection none --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4"
+
+- name: t2m_snap_vae_lat64_proj16_setconv_noinj_attnembed_kernelcond_with_elev_no_static_wd
+  label: "t2m snap VAE-lat64→proj16 SetConv noinj + attention-embedding + kernel-cond (wd=1e-4)"
+  colour: "#dbdb8d"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --decoder-kernel embedding_conditioned --target-embed-attention embedding --tessera-injection none --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4"
+
+
+# =========================================================================
+# Bilinear interpolation extension
+# =========================================================================
+# Tests whether the attention mechanism still helps when the grid→target
+# read is the parameter-free bilinear interpolation rather than the
+# learned-σ RBF SetConv. Attention is interpolation-agnostic by
+# construction: it operates on (target embeddings, target coordinates)
+# only, and its output is concatenated to the per-target MLP input —
+# the grid→target path runs in parallel.
+#
+# Bilinear's structural property is sharper-but-narrower reading of the
+# weather grid (4 nearest cells with bilinear weights, no Gaussian tail).
+# Forces all local station correction onto TESSERA rather than the
+# weather pathway — combining with attention puts the full weight of the
+# correction on the embedding mechanism.
+#
+# Scope: run at the two winning latent settings (lat16→proj8, lat64→proj16),
+# both variables, both injection levels. 8 entries × 3 seeds = 24 runs.
+# =========================================================================
+
+
+# -------- bilinear + attention-embedding, lat16→proj8 --------
+
+- name: wind_snap_vae_lat16_proj8_bilinear_concat_attnembed_with_elev_no_static_wd
+  label: "Wind snap VAE-lat16→proj8 Bilinear concat + attention-embedding (wd=1e-4)"
+  colour: "#9467bd"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --target-embed-attention embedding --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat16_proj8_bilinear_concat_attnembed_with_elev_no_static_wd
+  label: "t2m snap VAE-lat16→proj8 Bilinear concat + attention-embedding (wd=1e-4)"
+  colour: "#9467bd"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --target-embed-attention embedding --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat16_proj8_bilinear_noinj_attnembed_with_elev_no_static_wd
+  label: "Wind snap VAE-lat16→proj8 Bilinear noinj + attention-embedding (wd=1e-4)"
+  colour: "#9467bd"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --target-embed-attention embedding --tessera-injection none --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat16_proj8_bilinear_noinj_attnembed_with_elev_no_static_wd
+  label: "t2m snap VAE-lat16→proj8 Bilinear noinj + attention-embedding (wd=1e-4)"
+  colour: "#9467bd"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --target-embed-attention embedding --tessera-injection none --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+
+# -------- bilinear + attention-embedding, lat64→proj16 --------
+
+- name: wind_snap_vae_lat64_proj16_bilinear_concat_attnembed_with_elev_no_static_wd
+  label: "Wind snap VAE-lat64→proj16 Bilinear concat + attention-embedding (wd=1e-4)"
+  colour: "#9467bd"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --target-embed-attention embedding --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat64_proj16_bilinear_concat_attnembed_with_elev_no_static_wd
+  label: "t2m snap VAE-lat64→proj16 Bilinear concat + attention-embedding (wd=1e-4)"
+  colour: "#9467bd"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --target-embed-attention embedding --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat64_proj16_bilinear_noinj_attnembed_with_elev_no_static_wd
+  label: "Wind snap VAE-lat64→proj16 Bilinear noinj + attention-embedding (wd=1e-4)"
+  colour: "#9467bd"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --target-embed-attention embedding --tessera-injection none --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat64_proj16_bilinear_noinj_attnembed_with_elev_no_static_wd
+  label: "t2m snap VAE-lat64→proj16 Bilinear noinj + attention-embedding (wd=1e-4)"
+  colour: "#9467bd"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --target-embed-attention embedding --tessera-injection none --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4"
+
+
+# -------- bilinear concat baselines at the winning latent settings --------
+# Companions for the attention cells above: bilinear + concat with no
+# embedding-aware mechanism. Establishes the "bilinear + TESSERA via concat"
+# reference against which the attention extension can be compared cleanly.
+
+- name: wind_snap_vae_lat16_proj8_bilinear_concat_with_elev_no_static_wd
+  label: "Wind snap VAE-lat16→proj8 Bilinear concat (wd=1e-4)"
+  colour: "#7f7f7f"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat16_proj8_bilinear_concat_with_elev_no_static_wd
+  label: "t2m snap VAE-lat16→proj8 Bilinear concat (wd=1e-4)"
+  colour: "#7f7f7f"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat64_proj16_bilinear_concat_with_elev_no_static_wd
+  label: "Wind snap VAE-lat64→proj16 Bilinear concat (wd=1e-4)"
+  colour: "#7f7f7f"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat64_proj16_bilinear_concat_with_elev_no_static_wd
+  label: "t2m snap VAE-lat64→proj16 Bilinear concat (wd=1e-4)"
+  colour: "#7f7f7f"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4"
+
+
+# =========================================================================
+# Combined-mechanism cells
+# =========================================================================
+# Tests whether the similarity-based (target-to-target attention) and
+# spatial-structural (station→grid SetConv) routes for landscape
+# information carry complementary signal. attnembed sits on the per-target
+# MLP path; embed-stream sits on the grid. They're architecturally
+# independent — combining them gives the model both routes simultaneously.
+# The triple cells add kernel-cond on top, testing whether per-target
+# kernel reshaping adds anything once both other paths are active.
+#
+# Scope: run at the two latent settings that won their respective variable
+# in the initial matrix (lat16→proj8 for wind, lat64→proj16 for t2m), both
+# variables at both settings, both injection levels.
+#
+# Tally: pair = 8 entries; triple = 8 entries; 16 total = 48 runs at 3 seeds.
+# =========================================================================
+
+
+# -------- pair: attention-embedding + embed-stream, lat16→proj8 --------
+
+- name: wind_snap_vae_lat16_proj8_setconv_concat_attnembed_embedstream_with_elev_no_static_wd
+  label: "Wind snap VAE-lat16→proj8 SetConv concat + attention-embedding + embed-stream (wd=1e-4)"
+  colour: "#17becf"
+  target_variables: [wind]
+  extra_args: "--interpolation setconv --target-embed-attention embedding --use-target-embed-stream --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat16_proj8_setconv_concat_attnembed_embedstream_with_elev_no_static_wd
+  label: "t2m snap VAE-lat16→proj8 SetConv concat + attention-embedding + embed-stream (wd=1e-4)"
+  colour: "#17becf"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --target-embed-attention embedding --use-target-embed-stream --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat16_proj8_setconv_noinj_attnembed_embedstream_with_elev_no_static_wd
+  label: "Wind snap VAE-lat16→proj8 SetConv noinj + attention-embedding + embed-stream (wd=1e-4)"
+  colour: "#17becf"
+  target_variables: [wind]
+  extra_args: "--interpolation setconv --target-embed-attention embedding --use-target-embed-stream --tessera-injection none --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat16_proj8_setconv_noinj_attnembed_embedstream_with_elev_no_static_wd
+  label: "t2m snap VAE-lat16→proj8 SetConv noinj + attention-embedding + embed-stream (wd=1e-4)"
+  colour: "#17becf"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --target-embed-attention embedding --use-target-embed-stream --tessera-injection none --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+
+# -------- pair: attention-embedding + embed-stream, lat64→proj16 --------
+
+- name: wind_snap_vae_lat64_proj16_setconv_concat_attnembed_embedstream_with_elev_no_static_wd
+  label: "Wind snap VAE-lat64→proj16 SetConv concat + attention-embedding + embed-stream (wd=1e-4)"
+  colour: "#17becf"
+  target_variables: [wind]
+  extra_args: "--interpolation setconv --target-embed-attention embedding --use-target-embed-stream --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat64_proj16_setconv_concat_attnembed_embedstream_with_elev_no_static_wd
+  label: "t2m snap VAE-lat64→proj16 SetConv concat + attention-embedding + embed-stream (wd=1e-4)"
+  colour: "#17becf"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --target-embed-attention embedding --use-target-embed-stream --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat64_proj16_setconv_noinj_attnembed_embedstream_with_elev_no_static_wd
+  label: "Wind snap VAE-lat64→proj16 SetConv noinj + attention-embedding + embed-stream (wd=1e-4)"
+  colour: "#17becf"
+  target_variables: [wind]
+  extra_args: "--interpolation setconv --target-embed-attention embedding --use-target-embed-stream --tessera-injection none --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat64_proj16_setconv_noinj_attnembed_embedstream_with_elev_no_static_wd
+  label: "t2m snap VAE-lat64→proj16 SetConv noinj + attention-embedding + embed-stream (wd=1e-4)"
+  colour: "#17becf"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --target-embed-attention embedding --use-target-embed-stream --tessera-injection none --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4"
+
+
+# -------- triple: attention-embedding + kernel-cond + embed-stream, lat16→proj8 --------
+
+- name: wind_snap_vae_lat16_proj8_setconv_concat_attnembed_kernelcond_embedstream_with_elev_no_static_wd
+  label: "Wind snap VAE-lat16→proj8 SetConv concat + attention-embedding + kernel-cond + embed-stream (wd=1e-4)"
+  colour: "#bcbd22"
+  target_variables: [wind]
+  extra_args: "--interpolation setconv --target-embed-attention embedding --decoder-kernel embedding_conditioned --use-target-embed-stream --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat16_proj8_setconv_concat_attnembed_kernelcond_embedstream_with_elev_no_static_wd
+  label: "t2m snap VAE-lat16→proj8 SetConv concat + attention-embedding + kernel-cond + embed-stream (wd=1e-4)"
+  colour: "#bcbd22"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --target-embed-attention embedding --decoder-kernel embedding_conditioned --use-target-embed-stream --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat16_proj8_setconv_noinj_attnembed_kernelcond_embedstream_with_elev_no_static_wd
+  label: "Wind snap VAE-lat16→proj8 SetConv noinj + attention-embedding + kernel-cond + embed-stream (wd=1e-4)"
+  colour: "#bcbd22"
+  target_variables: [wind]
+  extra_args: "--interpolation setconv --target-embed-attention embedding --decoder-kernel embedding_conditioned --use-target-embed-stream --tessera-injection none --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat16_proj8_setconv_noinj_attnembed_kernelcond_embedstream_with_elev_no_static_wd
+  label: "t2m snap VAE-lat16→proj8 SetConv noinj + attention-embedding + kernel-cond + embed-stream (wd=1e-4)"
+  colour: "#bcbd22"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --target-embed-attention embedding --decoder-kernel embedding_conditioned --use-target-embed-stream --tessera-injection none --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+
+# -------- triple: attention-embedding + kernel-cond + embed-stream, lat64→proj16 --------
+
+- name: wind_snap_vae_lat64_proj16_setconv_concat_attnembed_kernelcond_embedstream_with_elev_no_static_wd
+  label: "Wind snap VAE-lat64→proj16 SetConv concat + attention-embedding + kernel-cond + embed-stream (wd=1e-4)"
+  colour: "#bcbd22"
+  target_variables: [wind]
+  extra_args: "--interpolation setconv --target-embed-attention embedding --decoder-kernel embedding_conditioned --use-target-embed-stream --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat64_proj16_setconv_concat_attnembed_kernelcond_embedstream_with_elev_no_static_wd
+  label: "t2m snap VAE-lat64→proj16 SetConv concat + attention-embedding + kernel-cond + embed-stream (wd=1e-4)"
+  colour: "#bcbd22"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --target-embed-attention embedding --decoder-kernel embedding_conditioned --use-target-embed-stream --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat64_proj16_setconv_noinj_attnembed_kernelcond_embedstream_with_elev_no_static_wd
+  label: "Wind snap VAE-lat64→proj16 SetConv noinj + attention-embedding + kernel-cond + embed-stream (wd=1e-4)"
+  colour: "#bcbd22"
+  target_variables: [wind]
+  extra_args: "--interpolation setconv --target-embed-attention embedding --decoder-kernel embedding_conditioned --use-target-embed-stream --tessera-injection none --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat64_proj16_setconv_noinj_attnembed_kernelcond_embedstream_with_elev_no_static_wd
+  label: "t2m snap VAE-lat64→proj16 SetConv noinj + attention-embedding + kernel-cond + embed-stream (wd=1e-4)"
+  colour: "#bcbd22"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --target-embed-attention embedding --decoder-kernel embedding_conditioned --use-target-embed-stream --tessera-injection none --vae-latents-path ${VAE_LATENTS_PATH_LAT64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4"
+
+
+# -------------------------------------------------------------------------
+# Shuffled-latent controls  (vae_lat16, lat16 row-permuted with seed 0)
+# -------------------------------------------------------------------------
+# Verifies that gains in the matrix above are attributable to genuine
+# station-specific signal in TESSERA latents, not to model capacity. Each
+# cell loads a row-shuffled copy of the lat16 latents file (produced once
+# by scripts/shuffle_latents.py with seed 0). Shuffling permutes only the
+# non-NaN rows among themselves so the dataset's NaN-based station filter
+# yields the identical station set on the shuffled run as on the unshuffled
+# run, and the model's parameter count is unchanged. Only the
+# (station_id, latent_vector) mapping is broken.
+#
+# Reading
+#   shuffled performance ≈ real performance        → mechanism uses model
+#                                                    capacity, not station
+#                                                    signal
+#   shuffled performance ≈ no-TESSERA baseline     → mechanism uses station
+#                                                    signal heavily
+#   intermediate                                    → partial signal usage
+#
+# Scope: one latent setting (vae_lat16). The (baseline, noinj) cell is
+# omitted: no TESSERA path is active, so the shuffled latent is never
+# read; the run is identical to wind_snap_setconv_baseline_no_static_wd.
+#
+# Requires:
+#   1. ${VAE_LATENTS_PATH_SHUFFLED} env var added to submit.sh, pointing
+#      at the shuffled .npy.
+#   2. scripts/shuffle_latents.py run once before first submit:
+#        python projects/tessera_downscaling/scripts/shuffle_latents.py \
+#          --input  .tmp_output/processed/station_latents_lat16_grad0.5.npy \
+#          --output .tmp_output/processed/station_latents_lat16_grad0.5_shuffle_seed0.npy \
+#          --seed   0
+# =========================================================================
+
+
+- name: wind_snap_vae_lat16_shuffled_setconv_concat_with_elev_no_static_wd
+  label: "Wind snap VAE-lat16 shuffled SetConv concat (wd=1e-4)"
+  colour: "#444444"
+  target_variables: [wind]
+  extra_args: "--interpolation setconv --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_SHUFFLED} --vae-latents-station-csv ${VAE_LATENTS_CSV} --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat16_shuffled_setconv_concat_with_elev_no_static_wd
+  label: "t2m snap VAE-lat16 shuffled SetConv concat (wd=1e-4)"
+  colour: "#444444"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_SHUFFLED} --vae-latents-station-csv ${VAE_LATENTS_CSV} --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat16_shuffled_setconv_concat_kernelcond_with_elev_no_static_wd
+  label: "Wind snap VAE-lat16 shuffled SetConv concat + kernel-cond (wd=1e-4)"
+  colour: "#2ca02c"
+  target_variables: [wind]
+  extra_args: "--interpolation setconv --decoder-kernel embedding_conditioned --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_SHUFFLED} --vae-latents-station-csv ${VAE_LATENTS_CSV} --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat16_shuffled_setconv_concat_kernelcond_with_elev_no_static_wd
+  label: "t2m snap VAE-lat16 shuffled SetConv concat + kernel-cond (wd=1e-4)"
+  colour: "#2ca02c"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --decoder-kernel embedding_conditioned --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_SHUFFLED} --vae-latents-station-csv ${VAE_LATENTS_CSV} --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat16_shuffled_setconv_noinj_kernelcond_with_elev_no_static_wd
+  label: "Wind snap VAE-lat16 shuffled SetConv noinj + kernel-cond (wd=1e-4)"
+  colour: "#2ca02c"
+  target_variables: [wind]
+  extra_args: "--interpolation setconv --decoder-kernel embedding_conditioned --tessera-injection none --vae-latents-path ${VAE_LATENTS_PATH_SHUFFLED} --vae-latents-station-csv ${VAE_LATENTS_CSV} --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat16_shuffled_setconv_noinj_kernelcond_with_elev_no_static_wd
+  label: "t2m snap VAE-lat16 shuffled SetConv noinj + kernel-cond (wd=1e-4)"
+  colour: "#2ca02c"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --decoder-kernel embedding_conditioned --tessera-injection none --vae-latents-path ${VAE_LATENTS_PATH_SHUFFLED} --vae-latents-station-csv ${VAE_LATENTS_CSV} --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat16_shuffled_setconv_concat_embedstream_with_elev_no_static_wd
+  label: "Wind snap VAE-lat16 shuffled SetConv concat + embed-stream (wd=1e-4)"
+  colour: "#d62728"
+  target_variables: [wind]
+  extra_args: "--interpolation setconv --use-target-embed-stream --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_SHUFFLED} --vae-latents-station-csv ${VAE_LATENTS_CSV} --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat16_shuffled_setconv_concat_embedstream_with_elev_no_static_wd
+  label: "t2m snap VAE-lat16 shuffled SetConv concat + embed-stream (wd=1e-4)"
+  colour: "#d62728"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --use-target-embed-stream --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_SHUFFLED} --vae-latents-station-csv ${VAE_LATENTS_CSV} --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat16_shuffled_setconv_noinj_embedstream_with_elev_no_static_wd
+  label: "Wind snap VAE-lat16 shuffled SetConv noinj + embed-stream (wd=1e-4)"
+  colour: "#d62728"
+  target_variables: [wind]
+  extra_args: "--interpolation setconv --use-target-embed-stream --tessera-injection none --vae-latents-path ${VAE_LATENTS_PATH_SHUFFLED} --vae-latents-station-csv ${VAE_LATENTS_CSV} --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat16_shuffled_setconv_noinj_embedstream_with_elev_no_static_wd
+  label: "t2m snap VAE-lat16 shuffled SetConv noinj + embed-stream (wd=1e-4)"
+  colour: "#d62728"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --use-target-embed-stream --tessera-injection none --vae-latents-path ${VAE_LATENTS_PATH_SHUFFLED} --vae-latents-station-csv ${VAE_LATENTS_CSV} --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat16_shuffled_setconv_concat_kernelcond_embedstream_with_elev_no_static_wd
+  label: "Wind snap VAE-lat16 shuffled SetConv concat + kernel-cond + embed-stream (wd=1e-4)"
+  colour: "#9467bd"
+  target_variables: [wind]
+  extra_args: "--interpolation setconv --decoder-kernel embedding_conditioned --use-target-embed-stream --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_SHUFFLED} --vae-latents-station-csv ${VAE_LATENTS_CSV} --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat16_shuffled_setconv_concat_kernelcond_embedstream_with_elev_no_static_wd
+  label: "t2m snap VAE-lat16 shuffled SetConv concat + kernel-cond + embed-stream (wd=1e-4)"
+  colour: "#9467bd"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --decoder-kernel embedding_conditioned --use-target-embed-stream --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_SHUFFLED} --vae-latents-station-csv ${VAE_LATENTS_CSV} --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat16_shuffled_setconv_noinj_kernelcond_embedstream_with_elev_no_static_wd
+  label: "Wind snap VAE-lat16 shuffled SetConv noinj + kernel-cond + embed-stream (wd=1e-4)"
+  colour: "#9467bd"
+  target_variables: [wind]
+  extra_args: "--interpolation setconv --decoder-kernel embedding_conditioned --use-target-embed-stream --tessera-injection none --vae-latents-path ${VAE_LATENTS_PATH_SHUFFLED} --vae-latents-station-csv ${VAE_LATENTS_CSV} --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat16_shuffled_setconv_noinj_kernelcond_embedstream_with_elev_no_static_wd
+  label: "t2m snap VAE-lat16 shuffled SetConv noinj + kernel-cond + embed-stream (wd=1e-4)"
+  colour: "#9467bd"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --decoder-kernel embedding_conditioned --use-target-embed-stream --tessera-injection none --vae-latents-path ${VAE_LATENTS_PATH_SHUFFLED} --vae-latents-station-csv ${VAE_LATENTS_CSV} --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat16_shuffled_setconv_concat_attnembed_with_elev_no_static_wd
+  label: "Wind snap VAE-lat16 shuffled SetConv concat + attention-embedding (wd=1e-4)"
+  colour: "#ff7f0e"
+  target_variables: [wind]
+  extra_args: "--interpolation setconv --target-embed-attention embedding --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_SHUFFLED} --vae-latents-station-csv ${VAE_LATENTS_CSV} --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat16_shuffled_setconv_concat_attnembed_with_elev_no_static_wd
+  label: "t2m snap VAE-lat16 shuffled SetConv concat + attention-embedding (wd=1e-4)"
+  colour: "#ff7f0e"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --target-embed-attention embedding --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_SHUFFLED} --vae-latents-station-csv ${VAE_LATENTS_CSV} --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat16_shuffled_setconv_noinj_attnembed_with_elev_no_static_wd
+  label: "Wind snap VAE-lat16 shuffled SetConv noinj + attention-embedding (wd=1e-4)"
+  colour: "#ff7f0e"
+  target_variables: [wind]
+  extra_args: "--interpolation setconv --target-embed-attention embedding --tessera-injection none --vae-latents-path ${VAE_LATENTS_PATH_SHUFFLED} --vae-latents-station-csv ${VAE_LATENTS_CSV} --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat16_shuffled_setconv_noinj_attnembed_with_elev_no_static_wd
+  label: "t2m snap VAE-lat16 shuffled SetConv noinj + attention-embedding (wd=1e-4)"
+  colour: "#ff7f0e"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --target-embed-attention embedding --tessera-injection none --vae-latents-path ${VAE_LATENTS_PATH_SHUFFLED} --vae-latents-station-csv ${VAE_LATENTS_CSV} --no-static-fields --weight-decay 1e-4"
+
+
+# -------- Shuffled controls for the matrix winners (vae_lat16→proj8, vae_lat64→proj16) --------
+# These extend the existing shuffle block (which only covered lat16-no-proj)
+# to the latent settings where the winning architectures sit. Required for
+# the "best matrix variant uses signal not capacity" claim in the paper.
+
+- name: wind_snap_vae_lat16_proj8_shuffled_setconv_concat_attnembed_with_elev_no_static_wd
+  label: "Wind snap VAE-lat16→proj8 shuffled SetConv concat + attention-embedding (wd=1e-4)"
+  colour: "#ff7f0e"
+  target_variables: [wind]
+  extra_args: "--interpolation setconv --target-embed-attention embedding --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_SHUFFLED} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat16_proj8_shuffled_setconv_concat_embedstream_with_elev_no_static_wd
+  label: "Wind snap VAE-lat16→proj8 shuffled SetConv concat + embed-stream (wd=1e-4)"
+  colour: "#d62728"
+  target_variables: [wind]
+  extra_args: "--interpolation setconv --use-target-embed-stream --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_SHUFFLED} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat64_proj16_shuffled_setconv_concat_attnembed_with_elev_no_static_wd
+  label: "t2m snap VAE-lat64→proj16 shuffled SetConv concat + attention-embedding (wd=1e-4)"
+  colour: "#ff7f0e"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --target-embed-attention embedding --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64_SHUFFLED} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4"
+
+
+
+# =============================================================================
+# Shuffled controls for top-3 single-task non-mechanism performers per
+# (variable, distribution).
+# =============================================================================
+
+
+# -------- T2M (Gaussian) — top 3 shuffled --------
+
+- name: t2m_snap_vae_lat64_proj16_shuffled_bilinear_concat_with_elev_no_static_wd
+  label: "t2m snap VAE-lat64→proj16 shuffled Bilinear concat (wd=1e-4)"
+  colour: "#98df8a"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64_SHUFFLED} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat16_proj8_shuffled_bilinear_concat_with_elev_no_static_wd
+  label: "t2m snap VAE-lat16→proj8 shuffled Bilinear concat (wd=1e-4)"
+  colour: "#98df8a"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_SHUFFLED} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat64_proj16_shuffled_concat_with_elev_no_static_wd
+  label: "t2m snap VAE-lat64→proj16 shuffled concat (wd=1e-4)"
+  colour: "#98df8a"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64_SHUFFLED} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4"
+
+
+# -------- Wind (Gaussian) — top 3 shuffled --------
+
+- name: wind_snap_vae_lat16_proj8_shuffled_mlp_film_with_elev_no_static_wd
+  label: "Wind snap VAE-lat16→proj8-MLP shuffled FiLM (wd=1e-4)"
+  colour: "#ffbb78"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_SHUFFLED} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --vae-latents-proj-mlp --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat16_proj8_shuffled_bilinear_concat_with_elev_no_static_wd
+  label: "Wind snap VAE-lat16→proj8 shuffled Bilinear concat (wd=1e-4)"
+  colour: "#aec7e8"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_SHUFFLED} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_vae_lat16_proj8_shuffled_mlp_concat_with_elev_no_static_wd
+  label: "Wind snap VAE-lat16→proj8-MLP shuffled concat (wd=1e-4)"
+  colour: "#aec7e8"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_SHUFFLED} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --vae-latents-proj-mlp --no-static-fields --weight-decay 1e-4"
+
+
+# -------- Wind (Weibull) — top 3 shuffled --------
+
+- name: wind_weibull_snap_vae_lat16_shuffled_concat_with_elev_no_static_wd
+  label: "Wind (Weibull) snap VAE-lat16 shuffled concat (wd=1e-4)"
+  colour: "#aec7e8"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_SHUFFLED} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --no-static-fields --weight-decay 1e-4 --likelihood wind=weibull"
+
+
+- name: wind_weibull_snap_vae_lat16_proj8_shuffled_mlp_film_with_elev_no_static_wd
+  label: "Wind (Weibull) snap VAE-lat16→proj8-MLP shuffled FiLM (wd=1e-4)"
+  colour: "#ffbb78"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_SHUFFLED} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --vae-latents-proj-mlp --no-static-fields --weight-decay 1e-4 --likelihood wind=weibull"
+
+
+- name: wind_weibull_snap_vae_lat64_proj16_shuffled_concat_with_elev_no_static_wd
+  label: "Wind (Weibull) snap VAE-lat64→proj16 shuffled concat (wd=1e-4)"
+  colour: "#98df8a"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64_SHUFFLED} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4 --likelihood wind=weibull"
+
+
+# -------------------------------------------------------------------------
+# Set H — Hand-crafted summary-stats baseline for the VAE latents
+# -------------------------------------------------------------------------
+# Tests whether the VAE-learned 16-d / 64-d compression earns its keep over
+# a fixed-recipe summary of the same TESSERA patches: mean, std, p10, p90
+# over the top-K most cross-train-station-variant channels (K=4 for dim16,
+# K=16 for dim64). Same model, same injection path, same projection options;
+# only the --vae-latents-path differs. Built once via
+# scripts/preprocessing/build_summary_stats_latents.py.
+# Single-task only — multi-task can wait for results to be interesting first.
+# -------------------------------------------------------------------------
+
+- name: t2m_snap_stats_dim16_concat_with_elev_no_static_wd
+  label: "t2m snap summary-stats dim16 concat (with elev, no static, wd=1e-4)"
+  colour: "#17becf"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_STATS_DIM16} --vae-latents-station-csv ${VAE_LATENTS_CSV} --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_stats_dim16_proj8_concat_with_elev_no_static_wd
+  label: "t2m snap summary-stats dim16→proj8 concat (with elev, no static, wd=1e-4)"
+  colour: "#17becf"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_STATS_DIM16} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_stats_dim64_concat_with_elev_no_static_wd
+  label: "t2m snap summary-stats dim64 concat (with elev, no static, wd=1e-4)"
+  colour: "#17becf"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_STATS_DIM64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_stats_dim64_proj16_concat_with_elev_no_static_wd
+  label: "t2m snap summary-stats dim64→proj16 concat (with elev, no static, wd=1e-4)"
+  colour: "#17becf"
+  target_variables: [t2m]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_STATS_DIM64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_stats_dim16_concat_with_elev_no_static_wd
+  label: "Wind snap summary-stats dim16 concat (with elev, no static, wd=1e-4)"
+  colour: "#17becf"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_STATS_DIM16} --vae-latents-station-csv ${VAE_LATENTS_CSV} --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_stats_dim16_proj8_concat_with_elev_no_static_wd
+  label: "Wind snap summary-stats dim16→proj8 concat (with elev, no static, wd=1e-4)"
+  colour: "#17becf"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_STATS_DIM16} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_stats_dim64_concat_with_elev_no_static_wd
+  label: "Wind snap summary-stats dim64 concat (with elev, no static, wd=1e-4)"
+  colour: "#17becf"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_STATS_DIM64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_stats_dim64_proj16_concat_with_elev_no_static_wd
+  label: "Wind snap summary-stats dim64→proj16 concat (with elev, no static, wd=1e-4)"
+  colour: "#17becf"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_STATS_DIM64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4"
+
+
+# =============================================================================
+# Top-5 completion (post VAE-only filter) — stats counterparts for top-1
+# VAE in each variable, missing VAE-shuffled controls, and TruncNormal
+# head ablation for top-5 wind.
+# =============================================================================
+
+
+# --- Stats counterparts of top-1 vanilla TESSERA (per variable) ---
+
+- name: t2m_snap_stats_dim64_proj16_setconv_concat_with_elev_no_static_wd
+  label: "t2m snap summary-stats dim64→proj16 SetConv concat (wd=1e-4)"
+  colour: "#17becf"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_STATS_DIM64} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4"
+
+
+- name: wind_snap_stats_dim16_proj8_mlp_film_with_elev_no_static_wd
+  label: "Wind snap summary-stats dim16→proj8-MLP FiLM (with elev, no static, wd=1e-4)"
+  colour: "#17becf"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH_STATS_DIM16} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 8 --vae-latents-proj-mlp --no-static-fields --weight-decay 1e-4"
+
+
+# --- Missing VAE-shuffled controls for top-5 vanilla TESSERA ---
+
+- name: wind_snap_vae_lat16_shuffled_concat_with_elev_no_static_wd
+  label: "Wind snap VAE-lat16 shuffled concat (wd=1e-4)"
+  colour: "#aec7e8"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_SHUFFLED} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --no-static-fields --weight-decay 1e-4"
+
+
+- name: t2m_snap_vae_lat64_proj16_shuffled_setconv_concat_with_elev_no_static_wd
+  label: "t2m snap VAE-lat64→proj16 shuffled SetConv concat (wd=1e-4)"
+  colour: "#98df8a"
+  target_variables: [t2m]
+  extra_args: "--interpolation setconv --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH_LAT64_SHUFFLED} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-proj-dim 16 --no-static-fields --weight-decay 1e-4"
+
+
+# --- TruncNormal head — top-5 wind (post VAE-only filter) ---
+
+- name: wind_truncnormal_snap_vae_lat16_proj8_mlp_film_with_elev_no_static_wd
+  label: "Wind (TruncNormal) snap VAE-lat16→proj8-MLP FiLM (with elev, no static, wd=1e-4)"
+  colour: "#e377c2"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --vae-latents-proj-mlp --no-static-fields --weight-decay 1e-4 --likelihood wind=truncated_normal"
+
+
+- name: wind_truncnormal_snap_vae_lat16_proj8_concat_with_elev_no_static_wd
+  label: "Wind (TruncNormal) snap VAE-lat16→proj8 concat (with elev, no static, wd=1e-4)"
+  colour: "#e377c2"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4 --likelihood wind=truncated_normal"
+
+
+- name: wind_truncnormal_snap_vae_lat16_proj8_mlp_concat_with_elev_no_static_wd
+  label: "Wind (TruncNormal) snap VAE-lat16→proj8-MLP concat (with elev, no static, wd=1e-4)"
+  colour: "#e377c2"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --vae-latents-proj-mlp --no-static-fields --weight-decay 1e-4 --likelihood wind=truncated_normal"
+
+
+- name: wind_truncnormal_snap_vae_lat16_concat_with_elev_no_static_wd
+  label: "Wind (TruncNormal) snap VAE-lat16 concat (with elev, no static, wd=1e-4)"
+  colour: "#e377c2"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --no-static-fields --weight-decay 1e-4 --likelihood wind=truncated_normal"
+
+
+- name: wind_truncnormal_snap_vae_lat16_proj8_film_with_elev_no_static_wd
+  label: "Wind (TruncNormal) snap VAE-lat16→proj8 FiLM (with elev, no static, wd=1e-4)"
+  colour: "#e377c2"
+  target_variables: [wind]
+  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --vae-latents-proj-dim 8 --no-static-fields --weight-decay 1e-4 --likelihood wind=truncated_normal"
