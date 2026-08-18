@@ -6,8 +6,8 @@
 
 Scoping decisions taken:
 - **Wind-energy project stays out**: `scripts/preprocessing/wind_energy/` remains in the monorepo untouched, to be migrated to its own repo later. `capacity_factor` and the two extra ERA5 variables it needed (`surface_pressure`, `boundary_layer_height`) do not belong to this repo.
-- **Data pipeline is end-to-end**: the `dataprocessing` ingestion scripts are vendored (§2.6). Gap found: `era5_static_0p25_all.nc` (13 invariant fields, 12 MB) was a one-off CDS/cfgrib download on 2026-03-18 with no producing script — add `scripts/data/download_era5_static.py` (CDS invariant-field request; `vendored/…/era5/cds.py` has a request template) or ship the file with the data root and document it.
-- **Vanilla SetConv stays**: `RBFSetConv`, `setconv_length_scale` and `--interpolation setconv` are **KEEP** for future re-runs; only the embedding-conditioned / stream / attention SetConv variants are cut. Recommended: default `--interpolation` to `bilinear` (what every paper run used) so a bare invocation reproduces the paper.
+- **Data pipeline is end-to-end**: the `dataprocessing` ingestion scripts are vendored (§2.6). `era5_static_0p25_all.nc` (13 ERA5 invariant fields, 12 MB; one-off CDS/cfgrib download 2026-03-18) is **treated as given** — it ships with the data root and is documented in `DATA.md`; no downloader is written for it.
+- **Vanilla SetConv stays**: `RBFSetConv`, `setconv_length_scale` and `--interpolation setconv` are **KEEP** for future re-runs; only the embedding-conditioned / stream / attention SetConv variants are cut. **Default `--interpolation` is `bilinear`** (what every paper run used), so a bare invocation reproduces the paper.
 - **Mechanics**: the monorepo checkout is left exactly as is; the new repository is built locally at `/home/pmms2/tessera-downscaling` and pushed to a new remote when ready.
 
 Done so far (all in the new repo, nothing changed in the monorepo):
@@ -20,7 +20,7 @@ Answer to "is anything still missing from the mount?" — two things, both Isamb
 - **The VAE patch-encoder code** (`~/tessera-patch-encoder` on Isambard, uncommitted): its outputs (checkpoints, latents) are on the mount, the code is not.
 - Everything else the paper needs is on the mount (models, latents, descriptors, Aurora-lead datasets, dense grids, DEMs, figure inputs, raw ERA5/GHCNh, Tessera 2017/2024 patches, VAE checkpoints).
 
-Isambard note: the clifton cert on this machine still shows validity 2026-08-11 16:53 → 08-12 04:53 (`~/.cache/clifton/` untouched), so SSH is still refused — `clifton auth` needs to be run on this box.
+Isambard rescue (2026-08-18): eight jobs appended to `/data/weather-downscaling/_migration/jobs.tsv` — `dsg_top`, `dsg_ghcnh`, `dsg_{europe,us,east_asia,southern_africa,australia}` (→ `dataset_timestamp_global/`) and `pe_repo` (→ `tessera_patch_encoder/repo/`, excludes venv/outputs/data) — and four workers started; they poll every 300 s until the clifton cert on this machine is valid (it still showed 2026-08-11 → 08-12 at 19:46 UTC), then transfer. `bash /data/weather-downscaling/_migration/status.sh` shows progress.
 
 
 ---
