@@ -4,26 +4,24 @@ Used to build the inputs for high-resolution downscaling map comparisons
 (e.g. "what does TESSERA's contribution look like across Iberia at 0.05°
 resolution"), where we need a TESSERA patch centred at every grid point.
 
-Output goes to ``.tmp_output/processed/tessera_dense_grid/<region>_<resolution>deg_<year>/``
-with a memory-mapped ``patch_embeddings.npy`` plus a sibling ``grid_points.csv``
-and metadata. The output format mirrors the existing
+Output goes to ``<output-dir>/<region>_<resolution>deg_<year>/`` (default
+``<data_root>/processed/tessera_dense_grid/``) with a memory-mapped
+``patch_embeddings.npy`` plus a sibling ``grid_points.csv`` and metadata. The
+output format mirrors the existing
 ``processed/tessera_global/patch_embeddings_<year>.npy`` so downstream
 consumers (VAE encoder, ConvCNP inference) can use the same code path.
 
+The paper's dense grids (``processed/dense/{iberia,norway}/*_0.05deg_2024.npz``)
+are TESSERA v1 2024 patches encoded by the v1 VAE; see generate_maps.py.
+
 Usage:
-    # Predefined region (matches the analysis notebook's REGIONS dict)
-    uv run --group core python projects/tessera_downscaling/scripts/maps/extract_dense_grid_patches.py \\
-        --region iberia \\
-        --resolution 0.05 \\
-        --year 2024 \\
-        --output-dir .tmp_output/processed/tessera_dense_grid
+    # Predefined region
+    uv run python scripts/maps/extract_dense_grid_patches.py \\
+        --region iberia --resolution 0.05 --year 2024
 
     # Arbitrary bbox
-    uv run --group core python projects/tessera_downscaling/scripts/maps/extract_dense_grid_patches.py \\
-        --bbox 36.0 43.5 -10.0 3.0 \\
-        --region-name iberia \\
-        --resolution 0.05 \\
-        --output-dir .tmp_output/processed/tessera_dense_grid
+    uv run python scripts/maps/extract_dense_grid_patches.py \\
+        --bbox 36.0 43.5 -10.0 3.0 --region-name iberia --resolution 0.05
 
 The script is **resumable**: if it crashes or is killed, re-running the
 same command picks up at the next unfinished sub-bbox.
@@ -32,23 +30,15 @@ from __future__ import annotations
 
 import argparse
 import logging
-import sys
 from pathlib import Path
 
-# Add the project src to the path. Mirrors the convention used by
-# scripts/extract_tessera.py.
-SCRIPT_DIR = Path(__file__).resolve().parent
-REPO_ROOT = SCRIPT_DIR.parents[3]
-sys.path.insert(0, str(REPO_ROOT / "projects" / "tessera_downscaling" / "src"))
-
-from tessera_downscaling.data.dense_grid_patches import (  # noqa: E402
+from tessera_downscaling.data.dense_grid_patches import (
     compute_grid_points,
     extract_dense_grid_patches,
 )
+from tessera_downscaling.paths import processed_dir
 
-
-# Pre-defined regions. Matches the REGIONS dict in
-# notebooks/single_folder_analysis.ipynb (cell 32).
+# Pre-defined regions (bounding boxes of the dense-map crops).
 PREDEFINED_REGIONS: dict[str, dict[str, float]] = {
     "alps":         {"lat_min": 45.5, "lat_max": 48.0, "lon_min": 6.0,   "lon_max": 16.0},
     "norway":       {"lat_min": 58.0, "lat_max": 71.0, "lon_min": 4.0,   "lon_max": 16.0},
@@ -95,9 +85,9 @@ def main() -> None:
              "(default: 0.3 → ~5 GB peak mosaic at mid-latitudes).",
     )
     parser.add_argument(
-        "--output-dir", type=Path, required=True,
+        "--output-dir", type=Path, default=processed_dir("tessera_dense_grid"),
         help="Parent directory under which the run's output subfolder is "
-             "created (e.g. .tmp_output/processed/tessera_dense_grid).",
+             "created (default: <data_root>/processed/tessera_dense_grid).",
     )
     parser.add_argument(
         "--embeddings-cache-dir", type=Path, default=None,

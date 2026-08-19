@@ -30,13 +30,15 @@ check) — both must match the dataset or the counts drift from the evaluator's.
 
 Usage (from repo root):
 
-    .venv/bin/python projects/tessera_downscaling/scripts/maps/plot_region_overview.py
+    uv run python scripts/maps/plot_region_overview.py
 
     # restrict the dots to one variable's station set
-    .venv/bin/python .../plot_region_overview.py --variable wind
+    uv run python scripts/maps/plot_region_overview.py --variable wind
 
-The TESSERA patch-coverage mask is the only expensive input (it streams the
-81 GB patch array once, ~10 s warm) and is cached next to the patch file.
+Outputs go to OUTPUTS/overview/ (see regions.py; the paper's copy is
+``make_paper_figures.fig01``). The TESSERA patch-coverage mask is the only
+expensive input (it streams the 81 GB patch array once, ~10 s warm) and is
+cached under ``processed/overview_cache/``.
 """
 from __future__ import annotations
 
@@ -46,21 +48,20 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from regions import OUTPUTS as MAPS_OUTPUTS
 
-REPO = Path("/lus/lfs1aip2/projects/u6do/pmms2/end-to-end-forecasting")
-PROJ = REPO / "projects/tessera_downscaling"
-BASE = PROJ / ".tmp_output"
-DATASET = BASE / "dataset_timestamp_global"
-PROCESSED = BASE / "processed"
-OUTPUTS = PROJ / "scripts/maps/outputs" / "overview"
+from tessera_downscaling.paths import dataset_dir, processed_dir
 
-PATCHES = PROCESSED / "tessera_global/patch_embeddings_2024.npy"
-PATCH_CSV = PROCESSED / "tessera_global/station_list_filtered.csv"
-LATENTS = PROCESSED / "station_latents_lat16_grad0.5.npy"
+DATASET = dataset_dir("dataset_timestamp_global")
+OUTPUTS = MAPS_OUTPUTS / "overview"
+
+PATCHES = processed_dir("tessera_global", "patch_embeddings_2024.npy")
+PATCH_CSV = processed_dir("tessera_global", "station_list_filtered.csv")
+LATENTS = processed_dir("station_latents_lat16_grad0.5.npy")
 MIN_PATCH_COVERAGE = 0.5
 
 # Region boxes — MUST stay in sync with REGIONS in
-# preprocessing/timestamp/preprocess_timestamp_global.py (and Table 3).
+# scripts/preprocessing/preprocess_timestamp_global.py (and Table 3).
 REGIONS: dict[str, tuple[float, float, float, float]] = {
     "europe": (35.0, 75.0, -24.0, 40.0),
     "us": (24.0, 50.0, -125.0, -66.0),
@@ -318,7 +319,7 @@ def main() -> None:
                          "union of the two variables' sets (default)")
     ap.add_argument("--out-stem", default=None)
     ap.add_argument("--formats", nargs="+", default=["pdf", "png"])
-    ap.add_argument("--cache-dir", type=Path, default=PROCESSED / "overview_cache")
+    ap.add_argument("--cache-dir", type=Path, default=processed_dir("overview_cache"))
     args = ap.parse_args()
 
     stations = build_station_table(args.cache_dir)

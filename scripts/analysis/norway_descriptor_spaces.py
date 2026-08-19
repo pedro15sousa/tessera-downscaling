@@ -49,9 +49,10 @@ crop64_lat16_auxon — see LATENTS_NPY below); v1-latents numbers in [brackets]:
                   support while staying just as faithful.]
 
 Run:
-    .venv/bin/python projects/tessera_downscaling/scripts/norway_rollout_descriptors/norway_descriptor_spaces.py
-Outputs:
-    projects/tessera_downscaling/notebooks/norway_analysis_outputs/
+    uv run python scripts/analysis/norway_descriptor_spaces.py
+Outputs (the paper's Figs 11/12 (preprint) = F1/F2 (AMS) are re-rendered from
+the same inputs by scripts/paper/make_paper_figures.py fig11/fig12):
+    notebooks/norway_analysis_outputs/
         fig_descriptor_spaces.png            (Norway probe: isolation + AUC)
         fig_heldout_descriptor_control.png   (3 rollout groups: probe /
                                               held-out Norway / non-Norway
@@ -84,25 +85,27 @@ from sklearn.model_selection import cross_val_score, StratifiedKFold
 from sklearn.decomposition import PCA
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 
-REPO = Path(__file__).resolve().parents[4]
-BASE = REPO / "projects/tessera_downscaling/.tmp_output"
-OUT = REPO / "projects/tessera_downscaling/notebooks/norway_analysis_outputs"
+from tessera_downscaling.paths import dataset_dir, processed_dir
+
+REPO = Path(__file__).resolve().parents[2]
+OUT = REPO / "notebooks" / "norway_analysis_outputs"
 OUT.mkdir(exist_ok=True, parents=True)
+DATASET = dataset_dir("dataset_timestamp_global")
 NB_LAT, NB_LON = (58.0, 71.0), (4.0, 31.0)
 
 # ---- TESSERA latents generation (pick ONE) -----------------------------
 # Current main: TESSERA v2 "1B-M", 2017 embeddings (crop64_lat16_auxon).
-LATENTS_NPY = BASE / ("processed/vae_tessera_1B-M/"
-                      "station_latents_1B-M_p128_2017_crop64_lat16_grad0.5_auxon.npy")
+LATENTS_NPY = processed_dir(
+    "vae_tessera_1B-M", "station_latents_1B-M_p128_2017_crop64_lat16_grad0.5_auxon.npy")
 # Previous main: TESSERA v1 16-d latents.
-# LATENTS_NPY = BASE / "processed/station_latents_lat16_grad0.5.npy"
+# LATENTS_NPY = processed_dir("station_latents_lat16_grad0.5.npy")
 
 # ---- load & join latents + station table -------------------------------
 lat = np.load(LATENTS_NPY)
-ll = pd.read_csv(BASE / "processed/tessera_global/station_list_filtered.csv")
+ll = pd.read_csv(processed_dir("tessera_global", "station_list_filtered.csv"))
 ll["station_id"] = ll["station_id"].astype(str)
 lat_of = {s: i for i, s in enumerate(ll["station_id"])}
-st = pd.read_csv(BASE / "dataset_timestamp_global/stations.csv")
+st = pd.read_csv(DATASET / "stations.csv")
 st["station_id"] = st["station_id"].astype(str)
 st["lrow"] = st["station_id"].map(lat_of)
 st = st[st["lrow"].notna()].copy(); st["lrow"] = st["lrow"].astype(int)
@@ -124,7 +127,7 @@ Z16 = lat[st["lrow"].to_numpy()]
 # alone makes it look OOD in the encoded latent). The descriptor question is
 # whether a persistent surface analogue exists, so the time-invariant static
 # input is the right space; the encoded-latent version is not used.
-_eu_static = BASE / "dataset_timestamp_global/regions/europe"
+_eu_static = DATASET / "regions" / "europe"
 _sfield = np.load(_eu_static / "static_fields.npy")    # (n_static, H, W)
 _glat = np.load(_eu_static / "lats.npy")               # (H,) increasing
 _glon = np.load(_eu_static / "lons.npy")               # (W,) increasing
@@ -165,9 +168,9 @@ groups = {
 # OPT-IN. The paper's §3.5 figures compare the four spaces below and nothing
 # else, so these two extra spaces are gated behind an environment variable:
 # a default run reproduces the published figures unchanged. Enable with
-#     WITH_EXTRA_DESCRIPTORS=1 .venv/bin/python .../norway_descriptor_spaces.py
+#     WITH_EXTRA_DESCRIPTORS=1 uv run python scripts/analysis/norway_descriptor_spaces.py
 # for the appendix version.
-_EXTRA_NPY = BASE / "processed/extra_descriptors.npy"
+_EXTRA_NPY = processed_dir("extra_descriptors.npy")
 _WITH_EXTRA = os.environ.get("WITH_EXTRA_DESCRIPTORS", "0") not in ("0", "", "false")
 EXTRA_DESC = None
 if not _WITH_EXTRA:
@@ -385,8 +388,7 @@ print("Wrote", OUT / "fig_heldout_descriptor_control.png")
 # whereas the embedding already places ~80% of Norway in-distribution from the
 # very first stations -- reachable AND faithful when geography is neither.
 ROLLOUT_FOLDER = "snapshot_14y_eu_temporal_rollout_norway_lat16_mtpi"
-SCHED = (REPO / "projects/tessera_downscaling/scripts/experiments"
-         / ROLLOUT_FOLDER / "rollout_schedule.json")
+SCHED = REPO / "scripts" / "experiments" / ROLLOUT_FOLDER / "rollout_schedule.json"
 # Through full deployment: at r3y all 1505 probes are online, so the query is
 # exactly the held-out test set; r4y..r6y add no stations and are omitted.
 HORIZON_ORDER = ["r1mo", "r3mo", "r6mo", "r1y", "r2y", "r3y"]

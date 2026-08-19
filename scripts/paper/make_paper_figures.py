@@ -1,4 +1,4 @@
-"""One-off, self-contained generator for the paper's figures.
+"""Self-contained generator for the paper's figures.
 
 Produces every figure of "Earth observation embeddings are effective sub-grid
 descriptors for probabilistic weather downscaling" into a single folder
@@ -11,21 +11,27 @@ descriptors for probabilistic weather downscaling" into a single folder
     cropping (cropping would change the delivered width and defeat the
     fixed font sizes);
   * vector PDF everywhere, TrueType (fonttype 42) fonts — no Type-3;
-  * the non-regenerable dense maps (Figs 1, 3, 4) are copied/wrapped
-    losslessly from scripts/maps/outputs/.
+  * the dense-map figures (Figs 1, 3, 4, 9) are copied / re-rendered
+    losslessly from the cached outputs of scripts/maps/ (see MAPS_OUT below);
+    those caches were produced by the v1-generation runs, as documented in
+    scripts/maps/generate_maps.py.
 
 This script deliberately REPLICATES the plotting logic of the notebooks and
 scripts it mirrors (cross_folder_analysis.ipynb, analyze_cross_lead.ipynb,
 data_efficiency_temporal_rollout.ipynb, residual_structure_analysis.ipynb,
-norway_descriptor_spaces.py) without importing or modifying them, reading the
-same run artefacts from the migrated /data/weather-downscaling tree.
+scripts/analysis/norway_descriptor_spaces.py) without importing or modifying
+them, reading the same run artefacts from the data root
+(tessera_downscaling.paths). Every figure that is recomputed carries a
+numeric cross-check against the numbers printed in the paper (the *_EXPECTED
+tables); a "[warn]" line means the regenerated figure has drifted.
 
-Run:  python make_paper_figures.py [--only fig02,fig09] [--out DIR]
+Run:  uv run python scripts/paper/make_paper_figures.py [--only fig02,fig09] [--out DIR]
 """
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import sys
 import traceback
@@ -34,16 +40,20 @@ from pathlib import Path
 import matplotlib
 
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-import numpy as np
+import matplotlib.pyplot as plt  # noqa: E402
+import numpy as np  # noqa: E402
+
+from tessera_downscaling import paths  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Locations
 # ---------------------------------------------------------------------------
-PROJ = Path(__file__).resolve().parents[2]          # projects/tessera_downscaling
-MAPS_OUT = PROJ / "scripts" / "maps" / "outputs"
-DATA = Path("/data/weather-downscaling")            # migrated run artefacts
-OUT_DEFAULT = PROJ / "paper" / "figures"
+REPO = Path(__file__).resolve().parents[2]          # repository root
+DATA = paths.data_root()                            # run artefacts, descriptors, latents
+# Cached inputs of the map figures, written by scripts/maps/ (override with
+# TESSERA_MAPS_OUT, as regions.py does).
+MAPS_OUT = Path(os.environ.get("TESSERA_MAPS_OUT") or paths.paper_figure_inputs_dir())
+OUT_DEFAULT = REPO / "paper" / "figures"
 
 # ---------------------------------------------------------------------------
 # Journal style: author at final printed size, never crop.
@@ -86,7 +96,7 @@ def save(fig, out_dir: Path, name: str) -> None:
 # ===========================================================================
 # Fig 1 + Figs 3/4 — frozen map figures: copy / wrap losslessly
 # ===========================================================================
-PAPER_MAPS = [  # (region, var, ts) — replot_paper_maps.FIGS, the paper's picks
+PAPER_MAPS = [  # (region, var, ts) — the paper's picks (scripts/maps/regions.py `dates`)
     ("iberia", "t2m", "2022-07-18-12"),
     ("iberia", "wind", "2022-12-12-12"),
     ("norway", "t2m", "2023-01-02-00"),
@@ -667,8 +677,8 @@ def fig09(out: Path) -> None:
 
 # ===========================================================================
 # Figs 6 & 10 — cross-lead uplift and relative skill decay
-# (replicates analyze_cross_lead.ipynb cells 1/2/4/8/13/17; the notebook's
-# HPC .tmp_output roots are remapped onto /data/weather-downscaling)
+# (replicates analyze_cross_lead.ipynb cells 1/2/4/8/13/17, reading the same
+# training_runs_snapshot_14y_cross_lead* folders under the data root)
 # ===========================================================================
 XLEAD_ROOT = DATA / "training_runs_snapshot_14y_cross_lead"
 XLEAD_TESS = DATA / "training_runs_snapshot_14y_cross_lead_tessera_1B-M_2017"
@@ -713,7 +723,7 @@ def _xlead_frame():
     df["eval_label"] = pd.Categorical(df["eval_label"], categories=EVAL_ORDER,
                                       ordered=True)
     # Cross-check against the notebook's exported tidy CSV (same run).
-    csv = PROJ / "notebooks" / "cross_lead_analysis_outputs" / "all_results_tidy.csv"
+    csv = REPO / "notebooks" / "cross_lead_analysis_outputs" / "all_results_tidy.csv"
     if csv.exists():
         ref = pd.read_csv(csv)[["region", "target", "variant", "seed",
                                 "eval_label", "rmse", "crps"]]
@@ -881,15 +891,9 @@ def fig10(out: Path) -> None:
 
 # ===========================================================================
 # Figs 5 & 8 — descriptor-space probes of the persistent ERA5-interp residual
-# (replicates residual_structure_analysis.ipynb §3c/3e/3g; HPC paths remapped)
+# (replicates residual_structure_analysis.ipynb §3c/3e/3g; the HPC paths stored
+# in the runs' config.json are remapped onto the data root by paths.resolve)
 # ===========================================================================
-HPC_TMP = "/projects/u6do/pmms2/end-to-end-forecasting/projects/tessera_downscaling/.tmp_output"
-
-
-def _remap(p) -> Path:
-    return Path(str(p).replace(HPC_TMP, str(DATA)))
-
-
 SR_DATASET = DATA / "dataset_timestamp_global"
 SR_MIN_N = 100          # 'well-sampled' regions: Europe (898), US (357)
 SR_WELL_SAMPLED = {     # folder -> (display name, region key)
@@ -983,8 +987,8 @@ def _sr_latents(folder, var):
             if not cfgp.exists():
                 continue
             cfg = json.loads(cfgp.read_text())
-            lp = _remap(cfg["vae_latents_path"])
-            cp = _remap(cfg["vae_latents_station_csv"])
+            lp = paths.resolve(cfg["vae_latents_path"])
+            cp = paths.resolve(cfg["vae_latents_station_csv"])
             if lp.exists() and cp.exists():
                 arr = np.load(lp)
                 ids = pd.read_csv(cp)["station_id"].astype(str).values
@@ -1166,7 +1170,7 @@ def fig08(out: Path) -> None:
 # ===========================================================================
 ROLL_FOLDER = "snapshot_14y_eu_temporal_rollout_norway_lat16_mtpi"
 ROLL_TESS = "snapshot_14y_eu_temporal_rollout_norway_tessera_1B-M_2017"
-ROLL_EXP = PROJ / "scripts" / "experiments" / ROLL_FOLDER
+ROLL_EXP = REPO / "scripts" / "experiments" / ROLL_FOLDER
 SWEEP_X_YEARS = {"r0": 0.0, "r1mo": 1 / 12, "r3mo": 0.25, "r6mo": 0.50,
                  "r1y": 1.0, "r2y": 2.0, "r3y": 3.0, "r4y": 4.0,
                  "r5y": 5.0, "r6y": 6.0}
@@ -1391,8 +1395,8 @@ def fig07(out: Path) -> None:
 
 # ===========================================================================
 # Figs 11 & 12 — descriptor-space views + deployment-resolved reachability
-# (replicates norway_rollout_descriptors/norway_descriptor_spaces.py,
-#  default 4-space paper configuration; BASE remapped to /data)
+# (replicates scripts/analysis/norway_descriptor_spaces.py, default 4-space
+#  paper configuration, reading the same inputs under the data root)
 # ===========================================================================
 NW_SPACE_ORDER = ["geographic\n(lat, lon)", "elevation\n+ mTPI",
                   "ERA5 static\n(interp)", "TESSERA\nlat16 embedding"]

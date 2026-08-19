@@ -3,10 +3,21 @@
 The model-free counterpart to the per-region skill table: a random-forest probe
 asking, independently of any trained downscaler, which per-station descriptor
 space makes the persistent ERA5-interpolation residual predictable at stations
-excluded from fitting. This is the analysis behind the paper's descriptor-
-ranking figure, re-run over a **wider set of descriptor spaces** so that the
-hand-crafted land-surface descriptor is judged on the same footing as the
+excluded from fitting, re-run over a **wider set of descriptor spaces** so that
+the hand-crafted land-surface descriptor is judged on the same footing as the
 learned embedding.
+
+**Independent robustness probe -- not the source of the paper's figure.** The
+paper's residual-probe figure (preprint Fig 5 + Fig 8, AMS Fig 3) is produced by
+``notebooks/residual_structure_analysis.ipynb`` §3c/§3g and re-rendered by
+``scripts/paper/make_paper_figures.py`` (``fig05``/``fig08``). This script builds
+its station set differently (every station with >= ``--min-snapshots`` valid
+test snapshots, no TESSERA-validity filter, v1 latents by default; the paper
+uses the stations of the trained runs' ``test_predictions.npz``) and uses its
+own random-forest settings (400 trees, 4 folds, ``min_samples_leaf=2``; the
+paper: 200 trees, 5 folds, ``min_samples_leaf=3``), so its R² values are *not*
+the numbers printed in the paper; they are a check that the ranking of
+descriptor spaces is not an artefact of one probe design.
 
 Why this script exists separately from the notebook: the notebook version
 compares four spaces (geographic, elevation+mTPI, ERA5-static, TESSERA). The
@@ -46,7 +57,7 @@ Outputs (under notebooks/descriptor_analysis_outputs/):
     fig_residual_probe_spaces.png   grouped bars, one panel per variable
 
 Usage:
-    .venv/bin/python projects/tessera_downscaling/scripts/descriptor_analysis/residual_probe_spaces.py \\
+    uv run python scripts/analysis/residual_probe_spaces.py \\
         --regions europe us --target-variables t2m wind
 """
 from __future__ import annotations
@@ -54,30 +65,26 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import sys
 from collections import defaultdict
 from pathlib import Path
 
+import matplotlib
 import numpy as np
 import pandas as pd
-import matplotlib
+
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-from scipy.interpolate import RegularGridInterpolator
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.model_selection import KFold
+import matplotlib.pyplot as plt  # noqa: E402
+from scipy.interpolate import RegularGridInterpolator  # noqa: E402
+from sklearn.ensemble import RandomForestRegressor  # noqa: E402
+from sklearn.model_selection import KFold  # noqa: E402
 
-SCRIPT_DIR = Path(__file__).resolve().parent
-REPO_ROOT = SCRIPT_DIR.parents[3]
-sys.path.insert(0, str(REPO_ROOT / "projects" / "tessera_downscaling" / "src"))
-sys.path.insert(0, str(REPO_ROOT / "projects" / "tessera_downscaling" / "scripts" / "baselines"))
-
-from evaluate_simple_baselines import (  # noqa: E402
+from tessera_downscaling.baselines import (  # noqa: E402
     Era5DirResolver,
     build_dataset,
     detect_layout,
     era5_interp_predict,
 )
+from tessera_downscaling.paths import dataset_dir, processed_dir  # noqa: E402
 
 logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -85,8 +92,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger("residual_probe")
 
-BASE = REPO_ROOT / "projects/tessera_downscaling/.tmp_output"
-OUT = REPO_ROOT / "projects/tessera_downscaling/notebooks/descriptor_analysis_outputs"
+REPO_ROOT = Path(__file__).resolve().parents[2]
+DATASET = dataset_dir("dataset_timestamp_global")
+OUT = REPO_ROOT / "notebooks" / "descriptor_analysis_outputs"
 
 # A station's residual is only a usable target once it averages enough
 # snapshots that transient weather has largely cancelled.
@@ -192,7 +200,7 @@ def per_station_residuals(
 
 def load_descriptor_tables(region: str) -> dict:
     """Per-station descriptor tables, keyed by station_id."""
-    stations = pd.read_csv(BASE / "dataset_timestamp_global/stations.csv")
+    stations = pd.read_csv(Path(args_global.dataset_dir) / "stations.csv")
     stations["station_id"] = stations["station_id"].astype(str)
 
     latents = np.load(args_global.latents_npy)
@@ -235,7 +243,7 @@ def load_descriptor_tables(region: str) -> dict:
     # interpolated statics, not the CNN-encoded grid latent, which is dominated
     # by the transient weather being corrected rather than persistent surface
     # character.
-    rdir = BASE / f"dataset_timestamp_global/regions/{region}"
+    rdir = Path(args_global.dataset_dir) / "regions" / region
     sfield = np.load(rdir / "static_fields.npy")
     glat = np.load(rdir / "lats.npy")
     glon = np.load(rdir / "lons.npy")
@@ -343,10 +351,7 @@ def cv_r2(x: np.ndarray, y: np.ndarray, args) -> float:
 def main():
     global args_global
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument(
-        "--dataset-dir", type=Path,
-        default=BASE / "dataset_timestamp_global",
-    )
+    parser.add_argument("--dataset-dir", type=Path, default=DATASET)
     parser.add_argument(
         "--regions", nargs="+", default=["europe", "us"],
         help="Restricted by default to the well-sampled regions, where the "
@@ -363,15 +368,15 @@ def main():
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument(
         "--latents-npy", type=Path,
-        default=BASE / "processed/station_latents_lat16_grad0.5.npy",
+        default=processed_dir("station_latents_lat16_grad0.5.npy"),
     )
     parser.add_argument(
         "--latents-csv", type=Path,
-        default=BASE / "processed/tessera_global/station_list_filtered.csv",
+        default=processed_dir("tessera_global", "station_list_filtered.csv"),
     )
     parser.add_argument(
         "--extra-descriptors-npy", type=Path,
-        default=BASE / "processed/extra_descriptors.npy",
+        default=processed_dir("extra_descriptors.npy"),
     )
     # Station filters are intentionally NOT applied here: the probe is
     # model-free and should use every station with a usable residual.

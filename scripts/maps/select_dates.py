@@ -7,26 +7,22 @@ structure (and, for wind, the most active field) to downscale. Each snapshot is
 loaded once and scored for every region.
 
 Prints the top candidates + the pick per (region, variable), and writes the picks
-to outputs/selected_dates.json. Use those to set per-region `jobs` in regions.py.
+to OUTPUTS/selected_dates.json. Use those to set per-region `dates` in regions.py
+(this is how the paper's four snapshots -- iberia t2m 2022-07-18-12 / wind
+2022-12-12-12, norway t2m 2023-01-02-00 / wind 2022-01-30-00 -- were chosen).
 
-  .venv/bin/python projects/tessera_downscaling/scripts/maps/select_dates.py
+  uv run python scripts/maps/select_dates.py
 """
 from __future__ import annotations
 
 import json
-import sys
-from pathlib import Path
 
 import numpy as np
+from generate_maps import bilinear_grid_to_points
+from regions import OUTPUTS, REGIONS, Region
 
-REPO = Path("/lus/lfs1aip2/projects/u6do/pmms2/end-to-end-forecasting")
-PROJ = REPO / "projects/tessera_downscaling"
-sys.path.insert(0, str(PROJ / "scripts/maps"))
-sys.path.insert(0, str(PROJ / "src"))
-
-from regions import REGIONS, BASE, OUTPUTS, Region  # noqa: E402
-from generate_maps import bilinear_grid_to_points  # noqa: E402
-from tessera_downscaling.data.dataset import MultiRegionSnapshotDownscalingDataset  # noqa: E402
+from tessera_downscaling.data.dataset import MultiRegionSnapshotDownscalingDataset
+from tessera_downscaling.paths import dataset_dir, processed_dir
 
 # Snapshots/grid are shared across these europe crops; take them from any region.
 EU = Region(next(iter(REGIONS))).region_data
@@ -53,10 +49,10 @@ def field(era5, var, pts):
 
 def main():
     ds = MultiRegionSnapshotDownscalingDataset(
-        dataset_dir=BASE / "dataset_timestamp_global",
+        dataset_dir=dataset_dir("dataset_timestamp_global"),
         region_specs={"europe": "test"}, split="test", target_variables=["t2m"],
-        vae_latents_path=BASE / "processed/station_latents_lat16_grad0.5.npy",
-        vae_latents_station_csv=BASE / "processed/tessera_global/station_list_filtered.csv",
+        vae_latents_path=processed_dir("station_latents_lat16_grad0.5.npy"),
+        vae_latents_station_csv=processed_dir("tessera_global", "station_list_filtered.csv"),
         vae_latents_zscore=True, include_static_fields=False, normalisation_policy="per_region",
     )
     tss = list(ds.timestamps)

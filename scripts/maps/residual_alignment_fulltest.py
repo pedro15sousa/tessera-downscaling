@@ -20,18 +20,20 @@ increment explains), directional hit-rate, rho(|D|,g) vs a random-increment null
 and -- for context -- the aggregate CRPS of both models (seed-mean, from
 test_summary.json). CRPS is a distributional proper score and does NOT enter the
 regression, which is intrinsically about the signed POINT prediction.
+
+Imported by notebooks/residual_structure_analysis.ipynb (§4) and runnable on its
+own:  uv run python scripts/maps/residual_alignment_fulltest.py
 """
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 import numpy as np
 from scipy.special import log_ndtr, ndtri
 from scipy.stats import pearsonr, spearmanr
 
-BASE = Path("/lus/lfs1aip2/projects/u6do/pmms2/end-to-end-forecasting"
-            "/projects/tessera_downscaling/.tmp_output")
+from tessera_downscaling.paths import training_runs_dir
+
 SEEDS = [42, 123, 456]
 REGIONS = ["eu", "us", "east_asia", "australia", "southern_africa"]
 STEM = {
@@ -62,7 +64,7 @@ def ens_point(reg, stem, var, suffix=""):
     "_tessera_1B-M_2017" -> training_runs_snapshot_14y_<reg>_tessera_1B-M_2017."""
     pts, tgt = [], None
     for s in SEEDS:
-        f = BASE / f"training_runs_snapshot_14y_{reg}{suffix}/{stem}_seed{s}/test_predictions.npz"
+        f = training_runs_dir(f"snapshot_14y_{reg}{suffix}") / f"{stem}_seed{s}" / "test_predictions.npz"
         if not f.exists():
             return None
         d = np.load(f)
@@ -73,7 +75,7 @@ def ens_point(reg, stem, var, suffix=""):
 def crps_seedmean(reg, stem, var, suffix=""):
     vals = []
     for s in SEEDS:
-        f = BASE / f"training_runs_snapshot_14y_{reg}{suffix}/{stem}_seed{s}/test_summary.json"
+        f = training_runs_dir(f"snapshot_14y_{reg}{suffix}") / f"{stem}_seed{s}" / "test_summary.json"
         if f.exists():
             v = json.load(open(f)).get(f"{var}_crps")
             if v is not None:

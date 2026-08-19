@@ -6,26 +6,24 @@ bucket (no auth, no rasterio needed), point-samples each grid-cell centroid
 and saves an array aligned with the latent grid (grid_idx order).
 
 Region selected by the REGION env var (default "iberia"). Output:
-.tmp_output/processed/dense/<region>/<region>_0.05deg_dem.npy  (N,) metres.
-Tiles are cached under .tmp_output/processed/dem_cache/ so re-runs are instant.
+<data_root>/processed/dense/<region>/<region>_0.05deg_dem.npy  (N,) metres.
+Tiles are cached under <data_root>/processed/dem_cache/ so re-runs are instant.
 
-  REGION=norway .venv/bin/python projects/tessera_downscaling/scripts/maps/fetch_dem.py
+  REGION=norway uv run python scripts/maps/fetch_dem.py
 """
 import gzip
 import math
-import sys
 import urllib.request
-from pathlib import Path
 
 import numpy as np
+from regions import get_region
 
-sys.path.insert(0, str(Path(__file__).parent))
-from regions import BASE, get_region  # noqa: E402
+from tessera_downscaling.paths import processed_dir
 
 R = get_region()
 NPZ = R.dense_npz
 OUT = R.dem_path
-CACHE = BASE / "processed/dem_cache"
+CACHE = processed_dir("dem_cache")
 CACHE.mkdir(parents=True, exist_ok=True)
 BASEURL = "https://elevation-tiles-prod.s3.amazonaws.com/skadi"
 
@@ -54,40 +52,45 @@ def load_tile(tlat, tlon):
     return a, n
 
 
-d = np.load(NPZ, allow_pickle=True)
-co = d["coords"]
-vm = d["valid_mask"]
-lat = co["lat"].astype(float)
-lon = co["lon"].astype(float)
-N = len(lat)
-dem = np.full(N, np.nan, np.float32)
+def main():
+    d = np.load(NPZ, allow_pickle=True)
+    co = d["coords"]
+    vm = d["valid_mask"]
+    lat = co["lat"].astype(float)
+    lon = co["lon"].astype(float)
+    N = len(lat)
+    dem = np.full(N, np.nan, np.float32)
 
-tiles = {}
-for i in range(N):
-    key = (int(math.floor(lat[i])), int(math.floor(lon[i])))
-    tiles.setdefault(key, []).append(i)
+    tiles = {}
+    for i in range(N):
+        key = (int(math.floor(lat[i])), int(math.floor(lon[i])))
+        tiles.setdefault(key, []).append(i)
 
-for (tlat, tlon), idxs in sorted(tiles.items()):
-    idxs = np.array(idxs)
-    if not vm[idxs].any():          # skip ocean-only tiles
-        continue
-    res = load_tile(tlat, tlon)
-    if res is None:
-        continue
-    a, n = res
-    plat, plon = lat[idxs], lon[idxs]
-    fy = np.clip((tlat + 1 - plat) * (n - 1), 0, n - 1 - 1e-6)
-    fx = np.clip((plon - tlon) * (n - 1), 0, n - 1 - 1e-6)
-    y0, x0 = np.floor(fy).astype(int), np.floor(fx).astype(int)
-    wy, wx = fy - y0, fx - x0
-    c = np.stack([a[y0, x0], a[y0, x0 + 1], a[y0 + 1, x0], a[y0 + 1, x0 + 1]], 0)
-    val = c[0] * (1 - wy) * (1 - wx) + c[1] * (1 - wy) * wx + c[2] * wy * (1 - wx) + c[3] * wy * wx
-    bad = ~np.isfinite(val)
-    if bad.any():
-        val[bad] = np.nanmean(c[:, bad], axis=0)   # fall back to valid corners
-    dem[idxs] = val
-    print(f"  tile {tlat:+03d},{tlon:+04d} cells={len(idxs):4d} elev[{np.nanmin(val):.0f},{np.nanmax(val):.0f}]")
+    for (tlat, tlon), idxs in sorted(tiles.items()):
+        idxs = np.array(idxs)
+        if not vm[idxs].any():          # skip ocean-only tiles
+            continue
+        res = load_tile(tlat, tlon)
+        if res is None:
+            continue
+        a, n = res
+        plat, plon = lat[idxs], lon[idxs]
+        fy = np.clip((tlat + 1 - plat) * (n - 1), 0, n - 1 - 1e-6)
+        fx = np.clip((plon - tlon) * (n - 1), 0, n - 1 - 1e-6)
+        y0, x0 = np.floor(fy).astype(int), np.floor(fx).astype(int)
+        wy, wx = fy - y0, fx - x0
+        c = np.stack([a[y0, x0], a[y0, x0 + 1], a[y0 + 1, x0], a[y0 + 1, x0 + 1]], 0)
+        val = c[0] * (1 - wy) * (1 - wx) + c[1] * (1 - wy) * wx + c[2] * wy * (1 - wx) + c[3] * wy * wx
+        bad = ~np.isfinite(val)
+        if bad.any():
+            val[bad] = np.nanmean(c[:, bad], axis=0)   # fall back to valid corners
+        dem[idxs] = val
+        print(f"  tile {tlat:+03d},{tlon:+04d} cells={len(idxs):4d} elev[{np.nanmin(val):.0f},{np.nanmax(val):.0f}]")
 
-np.save(OUT, dem)
-print(f"SAVED {OUT.name}: {int(np.isfinite(dem).sum())}/{N} cells, "
-      f"valid-land dem max {np.nanmax(np.where(vm, dem, np.nan)):.0f} m")
+    np.save(OUT, dem)
+    print(f"SAVED {OUT.name}: {int(np.isfinite(dem).sum())}/{N} cells, "
+          f"valid-land dem max {np.nanmax(np.where(vm, dem, np.nan)):.0f} m")
+
+
+if __name__ == "__main__":
+    main()

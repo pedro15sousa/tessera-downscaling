@@ -1,7 +1,7 @@
 """Summary tables for the dense maps: terrain structure added + per-variant
 station-performance decomposition, per snapshot.
 
-Scans every outputs/<region>/<var>_<ts>/ subfolder for the current REGION. For each
+Scans every OUTPUTS/<region>/<var>_<ts>/ subfolder for the current REGION. For each
 snapshot it writes a per-variant table (ERA5-interp / ConvCNP baseline / TESSERA):
 
   * Station MAE & RMSE at that snapshot (in-region GHCNh test stations),
@@ -11,26 +11,23 @@ snapshot it writes a per-variant table (ERA5-interp / ConvCNP baseline / TESSERA
 
 Outputs, per snapshot:  <sub>/<region>_<var>_<ts>_summary.{png,csv}
 Region roll-up (all snapshots, original vs auto-selected dates side by side):
-                        outputs/<region>/<region>_summary.{png,csv}
+                        OUTPUTS/<region>/<region>_summary.{png,csv}
 
-  REGION=norway .venv/bin/python projects/tessera_downscaling/scripts/maps/summary_table.py
+  REGION=norway uv run python scripts/maps/summary_table.py
 """
 from __future__ import annotations
 
 import csv
-import sys
-from pathlib import Path
 
+import matplotlib
 import numpy as np
 from scipy.ndimage import gaussian_filter
 from scipy.stats import spearmanr
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 
-sys.path.insert(0, str(Path(__file__).parent))
-from regions import SDFOR_IDX, get_region  # noqa: E402
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt  # noqa: E402
 from generate_maps import bilinear_grid_to_points  # noqa: E402
+from regions import SDFOR_IDX, get_region  # noqa: E402
 
 R = get_region()
 EU = R.region_data

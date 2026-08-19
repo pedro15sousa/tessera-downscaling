@@ -27,39 +27,48 @@ Contract notes (verified against the training pipeline):
 The region is selected by the REGION env var (default "iberia"); grid dimensions
 are derived from the dense npz, so the same script serves iberia, norway, etc.
 
+Provenance of the paper's map figures (preprint Figs 3/4/9, AMS Figs 4-7 +
+App. E). They were produced from the *v1-generation* runs in
+``training_runs_snapshot_14y_eu`` --
+``{t2m,wind_truncnormal}_snap_vae_lat16_concat_with_elev_no_static_wd`` (TESSERA
+arm) and ``{t2m,wind_truncnormal}_snap_bilinear_baseline_wd`` (baseline), see
+regions.DEFAULT_JOBS -- whose latents come from the v1 VAE
+``lat16_beta0.0005_grad0.5_e200`` (16-d, TESSERA v1 2024 patches), NOT from the
+1B-M 2017 latents behind Table 1 / Fig 2. The dense grids
+(``processed/dense/<region>/<region>_0.05deg_2024.npz``) are TESSERA v1 2024
+patches encoded by that same v1 VAE, z-scored with its station-latent stats
+(``processed/station_latents_lat16_grad0.5_global_stats.npz``). Neither run
+family uses mTPI, because mTPI is a per-station descriptor that is undefined on
+a dense grid. Regenerating the maps therefore needs the v1 runs, the v1 dense
+grids and the europe ERA5 snapshots of ``dataset_timestamp_global`` for the
+four chosen dates.
+
 Run (CPU is sufficient):
-  .venv/bin/python projects/tessera_downscaling/scripts/maps/generate_maps.py
-  REGION=norway .venv/bin/python projects/tessera_downscaling/scripts/maps/generate_maps.py
+  uv run python scripts/maps/generate_maps.py
+  REGION=norway uv run python scripts/maps/generate_maps.py
 """
 from __future__ import annotations
 
 import json
 import os
-import sys
-from pathlib import Path
 
 import numpy as np
 import torch
+from regions import G, SEEDS, Z_STATIC_IDX, get_region
 
-REPO = Path("/lus/lfs1aip2/projects/u6do/pmms2/end-to-end-forecasting")
-PROJ = REPO / "projects/tessera_downscaling"
-sys.path.insert(0, str(PROJ / "scripts/maps"))
-sys.path.insert(0, str(PROJ / "src"))
-
-from regions import G, SEEDS, Z_STATIC_IDX, get_region  # noqa: E402
-from tessera_downscaling.data.helpers import build_context_grid  # noqa: E402
-from tessera_downscaling.model.convcnp import ConvCNPDownscaler  # noqa: E402
+from tessera_downscaling.data.helpers import build_context_grid
+from tessera_downscaling.model.convcnp import ConvCNPDownscaler
+from tessera_downscaling.paths import processed_dir
 
 # ---------------------------------------------------------------------------
 # Region selection / paths (see regions.py). Module-level EU/RUNS/OUT_DIR are
 # kept so station_eval.py can import them region-resolved.
 # ---------------------------------------------------------------------------
 R = get_region()
-BASE = PROJ / ".tmp_output"
 EU = R.region_data
 RUNS = R.runs
 DENSE_NPZ = R.dense_npz
-VAE_STATS = BASE / "processed/station_latents_lat16_grad0.5_global_stats.npz"
+VAE_STATS = processed_dir("station_latents_lat16_grad0.5_global_stats.npz")
 OUT_DIR = R.out_dir
 JOBS = R.jobs
 
@@ -74,7 +83,7 @@ USE_DEM = DEM_PATH.exists() and os.environ.get("MAPS_NO_DEM") != "1"
 SUF = "_dem" if USE_DEM else ""
 
 # ---------------------------------------------------------------------------
-# Bilinear grid->points (replicates scripts/baselines/evaluate_simple_baselines.py)
+# Bilinear grid->points (replicates tessera_downscaling.baselines)
 # ---------------------------------------------------------------------------
 def bilinear_grid_to_points(grid, glats, glons, pts):
     """grid (H,W); glats (H,) may be descending; glons (W,) ascending; pts (N,2)=lat,lon."""
@@ -105,6 +114,12 @@ def bilinear_grid_to_points(grid, glats, glons, pts):
 # Model build + context grid (faithful to evaluate.py)
 # ---------------------------------------------------------------------------
 def build_model(run_dir, n_ctx, latent_dim):
+    """Rebuild a run's ConvCNP from its config.json and load best_model.pt.
+
+    Only the configuration keys the model still understands are read; the map
+    runs (see the module docstring) use bilinear interpolation, concat injection
+    of precomputed 16-d latents (TESSERA arm) or no latents (baseline).
+    """
     cfg = json.load(open(run_dir / "config.json"))
     ck = torch.load(run_dir / "best_model.pt", map_location="cpu", weights_only=False)
     sd = ck["model_state_dict"]
@@ -122,16 +137,9 @@ def build_model(run_dir, n_ctx, latent_dim):
         include_elevation=cfg.get("include_elevation", True),
         target_variables=tvars,
         likelihood_per_variable=cfg.get("likelihood_per_variable"),
-        tessera_encoder=None,
         tessera_injection=cfg.get("tessera_injection", "concat"),
         tessera_features_precomputed=uses_vae,
         precomputed_tessera_dim=latent_dim if uses_vae else 0,
-        precomputed_drop_prob=0.0,
-        precomputed_proj_dim=cfg.get("vae_latents_proj_dim", 0) or 0,
-        precomputed_proj_mlp=bool(cfg.get("vae_latents_proj_mlp", False)),
-        decoder_kernel=cfg.get("decoder_kernel", "isotropic"),
-        use_target_embed_stream=cfg.get("use_target_embed_stream", False),
-        target_embed_attention=cfg.get("target_embed_attention", "none"),
     )
     migrated = {(k.replace("setconv.", "interp.", 1) if k.startswith("setconv.") else k): v
                 for k, v in sd.items()}
@@ -149,7 +157,7 @@ def build_ctx(cfg, ts, glats, glons):
         static = None
         stats = np.load(EU / "normalisation_stats_no_static.npz")
     ctx = build_context_grid(
-        era5_daily_path=EU / "era5_snapshot" / f"{ts}.npy",
+        era5_path=EU / "era5_snapshot" / f"{ts}.npy",
         static_fields=static,
         grid_lats=glats, grid_lons=glons,
         date_str=ts[:10],
@@ -181,8 +189,9 @@ def run_model(model, var, ctx, glats, glons, pts, elev_pts, delta_pts, latents_z
 # Plotting
 # ---------------------------------------------------------------------------
 # Paper-ready panel names (left -> right). Region, date, resolution, DEM elevation
-# and the 3-seed ensembling belong in the LaTeX caption, NOT on the figure. Kept
-# module-level so replot_paper_maps.py renders identical labels without a model run.
+# and the 3-seed ensembling belong in the LaTeX caption, NOT on the figure.
+# scripts/paper/make_paper_figures.py re-renders the paper's panels from the saved
+# npz with its own (journal-styled) copies of these labels.
 PANEL_TITLES = [
     "ERA5 bilinear interpolation",
     "ConvCNP (without TESSERA)",
