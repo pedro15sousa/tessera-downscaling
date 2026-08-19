@@ -4,7 +4,9 @@ repos:
     hooks:
       - id: check-yaml
       - id: end-of-file-fixer
+        exclude: ^(scripts/experiments/.*\.json|notebooks/.*_outputs/.*)$
       - id: trailing-whitespace
+        exclude: ^(scripts/experiments/.*\.json|notebooks/.*_outputs/.*)$
       - id: check-added-large-files
         args: ["--maxkb=2000"]
         exclude: ^paper/figures/
@@ -25,11 +27,12 @@ repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: "v0.12.2"
     hooks:
+      # Python only: the notebooks are analysis records and are not linted.
       - id: ruff-check
-        types_or: [python, pyi, jupyter]
+        types_or: [python, pyi]
         args: ["--fix", "--show-fixes"]
       - id: ruff-format
-        types_or: [python, pyi, jupyter]
+        types_or: [python, pyi]
 
   # Notebooks are committed without outputs; the analysis PNG/CSV outputs they
   # produce live in notebooks/*_analysis_outputs/.

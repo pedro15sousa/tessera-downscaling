@@ -11,25 +11,26 @@ Source of truth for "what experiments belong to a folder" is each folder's
 runs exist on disk" is ``<data_root>/training_runs_<folder>/`` (see
 ``tessera_downscaling.paths``).
 """
+
 from __future__ import annotations
 
 import json
 import re
 import textwrap
-from collections import defaultdict
+from collections.abc import Iterable
+from enum import Enum
 from pathlib import Path
-from typing import Iterable
+from typing import Literal
 
-import numpy as np
 import pandas as pd
 import yaml
 
 from tessera_downscaling.paths import training_runs_dir
 
-
 # -----------------------------------------------------------------------------
 # Repo / path discovery
 # -----------------------------------------------------------------------------
+
 
 def find_repo_root(start: Path | None = None) -> Path:
     """Walk up from `start` (or cwd) until we find the repository root
@@ -37,12 +38,16 @@ def find_repo_root(start: Path | None = None) -> Path:
     p = (start or Path.cwd()).resolve()
 
     def _is_root(d: Path) -> bool:
-        return (d / "pyproject.toml").exists() and (d / "scripts" / "experiments").is_dir()
+        return (d / "pyproject.toml").exists() and (
+            d / "scripts" / "experiments"
+        ).is_dir()
 
     while not _is_root(p) and p != p.parent:
         p = p.parent
     if not _is_root(p):
-        raise RuntimeError(f"Could not locate the repository root above {start or Path.cwd()}")
+        raise RuntimeError(
+            f"Could not locate the repository root above {start or Path.cwd()}"
+        )
     return p
 
 
@@ -77,6 +82,7 @@ def list_folders(repo_root: Path | None = None) -> list[str]:
 # YAML loading
 # -----------------------------------------------------------------------------
 
+
 def load_experiments_yaml(folder: str, repo_root: Path | None = None) -> list[dict]:
     """Load the YAML for a single folder; return the list of experiment entries.
 
@@ -104,11 +110,7 @@ def load_experiments_yaml(folder: str, repo_root: Path | None = None) -> list[di
         raw = yaml.safe_load(f)
     if isinstance(raw, list):
         return raw
-    if (
-        isinstance(raw, dict)
-        and "architectures" in raw
-        and "sweep_points" in raw
-    ):
+    if isinstance(raw, dict) and "architectures" in raw and "sweep_points" in raw:
         return _flatten_data_efficiency_yaml(raw)
     raise ValueError(
         f"Unrecognised experiments.yaml format at {yaml_path}: expected "
@@ -164,16 +166,18 @@ def _flatten_data_efficiency_yaml(spec: dict) -> list[dict]:
     # write these to run dirs named "{name}_seed42" (one fixed seed,
     # since the baseline is deterministic).
     for sb in spec.get("simple_baselines", []):
-        out.append({
-            "name": sb["name"],
-            "label": sb.get("label", sb["name"]),
-            "colour": sb.get("colour", "#ff7f0e"),
-            "target_variables": list(sb["target_variables"]),
-            "extra_args": "",
-            "family": "simple_baseline",
-            "arch_name": sb["name"],
-            "sweep_label": "all",
-        })
+        out.append(
+            {
+                "name": sb["name"],
+                "label": sb.get("label", sb["name"]),
+                "colour": sb.get("colour", "#ff7f0e"),
+                "target_variables": list(sb["target_variables"]),
+                "extra_args": "",
+                "family": "simple_baseline",
+                "arch_name": sb["name"],
+                "sweep_label": "all",
+            }
+        )
     return out
 
 
@@ -219,13 +223,23 @@ _COMMON_METRICS = [
 
 _DISTRIBUTION_METRICS = {
     "gaussian": [
-        "mae", "rmse", "bias", "correlation",
-        "mean_pred_std", "within_1sigma", "within_2sigma",
-        "p50", "p90", "p95", "p99",
+        "mae",
+        "rmse",
+        "bias",
+        "correlation",
+        "mean_pred_std",
+        "within_1sigma",
+        "within_2sigma",
+        "p50",
+        "p90",
+        "p95",
+        "p99",
     ],
     "weibull": [
-        "mae_at_median", "rmse_at_mean",
-        "bias_at_mean", "correlation_at_mean",
+        "mae_at_median",
+        "rmse_at_mean",
+        "bias_at_mean",
+        "correlation_at_mean",
     ],
     "truncated_normal": [
         # Point estimates follow the Weibull convention (MAE@median,
@@ -233,17 +247,33 @@ _DISTRIBUTION_METRICS = {
         # Gaussian-style names (mae/rmse/bias/correlation, all mean-based);
         # _load_run_record aliases those to these names on load so old and
         # new result files share one schema.
-        "mae_at_median", "rmse_at_mean",
-        "bias_at_mean", "correlation_at_mean",
-        "mean_pred_std", "within_1sigma", "within_2sigma",
-        "p50", "p90", "p95", "p99",
+        "mae_at_median",
+        "rmse_at_mean",
+        "bias_at_mean",
+        "correlation_at_mean",
+        "mean_pred_std",
+        "within_1sigma",
+        "within_2sigma",
+        "p50",
+        "p90",
+        "p95",
+        "p99",
     ],
     "bernoulli_gamma": [
-        "wet_mae_at_median", "wet_rmse_at_mean",
-        "wet_bias_at_mean", "wet_correlation_at_mean",
-        "pod", "far", "brier",
-        "r01_obs", "r01_pred", "r05_obs", "r05_pred",
-        "p98_obs_wet_days", "p98_pred_wet_days", "p98_bias_wet_days",
+        "wet_mae_at_median",
+        "wet_rmse_at_mean",
+        "wet_bias_at_mean",
+        "wet_correlation_at_mean",
+        "pod",
+        "far",
+        "brier",
+        "r01_obs",
+        "r01_pred",
+        "r05_obs",
+        "r05_pred",
+        "p98_obs_wet_days",
+        "p98_pred_wet_days",
+        "p98_bias_wet_days",
     ],
     "generative": [
         # Implicit CRPS-trained head (no tractable density → its `nll`
@@ -252,9 +282,14 @@ _DISTRIBUTION_METRICS = {
         # RMSE/bias/correlation @mean); there is no σ parameter, so the
         # Gaussian σ-coverage fields are absent. CRPS (a _COMMON_METRIC) is
         # the headline proper-scoring metric, comparable across all heads.
-        "mae_at_median", "rmse_at_mean",
-        "bias_at_mean", "correlation_at_mean",
-        "p50", "p90", "p95", "p99",
+        "mae_at_median",
+        "rmse_at_mean",
+        "bias_at_mean",
+        "correlation_at_mean",
+        "p50",
+        "p90",
+        "p95",
+        "p99",
     ],
 }
 
@@ -273,6 +308,8 @@ def _metrics_for_variable(head_spec: dict | None, var: str) -> list[str]:
         distribution = head_spec[var].get("distribution", "gaussian")
     extras = _DISTRIBUTION_METRICS.get(distribution, [])
     return _COMMON_METRICS + extras
+
+
 _SEASONS = ["DJF", "MAM", "JJA", "SON"]
 
 
@@ -289,18 +326,20 @@ _SEASONS = ["DJF", "MAM", "JJA", "SON"]
 
 _REGION_BBOXES_DEG = {
     # name: (lat_min, lat_max, lon_min, lon_max)
-    "europe":          (35.0,  75.0,  -24.0,  40.0),
-    "us":              (24.0,  50.0, -125.0, -66.0),
-    "east_asia":       (20.0,  46.0,  100.0, 146.0),
-    "australia":      (-44.0, -10.0,  112.0, 154.0),
-    "southern_africa":(-35.0, -15.0,   15.0,  35.0),
+    "europe": (35.0, 75.0, -24.0, 40.0),
+    "us": (24.0, 50.0, -125.0, -66.0),
+    "east_asia": (20.0, 46.0, 100.0, 146.0),
+    "australia": (-44.0, -10.0, 112.0, 154.0),
+    "southern_africa": (-35.0, -15.0, 15.0, 35.0),
 }
 
 
-def _bbox_area_km2(lat_min: float, lat_max: float,
-                   lon_min: float, lon_max: float) -> float:
+def _bbox_area_km2(
+    lat_min: float, lat_max: float, lon_min: float, lon_max: float
+) -> float:
     """Approximate bbox area in km², lat-cosine corrected."""
     import math
+
     mean_lat = 0.5 * (lat_min + lat_max)
     cos_lat = math.cos(math.radians(mean_lat))
     lat_km = (lat_max - lat_min) * 111.0
@@ -309,8 +348,7 @@ def _bbox_area_km2(lat_min: float, lat_max: float,
 
 
 REGION_BBOX_AREA_KM2 = {
-    name: _bbox_area_km2(*bbox)
-    for name, bbox in _REGION_BBOXES_DEG.items()
+    name: _bbox_area_km2(*bbox) for name, bbox in _REGION_BBOXES_DEG.items()
 }
 
 
@@ -342,7 +380,8 @@ def _folder_to_region(folder_name: str) -> str | None:
     fn = re.sub(r"^snapshot_(?:global_)?\d+y_", "", folder_name.lower())
     candidates = sorted(
         list(REGION_BBOX_AREA_KM2) + list(_REGION_SYNONYMS),
-        key=len, reverse=True,
+        key=len,
+        reverse=True,
     )
     for key in candidates:
         if fn == key or fn.startswith(key + "_"):
@@ -374,9 +413,7 @@ def _load_run_record(
                 result = json.load(f)
             break
         except (json.JSONDecodeError, ValueError) as e:
-            print(
-                f"  [warn] skipping unparseable {fpath} ({type(e).__name__}: {e})"
-            )
+            print(f"  [warn] skipping unparseable {fpath} ({type(e).__name__}: {e})")
             continue
     if result is None:
         return None
@@ -413,9 +450,7 @@ def _load_run_record(
         # NLL, so the key may be absent). Simple baselines never ran train.py so there's no
         # config: ``None`` is the right semantic value for "no training
         # objective applies".
-        "loss_function": (
-            config.get("loss_function", "nll") if config else None
-        ),
+        "loss_function": (config.get("loss_function", "nll") if config else None),
         "best_epoch": result.get("checkpoint_epoch", result.get("best_epoch")),
         "best_val_loss": result.get("best_val_loss"),
         # head_spec is written by the v4 evaluator; pre-v4 files won't
@@ -488,9 +523,14 @@ def _load_run_record(
         # ends up NaN, which is the right semantic for "not measured".
         for subset in ("probe", "always_on", "spatial_test", "unmapped"):
             for sub_metric in (
-                "mae", "rmse", "bias",
-                "mae_macro", "rmse_macro", "bias_macro",
-                "n_stations", "n_predictions",
+                "mae",
+                "rmse",
+                "bias",
+                "mae_macro",
+                "rmse_macro",
+                "bias_macro",
+                "n_stations",
+                "n_predictions",
             ):
                 key = f"{var}_{subset}_{sub_metric}"
                 record[key] = result.get(key)
@@ -581,14 +621,15 @@ def _agg_metric(rows: pd.DataFrame, col: str) -> tuple[float, float, int]:
 # Shared formatting helpers for the distribution-specific table writers
 # below. Pulled out so each ``_print_<dist>_table`` doesn't redefine them.
 
+
 def _fmt_mean_std(mean, std, width, prec=3):
-    if mean != mean:        # NaN
+    if mean != mean:  # NaN
         return f"{'N/A':>{width}}"
     return f"{f'{mean:.{prec}f}±{std:.{prec}f}':>{width}}"
 
 
 def _fmt_single(val, width, prec=2):
-    if val != val:          # NaN
+    if val != val:  # NaN
         return f"{'N/A':>{width}}"
     return f"{val:>{width}.{prec}f}"
 
@@ -599,9 +640,9 @@ def _fmt_count(val, width):
         return f"{'N/A':>{width}}"
     v = int(val)
     if v >= 1_000_000:
-        s = f"{v/1_000_000:.2f}M"
+        s = f"{v / 1_000_000:.2f}M"
     elif v >= 1_000:
-        s = f"{v/1_000:.1f}K"
+        s = f"{v / 1_000:.1f}K"
     else:
         s = str(v)
     return f"{s:>{width}}"
@@ -624,9 +665,14 @@ def _resolve_region_and_density(df: pd.DataFrame, region: str | None):
     return resolved_region, bbox_area_km2
 
 
-def _print_title(variable: str, distribution: str, title_suffix: str,
-                 resolved_region: str | None, bbox_area_km2: float | None,
-                 total_w: int) -> None:
+def _print_title(
+    variable: str,
+    distribution: str,
+    title_suffix: str,
+    resolved_region: str | None,
+    bbox_area_km2: float | None,
+    total_w: int,
+) -> None:
     """Print the boxed title block above a per-distribution table."""
     title = f"ConvCNP RESULTS — {variable}"
     if distribution != "gaussian":
@@ -636,21 +682,22 @@ def _print_title(variable: str, distribution: str, title_suffix: str,
     if resolved_region:
         title += f"   ({resolved_region}"
         if bbox_area_km2:
-            title += f", bbox≈{bbox_area_km2/1e6:.2f}M km²"
+            title += f", bbox≈{bbox_area_km2 / 1e6:.2f}M km²"
         title += ")"
     print(f"\n{'=' * total_w}")
     print(title)
     print(f"{'=' * total_w}")
 
 
-def _station_count_and_density(edata: pd.DataFrame, n_stations_col: str,
-                               bbox_area_km2: float | None) -> tuple[str, str]:
+def _station_count_and_density(
+    edata: pd.DataFrame, n_stations_col: str, bbox_area_km2: float | None
+) -> tuple[str, str]:
     """Return (stations_str, density_str) for the rightmost two columns."""
     if n_stations_col in edata.columns:
         ns_val = edata[n_stations_col].iloc[0]
     else:
         ns_val = float("nan")
-    if ns_val != ns_val:        # NaN
+    if ns_val != ns_val:  # NaN
         return "—", "—"
     ns_int = int(ns_val)
     if bbox_area_km2 and bbox_area_km2 > 0:
@@ -699,12 +746,28 @@ def _print_gaussian_table(
     SEEDS_W, N_W, STA_W, DEN_W = 6, 9, 8, 9
     # 4 numeric columns now (MAE, RMSE, NLL, CRPS) + Epoch + σ + 1σ/2σ.
     total_w = (
-        LABEL_W + 1 + 4 * (NUM_W + 1)
-        + EPOCH_W + 1 + STD_W + 1 + PCT_W + 1 + PCT_W + 1
-        + SEEDS_W + 1 + N_W + 1 + STA_W + 1 + DEN_W
+        LABEL_W
+        + 1
+        + 4 * (NUM_W + 1)
+        + EPOCH_W
+        + 1
+        + STD_W
+        + 1
+        + PCT_W
+        + 1
+        + PCT_W
+        + 1
+        + SEEDS_W
+        + 1
+        + N_W
+        + 1
+        + STA_W
+        + 1
+        + DEN_W
     )
-    _print_title(variable, distribution, title_suffix,
-                 resolved_region, bbox_area_km2, total_w)
+    _print_title(
+        variable, distribution, title_suffix, resolved_region, bbox_area_km2, total_w
+    )
     header = (
         f"{'Experiment':<{LABEL_W}} "
         f"{'MAE':>{NUM_W}} "
@@ -723,7 +786,7 @@ def _print_gaussian_table(
     print(header)
     print("-" * total_w)
 
-    for exp_name in (vdf["experiment"].unique() if experiments is None else experiments):
+    for exp_name in vdf["experiment"].unique() if experiments is None else experiments:
         edata = vdf[vdf["experiment"] == exp_name]
         if edata.empty:
             continue
@@ -735,8 +798,12 @@ def _print_gaussian_table(
         rmse_std = edata[rmse_col].std() if n > 1 else 0.0
         nll_mean = edata[nll_col].mean() if nll_col in edata.columns else float("nan")
         nll_std = edata[nll_col].std() if (nll_col in edata.columns and n > 1) else 0.0
-        crps_mean = edata[crps_col].mean() if crps_col in edata.columns else float("nan")
-        crps_std = edata[crps_col].std() if (crps_col in edata.columns and n > 1) else 0.0
+        crps_mean = (
+            edata[crps_col].mean() if crps_col in edata.columns else float("nan")
+        )
+        crps_std = (
+            edata[crps_col].std() if (crps_col in edata.columns and n > 1) else 0.0
+        )
         epoch_mean = edata["best_epoch"].mean()
         epoch_std = edata["best_epoch"].std() if n > 1 else 0.0
         pred_std = edata[std_col].mean() if std_col in edata.columns else float("nan")
@@ -744,7 +811,9 @@ def _print_gaussian_table(
         w2 = edata[w2_col].mean() if w2_col in edata.columns else float("nan")
         n_pred = edata[n_col].iloc[0] if n_col in edata.columns else float("nan")
         ns_str, density_str = _station_count_and_density(
-            edata, n_stations_col, bbox_area_km2,
+            edata,
+            n_stations_col,
+            bbox_area_km2,
         )
 
         label = edata["label"].iloc[0]
@@ -815,12 +884,28 @@ def _print_truncated_normal_table(
     SEEDS_W, N_W, STA_W, DEN_W = 6, 9, 8, 9
     # 4 numeric columns (MAE@med, RMSE@mean, NLL, CRPS) + Epoch + σ + 1σ/2σ.
     total_w = (
-        LABEL_W + 1 + 4 * (NUM_W + 1)
-        + EPOCH_W + 1 + STD_W + 1 + PCT_W + 1 + PCT_W + 1
-        + SEEDS_W + 1 + N_W + 1 + STA_W + 1 + DEN_W
+        LABEL_W
+        + 1
+        + 4 * (NUM_W + 1)
+        + EPOCH_W
+        + 1
+        + STD_W
+        + 1
+        + PCT_W
+        + 1
+        + PCT_W
+        + 1
+        + SEEDS_W
+        + 1
+        + N_W
+        + 1
+        + STA_W
+        + 1
+        + DEN_W
     )
-    _print_title(variable, distribution, title_suffix,
-                 resolved_region, bbox_area_km2, total_w)
+    _print_title(
+        variable, distribution, title_suffix, resolved_region, bbox_area_km2, total_w
+    )
     header = (
         f"{'Experiment':<{LABEL_W}} "
         f"{'MAE@med':>{NUM_W}} "
@@ -839,18 +924,18 @@ def _print_truncated_normal_table(
     print(header)
     print("-" * total_w)
 
-    for exp_name in (vdf["experiment"].unique() if experiments is None else experiments):
+    for exp_name in vdf["experiment"].unique() if experiments is None else experiments:
         edata = vdf[vdf["experiment"] == exp_name]
         if edata.empty:
             continue
         n = len(edata)
 
-        def col_mean_std(col):
+        def col_mean_std(col, edata=edata, n=n):
             if col not in edata.columns:
                 return float("nan"), 0.0
             return edata[col].mean(), (edata[col].std() if n > 1 else 0.0)
 
-        def col_mean(col):
+        def col_mean(col, edata=edata):
             return edata[col].mean() if col in edata.columns else float("nan")
 
         mae_mean, mae_std = col_mean_std(mae_col)
@@ -864,7 +949,9 @@ def _print_truncated_normal_table(
         w2 = col_mean(w2_col)
         n_pred = edata[n_col].iloc[0] if n_col in edata.columns else float("nan")
         ns_str, density_str = _station_count_and_density(
-            edata, n_stations_col, bbox_area_km2,
+            edata,
+            n_stations_col,
+            bbox_area_km2,
         )
 
         label = edata["label"].iloc[0]
@@ -899,7 +986,7 @@ def _print_weibull_table(
     title_suffix: str,
     experiments: Iterable[str] | None,
     region: str | None,
-    distribution: str = "weibull"
+    distribution: str = "weibull",
 ) -> None:
     """Weibull-likelihood table.
 
@@ -931,11 +1018,22 @@ def _print_weibull_table(
     SEEDS_W, N_W, STA_W, DEN_W = 6, 9, 8, 9
     # 6 numeric columns (MAE@med, RMSE@mean, NLL, CRPS, Bias, Corr) + Epoch
     total_w = (
-        LABEL_W + 1 + 6 * (NUM_W + 1) + EPOCH_W + 1
-        + SEEDS_W + 1 + N_W + 1 + STA_W + 1 + DEN_W
+        LABEL_W
+        + 1
+        + 6 * (NUM_W + 1)
+        + EPOCH_W
+        + 1
+        + SEEDS_W
+        + 1
+        + N_W
+        + 1
+        + STA_W
+        + 1
+        + DEN_W
     )
-    _print_title(variable, distribution, title_suffix,
-                 resolved_region, bbox_area_km2, total_w)
+    _print_title(
+        variable, distribution, title_suffix, resolved_region, bbox_area_km2, total_w
+    )
     header = (
         f"{'Experiment':<{LABEL_W}} "
         f"{'MAE@med':>{NUM_W}} "
@@ -953,13 +1051,13 @@ def _print_weibull_table(
     print(header)
     print("-" * total_w)
 
-    for exp_name in (vdf["experiment"].unique() if experiments is None else experiments):
+    for exp_name in vdf["experiment"].unique() if experiments is None else experiments:
         edata = vdf[vdf["experiment"] == exp_name]
         if edata.empty:
             continue
         n = len(edata)
 
-        def col_mean_std(col):
+        def col_mean_std(col, edata=edata, n=n):
             if col not in edata.columns:
                 return float("nan"), 0.0
             return edata[col].mean(), (edata[col].std() if n > 1 else 0.0)
@@ -974,7 +1072,9 @@ def _print_weibull_table(
         epoch_std = edata["best_epoch"].std() if n > 1 else 0.0
         n_pred = edata[n_col].iloc[0] if n_col in edata.columns else float("nan")
         ns_str, density_str = _station_count_and_density(
-            edata, n_stations_col, bbox_area_km2,
+            edata,
+            n_stations_col,
+            bbox_area_km2,
         )
 
         label = edata["label"].iloc[0]
@@ -1008,7 +1108,7 @@ def _print_generative_table(
     title_suffix: str,
     experiments: Iterable[str] | None,
     region: str | None,
-    distribution: str = "generative"
+    distribution: str = "generative",
 ) -> None:
     """Implicit generative (CRPS-trained) head table.
 
@@ -1040,11 +1140,22 @@ def _print_generative_table(
     SEEDS_W, N_W, STA_W, DEN_W = 6, 9, 8, 9
     # 5 numeric columns (MAE@med, RMSE@mean, CRPS, Bias, Corr) + Epoch.
     total_w = (
-        LABEL_W + 1 + 5 * (NUM_W + 1) + EPOCH_W + 1
-        + SEEDS_W + 1 + N_W + 1 + STA_W + 1 + DEN_W
+        LABEL_W
+        + 1
+        + 5 * (NUM_W + 1)
+        + EPOCH_W
+        + 1
+        + SEEDS_W
+        + 1
+        + N_W
+        + 1
+        + STA_W
+        + 1
+        + DEN_W
     )
-    _print_title(variable, distribution, title_suffix,
-                 resolved_region, bbox_area_km2, total_w)
+    _print_title(
+        variable, distribution, title_suffix, resolved_region, bbox_area_km2, total_w
+    )
     header = (
         f"{'Experiment':<{LABEL_W}} "
         f"{'MAE@med':>{NUM_W}} "
@@ -1061,13 +1172,13 @@ def _print_generative_table(
     print(header)
     print("-" * total_w)
 
-    for exp_name in (vdf["experiment"].unique() if experiments is None else experiments):
+    for exp_name in vdf["experiment"].unique() if experiments is None else experiments:
         edata = vdf[vdf["experiment"] == exp_name]
         if edata.empty:
             continue
         n = len(edata)
 
-        def col_mean_std(col):
+        def col_mean_std(col, edata=edata, n=n):
             if col not in edata.columns:
                 return float("nan"), 0.0
             return edata[col].mean(), (edata[col].std() if n > 1 else 0.0)
@@ -1081,7 +1192,9 @@ def _print_generative_table(
         epoch_std = edata["best_epoch"].std() if n > 1 else 0.0
         n_pred = edata[n_col].iloc[0] if n_col in edata.columns else float("nan")
         ns_str, density_str = _station_count_and_density(
-            edata, n_stations_col, bbox_area_km2,
+            edata,
+            n_stations_col,
+            bbox_area_km2,
         )
 
         label = edata["label"].iloc[0]
@@ -1114,7 +1227,7 @@ def _print_bg_table(
     title_suffix: str,
     experiments: Iterable[str] | None,
     region: str | None,
-    distribution: str = "bernoulli_gamma"
+    distribution: str = "bernoulli_gamma",
 ) -> None:
     """Bernoulli-Gamma table.
 
@@ -1153,16 +1266,39 @@ def _print_bg_table(
     PCT_W, RATE_W = 7, 11
     EPOCH_W, SEEDS_W, N_W, STA_W, DEN_W = 8, 6, 9, 8, 9
     total_w = (
-        LABEL_W + 1
-        + NUM_W + 1 + NUM_W + 1                    # NLL, CRPS
-        + PCT_W + 1 + PCT_W + 1 + PCT_W + 1        # PoD, FaR, Brier
-        + NUM_W + 1 + NUM_W + 1                    # Wet MAE, Wet RMSE
-        + RATE_W + 1 + RATE_W + 1                  # R01 o/p, R05 o/p
-        + EPOCH_W + 1 + SEEDS_W + 1 + N_W + 1
-        + STA_W + 1 + DEN_W
+        LABEL_W
+        + 1
+        + NUM_W
+        + 1
+        + NUM_W
+        + 1  # NLL, CRPS
+        + PCT_W
+        + 1
+        + PCT_W
+        + 1
+        + PCT_W
+        + 1  # PoD, FaR, Brier
+        + NUM_W
+        + 1
+        + NUM_W
+        + 1  # Wet MAE, Wet RMSE
+        + RATE_W
+        + 1
+        + RATE_W
+        + 1  # R01 o/p, R05 o/p
+        + EPOCH_W
+        + 1
+        + SEEDS_W
+        + 1
+        + N_W
+        + 1
+        + STA_W
+        + 1
+        + DEN_W
     )
-    _print_title(variable, distribution, title_suffix,
-                 resolved_region, bbox_area_km2, total_w)
+    _print_title(
+        variable, distribution, title_suffix, resolved_region, bbox_area_km2, total_w
+    )
     header = (
         f"{'Experiment':<{LABEL_W}} "
         f"{'NLL(test)':>{NUM_W}} "
@@ -1183,18 +1319,18 @@ def _print_bg_table(
     print(header)
     print("-" * total_w)
 
-    for exp_name in (vdf["experiment"].unique() if experiments is None else experiments):
+    for exp_name in vdf["experiment"].unique() if experiments is None else experiments:
         edata = vdf[vdf["experiment"] == exp_name]
         if edata.empty:
             continue
         n = len(edata)
 
-        def col_mean_std(col):
+        def col_mean_std(col, edata=edata, n=n):
             if col not in edata.columns:
                 return float("nan"), 0.0
             return edata[col].mean(), (edata[col].std() if n > 1 else 0.0)
 
-        def col_mean(col):
+        def col_mean(col, edata=edata):
             return edata[col].mean() if col in edata.columns else float("nan")
 
         nll_mean, nll_std = col_mean_std(nll_col)
@@ -1212,7 +1348,9 @@ def _print_bg_table(
         epoch_std = edata["best_epoch"].std() if n > 1 else 0.0
         n_pred = edata[n_col].iloc[0] if n_col in edata.columns else float("nan")
         ns_str, density_str = _station_count_and_density(
-            edata, n_stations_col, bbox_area_km2,
+            edata,
+            n_stations_col,
+            bbox_area_km2,
         )
 
         def fmt_rate_pair(o, p, width):
@@ -1249,11 +1387,11 @@ def _print_bg_table(
 
 
 _DISTRIBUTION_TABLE_PRINTERS = {
-    "gaussian":        _print_gaussian_table,
-    "weibull":         _print_weibull_table,
+    "gaussian": _print_gaussian_table,
+    "weibull": _print_weibull_table,
     "truncated_normal": _print_truncated_normal_table,
     "bernoulli_gamma": _print_bg_table,
-    "generative":      _print_generative_table,
+    "generative": _print_generative_table,
 }
 
 
@@ -1339,12 +1477,12 @@ def _point_estimate_mae_column(distribution: str) -> str:
     Weibull; the median minimises expected MAE).
     """
     return {
-        "gaussian":           "mae",
-        "weibull":            "mae_at_median",
-        "truncated_normal":   "mae_at_median",
-        "bernoulli_gamma":    "wet_mae_at_median",
-        "generative":         "mae_at_median",
-        "generative_nonneg":  "mae_at_median",
+        "gaussian": "mae",
+        "weibull": "mae_at_median",
+        "truncated_normal": "mae_at_median",
+        "bernoulli_gamma": "wet_mae_at_median",
+        "generative": "mae_at_median",
+        "generative_nonneg": "mae_at_median",
     }.get(distribution, "mae")
 
 
@@ -1362,12 +1500,12 @@ def _point_estimate_rmse_column(distribution: str) -> str:
     matching Weibull).
     """
     return {
-        "gaussian":           "rmse",
-        "weibull":            "rmse_at_mean",
-        "truncated_normal":   "rmse_at_mean",
-        "bernoulli_gamma":    "wet_rmse_at_mean",
-        "generative":         "rmse_at_mean",
-        "generative_nonneg":  "rmse_at_mean",
+        "gaussian": "rmse",
+        "weibull": "rmse_at_mean",
+        "truncated_normal": "rmse_at_mean",
+        "bernoulli_gamma": "wet_rmse_at_mean",
+        "generative": "rmse_at_mean",
+        "generative_nonneg": "rmse_at_mean",
     }.get(distribution, "rmse")
 
 
@@ -1408,6 +1546,7 @@ def shortlist_experiments(
             d = row[dist_col] if pd.notna(row[dist_col]) else "gaussian"
             col = f"{variable}_{_point_estimate_mae_column(d)}"
             return row.get(col)
+
         mae_series = df.apply(_pick_mae, axis=1)
     else:
         # Pre-v4 dataframe — only Gaussian.
@@ -1432,15 +1571,21 @@ def shortlist_experiments(
         edata = df[(df["experiment"] == exp_name) & df["_pe_mae"].notna()]
         if len(edata) < 2:
             continue
-        rows.append({
-            "experiment": exp_name,
-            "label": edata["label"].iloc[0],
-            "mae_mean": edata["_pe_mae"].mean(),
-            "mae_std": edata["_pe_mae"].std(),
-            "nll_mean": edata[nll_col].mean() if nll_col in edata.columns else float("nan"),
-            "best_epoch": edata["best_epoch"].mean() if "best_epoch" in edata.columns else float("nan"),
-            "n_seeds": len(edata),
-        })
+        rows.append(
+            {
+                "experiment": exp_name,
+                "label": edata["label"].iloc[0],
+                "mae_mean": edata["_pe_mae"].mean(),
+                "mae_std": edata["_pe_mae"].std(),
+                "nll_mean": edata[nll_col].mean()
+                if nll_col in edata.columns
+                else float("nan"),
+                "best_epoch": edata["best_epoch"].mean()
+                if "best_epoch" in edata.columns
+                else float("nan"),
+                "n_seeds": len(edata),
+            }
+        )
 
     if not rows:
         return []
@@ -1452,8 +1597,10 @@ def shortlist_experiments(
     sdf = sdf.sort_values("composite_rank")
 
     unit = {
-        "tmax": "°C", "t2m": "°C",
-        "wind": "m/s", "wind_mean": "m/s",
+        "tmax": "°C",
+        "t2m": "°C",
+        "wind": "m/s",
+        "wind_mean": "m/s",
         "precip": "mm",
     }.get(variable, "")
 
@@ -1472,8 +1619,16 @@ def shortlist_experiments(
     for _, row in sdf.head(top_n).iterrows():
         if print_table:
             mae_str = f"{row['mae_mean']:.3f}±{row['mae_std']:.3f}"
-            nll_str = f"{row['nll_mean']:.3f}" if row["nll_mean"] == row["nll_mean"] else "N/A"
-            ep_str = f"{row['best_epoch']:.0f}" if row["best_epoch"] == row["best_epoch"] else "?"
+            nll_str = (
+                f"{row['nll_mean']:.3f}"
+                if row["nll_mean"] == row["nll_mean"]
+                else "N/A"
+            )
+            ep_str = (
+                f"{row['best_epoch']:.0f}"
+                if row["best_epoch"] == row["best_epoch"]
+                else "?"
+            )
             print(
                 f"  {row['label']:<{max_label}} {mae_str:>16}  "
                 f"{nll_str:>8}  {ep_str:>6}  {row['n_seeds']:>6}"
@@ -1503,13 +1658,13 @@ BASELINE_NAMES = {
     "wind_mean": ["wind_bilinear_baseline"],
     "t2m": {
         "gaussian": [
-            "t2m_snap_era5_interp_baseline",      # no model — bilinear ERA5 interp
-            "t2m_snap_persistence_baseline",      # no model — last valid station obs
-            "t2m_snap_bilinear_baseline_wd",      # trained ConvCNP, no TESSERA
-            "t2m_snap_setconv_baseline_wd", 
+            "t2m_snap_era5_interp_baseline",  # no model — bilinear ERA5 interp
+            "t2m_snap_persistence_baseline",  # no model — last valid station obs
+            "t2m_snap_bilinear_baseline_wd",  # trained ConvCNP, no TESSERA
+            "t2m_snap_setconv_baseline_wd",
             "multitask_full_snap_bilinear_baseline_wd",
             "multitask_mixed_snap_bilinear_baseline_wd",
-            "t2m_snap_bilinear_baseline_wd_crps", # trained ConvCNP, no TESSERA, CRPS-loss training
+            "t2m_snap_bilinear_baseline_wd_crps",  # trained ConvCNP, no TESSERA, CRPS-loss training
         ],
     },
     "wind": {
@@ -1517,7 +1672,7 @@ BASELINE_NAMES = {
             "wind_snap_era5_interp_baseline",
             "wind_snap_persistence_baseline",
             "wind_snap_bilinear_baseline_wd",
-            "wind_snap_setconv_baseline_wd", 
+            "wind_snap_setconv_baseline_wd",
         ],
         "weibull": [
             "wind_weibull_snap_era5_interp_baseline",
@@ -1540,15 +1695,13 @@ BASELINE_NAMES = {
             "precip_snap_era5_interp_baseline",
             "precip_snap_persistence_baseline",
             "precip_snap_bilinear_baseline_wd",
-            "multitask_full_snap_bilinear_baseline_wd"
+            "multitask_full_snap_bilinear_baseline_wd",
         ],
     },
 }
 
 
-def baselines_for(
-    variable: str, distribution: str = "gaussian"
-) -> list[str]:
+def baselines_for(variable: str, distribution: str = "gaussian") -> list[str]:
     """Resolve baseline experiment names for a (variable, distribution) pair.
 
     Tolerates both schemas in :data:`BASELINE_NAMES`:
@@ -1592,13 +1745,10 @@ def baselines_for(
 #   ``print_slice_analysis(df, folder, variable, distribution, task)``
 #   ``print_centralised_analysis(df, folders, target_pairs, top_n=5)``  # top-level
 
-import re
-from enum import Enum
-from typing import Literal
-
 
 class RunCategory(str, Enum):
     """Mutually-exclusive structural identity of a run."""
+
     SIMPLE_BASELINE = "simple_baseline"
     TRAINED_NO_TESSERA = "trained_no_tessera"
     TESSERA_VANILLA = "tessera_vanilla"
@@ -1719,6 +1869,7 @@ def latent_setting_of(record: dict) -> str:
         return f"{lat_part}_proj{proj}{'_mlp' if mlp else ''}"
     return lat_part
 
+
 def latent_encoder_of(record: dict) -> str:
     """Identify which static-feature encoder produced the latents:
     'jepa'  — JEPA-encoder latents (path contains 'jepa')
@@ -1762,20 +1913,20 @@ def latent_encoder_of(record: dict) -> str:
 # )
 
 _PAIRING_AXIS_FIELDS: dict[str, object] = {
-    "interpolation":           "bilinear",
-    "decoder_kernel":          "isotropic",
+    "interpolation": "bilinear",
+    "decoder_kernel": "isotropic",
     "use_target_embed_stream": False,
-    "target_embed_attention":  "none",
-    "detach_attn_embed":       False,
-    "tessera_injection":       "concat",
-    "vae_latents_path":        None,
-    "vae_latents_proj_dim":    0,
-    "vae_latents_proj_mlp":    False,
-    "include_elevation":       True,
-    "include_static_fields":   True,
-    "weight_decay":            0.0,
-    "vae_latents_drop_prob":   0.0,
-    "tessera_method":          None,
+    "target_embed_attention": "none",
+    "detach_attn_embed": False,
+    "tessera_injection": "concat",
+    "vae_latents_path": None,
+    "vae_latents_proj_dim": 0,
+    "vae_latents_proj_mlp": False,
+    "include_elevation": True,
+    "include_static_fields": True,
+    "weight_decay": 0.0,
+    "vae_latents_drop_prob": 0.0,
+    "tessera_method": None,
 }
 
 _SHUFFLE_MARKER_RE = re.compile(r"_shuffle_seed\d+")
@@ -1805,6 +1956,7 @@ def _normalise_for_dimension(value, field: str, dimension: str):
         return _path_to_dim_token(value or "")
     return value
 
+
 def pairing_key(record: dict, dimension: str) -> tuple:
     """Tuple of axis values minus the pair-dimension. Always includes the
     sorted variable list and likelihood so a single-task wind run does not
@@ -1813,8 +1965,8 @@ def pairing_key(record: dict, dimension: str) -> tuple:
     skip_fields = {
         "shuffled": set(),
         "detached": {"detach_attn_embed"},
-        "kernel":   {"interpolation"},
-        "stats":    set(),
+        "kernel": {"interpolation"},
+        "stats": set(),
     }[dimension]
 
     parts: list = []
@@ -1833,6 +1985,7 @@ def pairing_key(record: dict, dimension: str) -> tuple:
 # Dataframe augmentation
 # ----------------------------------------------------------------------------
 
+
 def _augment_df_with_classification(df: pd.DataFrame) -> pd.DataFrame:
     """Attach per-row classification columns. Idempotent — calling on an
     already-augmented df returns it unchanged.
@@ -1848,12 +2001,12 @@ def _augment_df_with_classification(df: pd.DataFrame) -> pd.DataFrame:
     df["kernel"] = [kernel_of(r) for r in records]
     df["injection"] = [injection_of(r) for r in records]
     df["latent_setting"] = [latent_setting_of(r) for r in records]
-    df["latent_encoder"] = [latent_encoder_of(r) for r in records] 
+    df["latent_encoder"] = [latent_encoder_of(r) for r in records]
     df["is_shuffled"] = [is_shuffled(r) for r in records]
     df["is_detached"] = [is_detached(r) for r in records]
     df["is_control"] = df["is_shuffled"] | df["is_detached"]
     df["n_target_variables"] = df["variables"].apply(
-        lambda vs: len(vs) if isinstance(vs, (list, tuple)) else 1
+        lambda vs: len(vs) if isinstance(vs, list | tuple) else 1
     )
     return df
 
@@ -1861,6 +2014,7 @@ def _augment_df_with_classification(df: pd.DataFrame) -> pd.DataFrame:
 # ----------------------------------------------------------------------------
 # Top-N selection
 # ----------------------------------------------------------------------------
+
 
 def _top_n_experiments(
     df: pd.DataFrame,
@@ -1892,9 +2046,7 @@ def _top_n_experiments(
     if mae_col not in df.columns:
         return []
     sub = df[
-        (df["category"] == category.value)
-        & (~df["is_control"])
-        & (df[mae_col].notna())
+        (df["category"] == category.value) & (~df["is_control"]) & (df[mae_col].notna())
     ]
     if loss_function is not None and "loss_function" in df.columns:
         sub = sub[sub["loss_function"] == loss_function]
@@ -1914,6 +2066,7 @@ def _top_n_experiments(
 # ----------------------------------------------------------------------------
 # Pairing resolution + printing
 # ----------------------------------------------------------------------------
+
 
 def _seed_aggregate(rows: pd.DataFrame, mae_col: str) -> tuple[float, float, int]:
     if mae_col not in rows.columns or rows.empty:
@@ -1974,15 +2127,21 @@ def _resolve_pairing_for_top(
             ]
 
         if candidates.empty:
-            rows.append({
-                "live_label": live_first.get("label", exp),
-                "live_kernel": live_kernel,
-                "live_mae": live_mae, "live_std": live_std, "live_n": live_n,
-                "sibling_label": None, "sibling_kernel": None,
-                "sibling_mae": float("nan"), "sibling_std": float("nan"),
-                "sibling_n": 0,
-                "status": "pending",
-            })
+            rows.append(
+                {
+                    "live_label": live_first.get("label", exp),
+                    "live_kernel": live_kernel,
+                    "live_mae": live_mae,
+                    "live_std": live_std,
+                    "live_n": live_n,
+                    "sibling_label": None,
+                    "sibling_kernel": None,
+                    "sibling_mae": float("nan"),
+                    "sibling_std": float("nan"),
+                    "sibling_n": 0,
+                    "status": "pending",
+                }
+            )
             continue
 
         matched_exp = None
@@ -1993,37 +2152,49 @@ def _resolve_pairing_for_top(
                 break
 
         if matched_exp is None:
-            rows.append({
-                "live_label": live_first.get("label", exp),
-                "live_kernel": live_kernel,
-                "live_mae": live_mae, "live_std": live_std, "live_n": live_n,
-                "sibling_label": None, "sibling_kernel": None,
-                "sibling_mae": float("nan"), "sibling_std": float("nan"),
-                "sibling_n": 0,
-                "status": "pending",
-            })
+            rows.append(
+                {
+                    "live_label": live_first.get("label", exp),
+                    "live_kernel": live_kernel,
+                    "live_mae": live_mae,
+                    "live_std": live_std,
+                    "live_n": live_n,
+                    "sibling_label": None,
+                    "sibling_kernel": None,
+                    "sibling_mae": float("nan"),
+                    "sibling_std": float("nan"),
+                    "sibling_n": 0,
+                    "status": "pending",
+                }
+            )
             continue
 
         sib_rows = candidates[candidates["experiment"] == matched_exp]
         sib_first = sib_rows.iloc[0].to_dict()
         sib_mae, sib_std, sib_n = _seed_aggregate(sib_rows, mae_col)
-        rows.append({
-            "live_label": live_first.get("label", exp),
-            "live_kernel": live_kernel,
-            "live_mae": live_mae, "live_std": live_std, "live_n": live_n,
-            "sibling_label": sib_first.get("label", matched_exp),
-            "sibling_kernel": sib_first.get("kernel", "unknown"),
-            "sibling_mae": sib_mae, "sibling_std": sib_std, "sibling_n": sib_n,
-            "status": "available",
-        })
+        rows.append(
+            {
+                "live_label": live_first.get("label", exp),
+                "live_kernel": live_kernel,
+                "live_mae": live_mae,
+                "live_std": live_std,
+                "live_n": live_n,
+                "sibling_label": sib_first.get("label", matched_exp),
+                "sibling_kernel": sib_first.get("kernel", "unknown"),
+                "sibling_mae": sib_mae,
+                "sibling_std": sib_std,
+                "sibling_n": sib_n,
+                "status": "available",
+            }
+        )
     return rows
 
 
 _PAIRING_KIND_LABELS = {
     "shuffled": "shuffled-latents control",
     "detached": "detached-attention control",
-    "kernel":   "kernel-swap comparison",
-    "stats":    "stats-encoder counterpart",
+    "kernel": "kernel-swap comparison",
+    "stats": "stats-encoder counterpart",
 }
 
 
@@ -2048,8 +2219,7 @@ def _print_pairing_table(
         return
     kind_label = _PAIRING_KIND_LABELS.get(pairing_kind, pairing_kind)
     header_text = (
-        f"Pairing — {kind_label}   "
-        f"[{variable} ({distribution}) — {title_suffix}]"
+        f"Pairing — {kind_label}   [{variable} ({distribution}) — {title_suffix}]"
     )
 
     # ---- Compact mode: all pending --------------------------------------
@@ -2069,9 +2239,7 @@ def _print_pairing_table(
                 mae_str = f"{r['live_mae']:.3f}±{r['live_std']:.3f}"
             else:
                 mae_str = "N/A"
-            print(
-                f"  [#{i}]  {r['live_label']}"
-            )
+            print(f"  [#{i}]  {r['live_label']}")
             print(
                 f"        MAE = {mae_str}  "
                 f"(seeds={r['live_n']}, kernel={r['live_kernel']})"
@@ -2079,15 +2247,13 @@ def _print_pairing_table(
         return
 
     # ---- Full mode: at least one sibling is available -------------------
-    N_W = 5         # "[#N]"
-    ROLE_W = 7      # "Live" / "Sibling"
-    LABEL_W = 80    # Experiment label (wraps if longer)
-    NUM_W = 13      # MAE column
+    N_W = 5  # "[#N]"
+    ROLE_W = 7  # "Live" / "Sibling"
+    LABEL_W = 80  # Experiment label (wraps if longer)
+    NUM_W = 13  # MAE column
     SEEDS_W = 5
     KERN_W = 8
-    total_w = (
-        N_W + 1 + ROLE_W + 1 + LABEL_W + 1 + NUM_W + 1 + SEEDS_W + 1 + KERN_W
-    )
+    total_w = N_W + 1 + ROLE_W + 1 + LABEL_W + 1 + NUM_W + 1 + SEEDS_W + 1 + KERN_W
     bar_w = max(total_w, len(header_text) + 2)
 
     print()
@@ -2124,16 +2290,24 @@ def _print_pairing_table(
             live_mae = "N/A"
             live_seeds = "—"
         _emit_data_row(
-            f"[#{i}]", "Live", r["live_label"] or "",
-            live_mae, live_seeds, r["live_kernel"],
+            f"[#{i}]",
+            "Live",
+            r["live_label"] or "",
+            live_mae,
+            live_seeds,
+            r["live_kernel"],
         )
 
         # Sibling row
         if r["status"] == "available":
             sib_mae = f"{r['sibling_mae']:.3f}±{r['sibling_std']:.3f}"
             _emit_data_row(
-                "", "Sibling", r["sibling_label"] or "",
-                sib_mae, str(r["sibling_n"]), r["sibling_kernel"],
+                "",
+                "Sibling",
+                r["sibling_label"] or "",
+                sib_mae,
+                str(r["sibling_n"]),
+                r["sibling_kernel"],
             )
             delta = r["sibling_mae"] - r["live_mae"]
             print(
@@ -2143,8 +2317,12 @@ def _print_pairing_table(
             )
         else:
             _emit_data_row(
-                "", "Sibling", "(pending — no matching sibling in dataframe)",
-                "—", "—", "—",
+                "",
+                "Sibling",
+                "(pending — no matching sibling in dataframe)",
+                "—",
+                "—",
+                "—",
             )
 
         if i < len(rows):
@@ -2154,6 +2332,7 @@ def _print_pairing_table(
 # ----------------------------------------------------------------------------
 # Per-slice entry point
 # ----------------------------------------------------------------------------
+
 
 def _print_unknown_warnings(
     slice_df: pd.DataFrame,
@@ -2197,11 +2376,9 @@ def print_slice_analysis(
         fam = sub
     baseline_names = baselines_for(variable, distribution)
     extras = sub[sub["experiment"].isin(baseline_names)]
-    slice_df = (
-        pd.concat([extras, fam[~fam["experiment"].isin(baseline_names)]],
-                  ignore_index=True)
-          .drop_duplicates(subset=["experiment", "seed"])
-    )
+    slice_df = pd.concat(
+        [extras, fam[~fam["experiment"].isin(baseline_names)]], ignore_index=True
+    ).drop_duplicates(subset=["experiment", "seed"])
     if slice_df.empty:
         return
     slice_df = _augment_df_with_classification(slice_df)
@@ -2242,7 +2419,9 @@ def print_slice_analysis(
     ]
     if not simple.empty:
         print_summary(
-            slice_df, variable, distribution=distribution,
+            slice_df,
+            variable,
+            distribution=distribution,
             title_suffix=f"{title_suffix_base} — simple baselines",
             experiments=simple["experiment"].drop_duplicates().tolist(),
         )
@@ -2254,7 +2433,9 @@ def print_slice_analysis(
     if not trained_nt.empty:
         if not multi_loss:
             print_summary(
-                slice_df, variable, distribution=distribution,
+                slice_df,
+                variable,
+                distribution=distribution,
                 title_suffix=f"{title_suffix_base} — trained baselines (no TESSERA)",
                 experiments=trained_nt["experiment"].drop_duplicates().tolist(),
             )
@@ -2264,12 +2445,16 @@ def print_slice_analysis(
                 if trained_nt_loss.empty:
                     continue
                 print_summary(
-                    slice_df, variable, distribution=distribution,
+                    slice_df,
+                    variable,
+                    distribution=distribution,
                     title_suffix=(
                         f"{title_suffix_base} — trained baselines (no TESSERA), "
                         f"{loss.upper()}-loss"
                     ),
-                    experiments=trained_nt_loss["experiment"].drop_duplicates().tolist(),
+                    experiments=trained_nt_loss["experiment"]
+                    .drop_duplicates()
+                    .tolist(),
                 )
 
     # Table 3: vanilla TESSERA top-N.
@@ -2281,27 +2466,39 @@ def print_slice_analysis(
     # meaningfully comparable to a CRPS-trained model.
     if not multi_loss:
         vanilla_top = _top_n_experiments(
-            slice_df, variable, distribution,
-            RunCategory.TESSERA_VANILLA, task, top_n,
-            encoder="vae",   # stats variants surface in the stats-counterpart pairing instead
+            slice_df,
+            variable,
+            distribution,
+            RunCategory.TESSERA_VANILLA,
+            task,
+            top_n,
+            encoder="vae",  # stats variants surface in the stats-counterpart pairing instead
         )
         if vanilla_top:
             print_summary(
-                slice_df, variable, distribution=distribution,
+                slice_df,
+                variable,
+                distribution=distribution,
                 title_suffix=f"{title_suffix_base} — top {top_n} vanilla TESSERA (VAE)",
                 experiments=vanilla_top,
             )
     else:
         for loss in losses_present:
             vanilla_top_loss = _top_n_experiments(
-                slice_df, variable, distribution,
-                RunCategory.TESSERA_VANILLA, task, top_n,
+                slice_df,
+                variable,
+                distribution,
+                RunCategory.TESSERA_VANILLA,
+                task,
+                top_n,
                 encoder="vae",
                 loss_function=loss,
             )
             if vanilla_top_loss:
                 print_summary(
-                    slice_df, variable, distribution=distribution,
+                    slice_df,
+                    variable,
+                    distribution=distribution,
                     title_suffix=(
                         f"{title_suffix_base} — top {top_n} vanilla TESSERA (VAE), "
                         f"{loss.upper()}-loss"
@@ -2315,8 +2512,12 @@ def print_slice_analysis(
         # without counterparts.
         anchor_loss = "nll" if "nll" in losses_present else losses_present[0]
         vanilla_top = _top_n_experiments(
-            slice_df, variable, distribution,
-            RunCategory.TESSERA_VANILLA, task, top_n,
+            slice_df,
+            variable,
+            distribution,
+            RunCategory.TESSERA_VANILLA,
+            task,
+            top_n,
             encoder="vae",
             loss_function=anchor_loss,
         )
@@ -2343,15 +2544,26 @@ def print_slice_analysis(
 
     # Table 5: shuffled pairing for top-N from tables 3 + 4.
     shuffled_rows = _resolve_pairing_for_top(
-        slice_df, vanilla_top, "shuffled", variable, distribution,
+        slice_df,
+        vanilla_top,
+        "shuffled",
+        variable,
+        distribution,
     )
     _print_pairing_table(
-        shuffled_rows, "shuffled", title_suffix_base,
-        variable, distribution,
+        shuffled_rows,
+        "shuffled",
+        title_suffix_base,
+        variable,
+        distribution,
     )
 
     stats_rows = _resolve_pairing_for_top(
-        slice_df, vanilla_top, "stats", variable, distribution,
+        slice_df,
+        vanilla_top,
+        "stats",
+        variable,
+        distribution,
     )
     _print_pairing_table(stats_rows, "stats", title_suffix_base, variable, distribution)
 
@@ -2366,11 +2578,18 @@ def print_slice_analysis(
 
     # Table 7: kernel-swap pairing for top-N from table 3 only.
     kernel_rows = _resolve_pairing_for_top(
-        slice_df, vanilla_top, "kernel", variable, distribution,
+        slice_df,
+        vanilla_top,
+        "kernel",
+        variable,
+        distribution,
     )
     _print_pairing_table(
-        kernel_rows, "kernel", title_suffix_base,
-        variable, distribution,
+        kernel_rows,
+        "kernel",
+        title_suffix_base,
+        variable,
+        distribution,
     )
 
     _print_unknown_warnings(slice_df_task, title_suffix_base)
@@ -2379,6 +2598,7 @@ def print_slice_analysis(
 # ----------------------------------------------------------------------------
 # Top-level driver
 # ----------------------------------------------------------------------------
+
 
 def print_centralised_analysis(
     df: pd.DataFrame,
@@ -2409,15 +2629,19 @@ def print_centralised_analysis(
         # Single-task per (variable, distribution).
         for variable, distribution in target_pairs:
             print_slice_analysis(
-                df, folder, variable, distribution,
-                task="single", top_n=top_n,
+                df,
+                folder,
+                variable,
+                distribution,
+                task="single",
+                top_n=top_n,
             )
 
         # Multi-task per (variable, distribution): only tables 1-3 each.
         any_multi = (
-            sub_folder["variables"].apply(
-                lambda vs: isinstance(vs, (list, tuple)) and len(vs) > 1
-            ).any()
+            sub_folder["variables"]
+            .apply(lambda vs: isinstance(vs, list | tuple) and len(vs) > 1)
+            .any()
         )
         if any_multi:
             print()
@@ -2426,6 +2650,10 @@ def print_centralised_analysis(
             print("-" * 80)
             for variable, distribution in target_pairs:
                 print_slice_analysis(
-                    df, folder, variable, distribution,
-                    task="multi", top_n=top_n,
+                    df,
+                    folder,
+                    variable,
+                    distribution,
+                    task="multi",
+                    top_n=top_n,
                 )
