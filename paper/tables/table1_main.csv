@@ -1,0 +1,31 @@
+region,model,t2m_mae,t2m_rmse,t2m_crps,wind_mae,wind_rmse,wind_crps,t2m_n_seeds,wind_n_seeds
+Europe,Persistence,3.534155,4.939311,,1.490360,2.126553,,3,3
+Europe,ERA5 interp. (+lapse for t2m),1.351887,1.946703,,1.435229,2.148892,,3,3
+Europe,ConvCNP (topography-only),1.168930,1.672679,0.842635,1.283267,1.874211,0.918214,3,3
+Europe,ConvCNP (hand-crafted surface),1.152329,1.646540,0.828759,1.244137,1.813186,0.892672,3,3
+Europe,ConvCNP with Tessera,1.097660,1.576978,0.789274,1.191303,1.738979,0.860913,3,3
+United States,Persistence,3.797775,5.290025,,1.676903,2.324326,,3,3
+United States,ERA5 interp. (+lapse for t2m),1.519717,2.225169,,1.627354,2.122652,,3,3
+United States,ConvCNP (topography-only),1.413230,2.070466,1.028640,1.446321,1.959577,1.037883,3,3
+United States,ConvCNP (hand-crafted surface),1.380716,2.023424,1.006748,1.415759,1.910225,1.012570,3,3
+United States,ConvCNP with Tessera,1.298809,1.946319,0.947026,1.361518,1.840611,0.972984,3,3
+East Asia,Persistence,3.069010,4.045149,,1.455601,2.043695,,3,3
+East Asia,ERA5 interp. (+lapse for t2m),1.219437,1.704067,,1.442816,1.986018,,3,3
+East Asia,ConvCNP (topography-only),1.347193,1.866643,0.973694,1.230897,1.705180,0.881919,3,3
+East Asia,ConvCNP (hand-crafted surface),1.206971,1.668675,0.869521,1.233122,1.697161,0.879142,3,3
+East Asia,ConvCNP with Tessera,1.096834,1.530142,0.788024,1.163699,1.622274,0.835838,3,3
+Southern Africa,Persistence,5.361653,6.901506,,1.481038,2.065207,,3,3
+Southern Africa,ERA5 interp. (+lapse for t2m),1.690257,2.556481,,1.383524,1.825923,,3,3
+Southern Africa,ConvCNP (topography-only),1.998257,2.749256,1.446695,1.230686,1.645777,0.884700,3,3
+Southern Africa,ConvCNP (hand-crafted surface),1.980037,2.724639,1.438077,1.250317,1.671391,0.896043,3,3
+Southern Africa,ConvCNP with Tessera,1.790929,2.545780,1.313144,1.163530,1.566383,0.835163,3,3
+Australia,Persistence,5.595402,6.619291,,2.026266,2.610003,,3,3
+Australia,ERA5 interp. (+lapse for t2m),1.398917,2.057324,,1.456433,1.879593,,3,3
+Australia,ConvCNP (topography-only),1.573376,2.163527,1.148941,1.422020,1.812268,1.024739,3,3
+Australia,ConvCNP (hand-crafted surface),1.497661,2.159099,1.123134,1.330991,1.712971,0.960937,3,3
+Australia,ConvCNP with Tessera,1.322823,1.922218,0.976819,1.291773,1.689502,0.945429,3,3
+All regions,Persistence,4.271599,5.559056,,1.626033,2.233957,,3,3
+All regions,ERA5 interp. (+lapse for t2m),1.436043,2.097949,,1.469071,1.992616,,3,3
+All regions,ConvCNP (topography-only),1.500197,2.104514,1.088121,1.322638,1.799402,0.949491,3,3
+All regions,ConvCNP (hand-crafted surface),1.443543,2.044475,1.053248,1.294865,1.760987,0.928273,3,3
+All regions,ConvCNP with Tessera,1.321411,1.904287,0.962857,1.234365,1.691550,0.890065,3,3

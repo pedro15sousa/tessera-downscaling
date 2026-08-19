@@ -1,0 +1,34 @@
+**Table 1 -- held-out station skill per region** (mean over seeds 42, 123, 456)
+
+| Region | Model | t2m MAE | t2m RMSE | t2m CRPS | wind MAE | wind RMSE | wind CRPS |
+|---|---|---:|---:|---:|---:|---:|---:|
+| Europe | Persistence | 3.53 | 4.94 | — | 1.49 | 2.13 | — |
+|  | ERA5 interp. (+lapse for t2m) | 1.35 | 1.95 | — | 1.44 | 2.15 | — |
+|  | ConvCNP (topography-only) | 1.17 | 1.67 | 0.84 | 1.28 | 1.87 | 0.92 |
+|  | ConvCNP (hand-crafted surface) | 1.15 | 1.65 | 0.83 | 1.24 | 1.81 | 0.89 |
+|  | ConvCNP with Tessera | 1.10 | 1.58 | 0.79 | 1.19 | 1.74 | 0.86 |
+| United States | Persistence | 3.80 | 5.29 | — | 1.68 | 2.32 | — |
+|  | ERA5 interp. (+lapse for t2m) | 1.52 | 2.23 | — | 1.63 | 2.12 | — |
+|  | ConvCNP (topography-only) | 1.41 | 2.07 | 1.03 | 1.45 | 1.96 | 1.04 |
+|  | ConvCNP (hand-crafted surface) | 1.38 | 2.02 | 1.01 | 1.42 | 1.91 | 1.01 |
+|  | ConvCNP with Tessera | 1.30 | 1.95 | 0.95 | 1.36 | 1.84 | 0.97 |
+| East Asia | Persistence | 3.07 | 4.05 | — | 1.46 | 2.04 | — |
+|  | ERA5 interp. (+lapse for t2m) | 1.22 | 1.70 | — | 1.44 | 1.99 | — |
+|  | ConvCNP (topography-only) | 1.35 | 1.87 | 0.97 | 1.23 | 1.71 | 0.88 |
+|  | ConvCNP (hand-crafted surface) | 1.21 | 1.67 | 0.87 | 1.23 | 1.70 | 0.88 |
+|  | ConvCNP with Tessera | 1.10 | 1.53 | 0.79 | 1.16 | 1.62 | 0.84 |
+| Southern Africa | Persistence | 5.36 | 6.90 | — | 1.48 | 2.07 | — |
+|  | ERA5 interp. (+lapse for t2m) | 1.69 | 2.56 | — | 1.38 | 1.83 | — |
+|  | ConvCNP (topography-only) | 2.00 | 2.75 | 1.45 | 1.23 | 1.65 | 0.88 |
+|  | ConvCNP (hand-crafted surface) | 1.98 | 2.72 | 1.44 | 1.25 | 1.67 | 0.90 |
+|  | ConvCNP with Tessera | 1.79 | 2.55 | 1.31 | 1.16 | 1.57 | 0.84 |
+| Australia | Persistence | 5.60 | 6.62 | — | 2.03 | 2.61 | — |
+|  | ERA5 interp. (+lapse for t2m) | 1.40 | 2.06 | — | 1.46 | 1.88 | — |
+|  | ConvCNP (topography-only) | 1.57 | 2.16 | 1.15 | 1.42 | 1.81 | 1.02 |
+|  | ConvCNP (hand-crafted surface) | 1.50 | 2.16 | 1.12 | 1.33 | 1.71 | 0.96 |
+|  | ConvCNP with Tessera | 1.32 | 1.92 | 0.98 | 1.29 | 1.69 | 0.95 |
+| All regions | Persistence | 4.27 | 5.56 | — | 1.63 | 2.23 | — |
+|  | ERA5 interp. (+lapse for t2m) | 1.44 | 2.10 | — | 1.47 | 1.99 | — |
+|  | ConvCNP (topography-only) | 1.50 | 2.10 | 1.09 | 1.32 | 1.80 | 0.95 |
+|  | ConvCNP (hand-crafted surface) | 1.44 | 2.04 | 1.05 | 1.29 | 1.76 | 0.93 |
+|  | ConvCNP with Tessera | 1.32 | 1.90 | 0.96 | 1.23 | 1.69 | 0.89 |
