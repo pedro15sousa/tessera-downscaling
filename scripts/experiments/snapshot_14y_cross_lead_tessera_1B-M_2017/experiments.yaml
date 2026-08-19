@@ -1,20 +1,27 @@
 # ==========================================================================
-# Cross-lead (lead-conditioned) TESSERA arm — 1B-M candidate latents
-# (crop64_lat16_auxon, 2017 embeddings). Folder-level axes per the
-# tessera_1B-M convention; submit.sh exports VAE_LATENTS_PATH pointing at
-# the candidate file, so these entries are name- and arg-identical to the original
-# t2m/wind_xlead_snap_vae_lat16_concat_with_elev_no_static_wd configs
-# (mTPI comes from COMMON_ARGS --use-mtpi, mirroring the original folder).
-# Baselines / ERA5-interp are reused from snapshot_14y_cross_lead.
+# snapshot_14y_cross_lead_tessera_1B-M_2017 -- lead-conditioned downscaling,
+# the paper's TESSERA arm (1B-M 2017, crop64_lat16_auxon latents)
+# ==========================================================================
+# Same design and hyperparameters as snapshot_14y_cross_lead (one model per
+# config trained on the lead mix, evaluated per lead into eval_lead{L}h/);
+# runs land in <data root>/training_runs_snapshot_14y_cross_lead_tessera_1B-M_2017/
+# <region>/<name>_seed<S>. submit.sh exports VAE_LATENTS_PATH pointing at the
+# 1B-M file, so these entries are name- and arg-identical to the v1
+# t2m/wind_xlead_snap_vae_lat16_concat_with_elev_no_static_wd configs of the
+# baseline folder (mTPI comes from COMMON_ARGS --use-mtpi there too).
+#
+# The no-TESSERA baseline and the per-lead ERA5-interp references are
+# latents-independent and are NOT re-run here: read them from
+# training_runs_snapshot_14y_cross_lead.
 # ==========================================================================
 - name: t2m_xlead_snap_vae_lat16_concat_with_elev_no_static_wd
   label: "t2m cross-lead snap VAE 1B-M concat (with elev, no static, wd=1e-4)"
   colour: "#1f77b4"
   target_variables: [t2m]
-  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --no-static-fields --weight-decay 1e-4"
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --no-static-fields --weight-decay 1e-4"
 
 - name: wind_truncnormal_xlead_snap_vae_lat16_concat_with_elev_no_static_wd
   label: "Wind (TruncNormal) cross-lead snap VAE 1B-M concat (with elev, no static, wd=1e-4)"
   colour: "#1f77b4"
   target_variables: [wind]
-  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --no-static-fields --weight-decay 1e-4 --likelihood wind=truncated_normal"
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --no-static-fields --weight-decay 1e-4 --likelihood wind=truncated_normal"

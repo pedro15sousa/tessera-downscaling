@@ -1,10 +1,8 @@
 """Pick a hand-curated, TESSERA-pre-filtered probe set for a temporal
-data-efficiency experiment, and write it to ``probe_station_ids.json``.
+rollout experiment, and write it to ``probe_station_ids.json``.
 
-Replaces the ad-hoc cells that lived in the temporal-efficiency analysis
-notebook for one-off probe-set construction. Driven from the command line
-so the same script generates probe sets for the Alps, Norway, or any
-other bbox-defined region without notebook state drift.
+Driven from the command line so the same script generates probe sets for
+Norway (the paper's rollout) or any other bbox-defined region.
 
 What the script does
 --------------------
@@ -12,8 +10,8 @@ What the script does
 Filters the dataset's ``stations.csv`` down to those stations that all of:
 
 1.  Lie in the requested ``--region``.
-2.  Have ``spatial_split == --spatial-split`` (= "train" for any standard
-    temporal-efficiency experiment).
+2.  Have ``spatial_split == --spatial-split`` (= "train" for the rollout
+    experiment).
 3.  Fall inside the lat/lon bbox.
 4.  Optionally meet an elevation floor (``--elev-min``).
 5.  Survive TESSERA + VAE-latent filtering — equivalently, their station_id
@@ -23,8 +21,7 @@ Filters the dataset's ``stations.csv`` down to those stations that all of:
     training observations (i.e. no "200 in the allowlist, only 11 survive
     the runtime filter" surprises like the station-count experiment had).
 
-Writes a single JSON file whose schema matches the existing Alps probe
-set on disk:
+Writes a single JSON file:
 
     {
         "probe_station_ids":  [<sorted station_ids>],
@@ -41,33 +38,18 @@ set on disk:
 Refuses to overwrite an existing file (use ``--force`` to override) — the
 same caching pattern that submit.sh uses for its sweep-point sidecars.
 
-Example: replicate the Alps probe set
--------------------------------------
-
-    uv run --project projects/tessera_downscaling python \\
-        projects/tessera_downscaling/scripts/experiments/pick_probe_set.py \\
-        --dataset-dir       .tmp_output/dataset_timestamp_global \\
-        --vae-latents-path  .tmp_output/processed/station_latents_lat16_grad0.5.npy \\
-        --vae-latents-csv   .tmp_output/processed/tessera_global/station_list_filtered.csv \\
-        --region            europe \\
-        --spatial-split     train \\
-        --bbox-lat 45 48 --bbox-lon 6 14 \\
-        --elev-min 800 \\
-        --out-dir projects/tessera_downscaling/scripts/experiments/snapshot_14y_eu_temporal_efficiency_alps
-
-Example: build the matching Norway probe set
---------------------------------------------
+Example: build the Norway probe set of the paper
+------------------------------------------------
 
     # Mainland Norway bbox; no elevation floor.
-    uv run --project projects/tessera_downscaling python \\
-        projects/tessera_downscaling/scripts/experiments/pick_probe_set.py \\
-        --dataset-dir       .tmp_output/dataset_timestamp_global \\
-        --vae-latents-path  .tmp_output/processed/station_latents_lat16_grad0.5.npy \\
-        --vae-latents-csv   .tmp_output/processed/tessera_global/station_list_filtered.csv \\
+    uv run python scripts/experiments/pick_probe_set.py \\
+        --dataset-dir       <data root>/dataset_timestamp_global \\
+        --vae-latents-path  <data root>/processed/station_latents_lat16_grad0.5.npy \\
+        --vae-latents-csv   <data root>/processed/tessera_global/station_list_filtered.csv \\
         --region            europe \\
         --spatial-split     train \\
         --bbox-lat 58 71 --bbox-lon 4 31 \\
-        --out-dir projects/tessera_downscaling/scripts/experiments/snapshot_14y_eu_temporal_efficiency_norway
+        --out-dir scripts/experiments/snapshot_14y_eu_temporal_rollout_norway_lat16_mtpi
 
 Pass ``--description "..."`` to override the auto-generated description.
 """
@@ -81,7 +63,6 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
@@ -94,7 +75,7 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument(
         "--dataset-dir", type=Path, required=True,
         help="Path to the dataset directory containing stations.csv "
-             "(e.g. .tmp_output/dataset_timestamp_global).",
+             "(e.g. <data root>/dataset_timestamp_global).",
     )
     p.add_argument(
         "--vae-latents-path", type=Path, required=True,
@@ -114,8 +95,7 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument(
         "--spatial-split", type=str, default="train",
         choices=["train", "test", "all"],
-        help="Source split for the probe pool. Default 'train' (standard "
-             "for temporal-efficiency experiments).",
+        help="Source split for the probe pool. Default 'train'.",
     )
     p.add_argument(
         "--bbox-lat", type=float, nargs=2, metavar=("LAT_MIN", "LAT_MAX"),

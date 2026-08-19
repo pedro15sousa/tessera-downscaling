@@ -1,41 +1,44 @@
 # =========================================================================
-# snapshot_14y_cross_lead — lead-conditioned downscaling
+# snapshot_14y_cross_lead -- lead-conditioned downscaling (Fig 6 / Fig 10 of
+# the preprint, Fig 8 of the AMS draft), baseline arms
 # =========================================================================
 # A SINGLE model per config is trained on a MIX of forecast leads via
 # --lead-datasets (ERA5 analysis = lead 0, plus Aurora +6/+24/+72h), with a
 # normalised lead/72 context channel so the heads can express a lead-dependent
-# predictive spread σ(lead). The downscaling target (station obs at the valid
-# time) is identical across leads — the leads are just alternative coarse
-# inputs — so one epoch sees every episode at every lead (see submit.sh).
+# predictive spread sigma(lead). The downscaling target (station obs at the
+# valid time) is identical across leads -- the leads are just alternative
+# coarse inputs -- so one epoch sees every episode at every lead. Each trained
+# checkpoint is then evaluated once per lead into eval_lead{0,6,24,72}h/
+# (see submit.sh).
 #
-# Three variants per variable (Pedro's matrix):
-#   * bilinear_baseline           : no TESSERA, WITH ERA5 static fields + elev
-#                                   (--tessera-injection none, static kept)
-#   * vae_lat16_concat_with_elev_no_static : raw 16-d VAE latent concatenated
-#                                   (no projection), WITH elev, NO static
-#   * vae_lat16_film_with_elev_no_static   : same latent via FiLM conditioning
-#                                   (no projection), WITH elev, NO static
-# "no projection" = --vae-latents-proj-dim 0 (the default). Elevation stays on
-# in every config; only the static ERA5 fields are dropped for the VAE configs.
+# Runs land in <data root>/training_runs_snapshot_14y_cross_lead/<region>/
+# <name>_seed<S> for region in {europe, east_asia}, seeds 42/123/456.
 #
-# Naming mirrors snapshot_14y_aurora_zeroshot exactly:
-#   {var[_truncnormal]}_snap_{model}_{features}_wd
-# (the folder name carries the cross-lead identity, so the config names stay on
-# the shared convention and line up 1:1 with the zero-shot rows for comparison).
+# Arms in this folder (latents-independent):
+#   * t2m/wind_truncnormal_xlead_snap_bilinear_baseline_wd : no-TESSERA ConvCNP,
+#     WITH ERA5 static fields + elev + mTPI (--use-mtpi is in COMMON_ARGS).
+#   * t2m/wind_truncnormal_xlead_snap_vae_lat16_concat_with_elev_no_static_wd :
+#     the v1 (2024 p64, lat16) TESSERA arm -- superseded; the paper's TESSERA
+#     arm with the 1B-M 2017 latents lives in
+#     snapshot_14y_cross_lead_tessera_1B-M_2017 (same entry names).
+#   * <var>_snap_era5_interp[_lapse]_baseline_matched : the no-model reference
+#     (bilinear interpolation of the coarse context the ConvCNP saw -- real
+#     ERA5 at lead 0, the Aurora forecast at +6/+24/+72h -- straight to the
+#     station), evaluated per lead into eval_lead{L}h/ on the SAME station set
+#     as the TESSERA runs ("matched": TESSERA-patch filter AND non-NaN v1
+#     latents; europe t2m 898 / wind 550 stations). Deterministic, one seed
+#     (42). Fig 6's black reference line. t2m uses the fitted lapse-rate
+#     correction (Gamma fitted on the train split, stride 4), wind the plain
+#     interpolation.
 #
-# Heads / loss:
-#   * t2m  -> Gaussian        (default head), NLL (default loss)
-#   * wind -> Truncated-Normal (--likelihood wind=truncated_normal), NLL
+# Heads / loss: t2m -> Gaussian NLL; wind -> Truncated-Normal NLL.
 #
 # ${TESSERA_PATH}/${TESSERA_CSV}/${VAE_LATENTS_PATH}/${VAE_LATENTS_CSV} are
-# expanded from the environment by submit.sh. --tessera-path/--tessera-station-csv
-# are supplied by COMMON_ARGS (submit.sh) for EVERY config so the baseline is
-# filtered to the same TESSERA-valid station set as the VAE variants (no patches
-# are loaded for the baseline — it is filter-only). The VAE configs add only
-# --vae-latents-path/--vae-latents-station-csv on top.
-#
-# Matrix: these 6 configs x {europe, east_asia} x seeds {42,123,456} = 36 runs,
-# each evaluated per-lead (eval_lead{0,6,24,72}h/). See submit.sh.
+# expanded from the environment by submit.sh. --tessera-path /
+# --tessera-station-csv are supplied by COMMON_ARGS for EVERY trained config so
+# the baseline is filtered to the same TESSERA-valid station set as the VAE
+# variants (filter-only; no patches are loaded).
+# =========================================================================
 
 # ---- t2m (Gaussian, NLL) ----
 
@@ -49,13 +52,7 @@
   label: "t2m cross-lead snap VAE-lat16 concat (with elev, no static, wd=1e-4)"
   colour: "#1f77b4"
   target_variables: [t2m]
-  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --no-static-fields --weight-decay 1e-4"
-
-- name: t2m_xlead_snap_vae_lat16_film_with_elev_no_static_wd
-  label: "t2m cross-lead snap VAE-lat16 FiLM (with elev, no static, wd=1e-4)"
-  colour: "#d62728"
-  target_variables: [t2m]
-  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --no-static-fields --weight-decay 1e-4"
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --no-static-fields --weight-decay 1e-4"
 
 # ---- wind (Truncated-Normal, NLL) ----
 
@@ -69,10 +66,29 @@
   label: "Wind (TruncNormal) cross-lead snap VAE-lat16 concat (with elev, no static, wd=1e-4)"
   colour: "#1f77b4"
   target_variables: [wind]
-  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --no-static-fields --weight-decay 1e-4 --likelihood wind=truncated_normal"
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --no-static-fields --weight-decay 1e-4 --likelihood wind=truncated_normal"
 
-- name: wind_truncnormal_xlead_snap_vae_lat16_film_with_elev_no_static_wd
-  label: "Wind (TruncNormal) cross-lead snap VAE-lat16 FiLM (with elev, no static, wd=1e-4)"
-  colour: "#d62728"
+# ---- no-model references, per lead, matched station set ----
+# baseline_kind entries are run through tessera-baselines once per lead (see
+# submit.sh); extra_args carries the baseline-specific flags.
+
+- name: t2m_snap_era5_interp_baseline_matched
+  label: "t2m ERA5/Aurora bilinear interpolation (no model, matched stations)"
+  colour: "#cccccc"
+  target_variables: [t2m]
+  extra_args: ""
+  baseline_kind: era5_interp
+
+- name: t2m_snap_era5_interp_lapse_baseline_matched
+  label: "t2m ERA5/Aurora bilinear interpolation + fitted lapse rate (no model, matched stations)"
+  colour: "#a68b6d"
+  target_variables: [t2m]
+  extra_args: "--lapse-rate-mode fitted --lapse-fit-stride 4"
+  baseline_kind: era5_interp_lapse
+
+- name: wind_snap_era5_interp_baseline_matched
+  label: "Wind ERA5/Aurora bilinear interpolation (no model, matched stations)"
+  colour: "#cccccc"
   target_variables: [wind]
-  extra_args: "--interpolation bilinear --tessera-injection film --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --no-static-fields --weight-decay 1e-4 --likelihood wind=truncated_normal"
+  extra_args: ""
+  baseline_kind: era5_interp

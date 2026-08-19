@@ -1,17 +1,19 @@
+# ==========================================================================
+# snapshot_14y_eu_temporal_rollout_norway_tessera_1B-M_2017 -- Norway
+# station-network rollout, the paper's TESSERA arm (1B-M 2017,
+# crop64_lat16_auxon latents). TESSERA ARM ONLY.
+# ==========================================================================
+# Identical experiment DESIGN to snapshot_14y_eu_temporal_rollout_norway_lat16_mtpi
+# (same probe set, byte-identical rollout_schedule.json: same T_0, T_rollout,
+# activation order, per-sweep train_end_override; same architectures and
+# hyperparameters). The ONLY difference is the latents file, swapped via
+# submit.sh's VAE_LATENTS_PATH export. Runs land in
+# <data root>/training_runs_snapshot_14y_eu_temporal_rollout_norway_tessera_1B-M_2017/.
 #
-# Norway temporal-rollout — TESSERA 1B-M (v2, 2017) candidate latents
-# (crop64_lat16_auxon), mTPI architecture. TESSERA ARM ONLY.
-#
-# Identical experiment DESIGN to snapshot_14y_eu_temporal_rollout_norway_lat16_mtpi:
-# same probe set, same rollout_schedule.json (byte-identical copies in this
-# folder: same T_0, T_rollout, activation order, per-sweep train_end_override),
-# same architectures/hyperparameters. The ONLY difference is the latents file,
-# swapped via submit.sh's VAE_LATENTS_PATH export.
-#
-# The no-TESSERA baseline arm and the era5_interp reference are NOT re-run
-# here — they are latents-independent; reuse them from
+# The no-TESSERA baseline arm and the era5_interp references are NOT re-run
+# here — they are latents-independent; read them from
 # training_runs_snapshot_14y_eu_temporal_rollout_norway_lat16_mtpi.
-#
+# ==========================================================================
 sweep_points:
 - label: r0
   description: "0 months elapsed (rollout anchor T_0): no probes online \u2014 pre-deployment European-only baseline"
@@ -39,10 +41,10 @@ architectures:
   family: tessera
   target_variables:
   - t2m
-  extra_args: --interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --no-static-fields --use-mtpi --weight-decay 1e-4
+  extra_args: --interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --no-static-fields --use-mtpi --weight-decay 1e-4
 - name: wind_truncnormal_snap_vae_lat16_concat_with_elev_mtpi_no_static_wd
   label: "wind snap VAE-lat16 concat DIRECT (with elev + mTPI, no static, wd=1e-4) \u2014 truncated-normal head"
   family: tessera
   target_variables:
   - wind
-  extra_args: --interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --no-static-fields --use-mtpi --weight-decay 1e-4 --likelihood wind=truncated_normal
+  extra_args: --interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --no-static-fields --use-mtpi --weight-decay 1e-4 --likelihood wind=truncated_normal

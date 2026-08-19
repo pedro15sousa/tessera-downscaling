@@ -1,22 +1,24 @@
 # ==========================================================================
-# SHUFFLED-LATENT CONTROL for the TESSERA 1B-M candidate
-# (crop64_lat16_auxon, 2017 embeddings) — paper Appendix A.
+# snapshot_14y_southern_africa_tessera_1B-M_2017_shuffled -- shuffled-latent control,
+# region "southern_africa" (Table 4 / App. C of the paper)
+# ==========================================================================
+# Runs land in <data root>/training_runs_snapshot_14y_southern_africa_tessera_1B-M_2017_shuffled/.
 #
-# Identical to the candidate's paper config (direct concat, +mTPI, with
-# elevation, no static fields, wd=1e-4); the ONLY change is the latents file:
-# station rows permuted among valid stations (shuffle_latents.py --seed 0,
-# NaN positions preserved => identical station set, broken station→latent
-# assignment). Compare against the live candidate runs in
-# training_runs_snapshot_14y_southern_africa_tessera_1B-M_2017.
+# Identical to the canonical arm in snapshot_14y_southern_africa_tessera_1B-M_2017
+# (crop64_lat16_auxon; direct concat, +mTPI, with elevation, no static
+# fields, wd=1e-4); the ONLY change is the latents file: station rows permuted
+# among valid stations (scripts/data/shuffle_latents.py --seed 0, NaN positions
+# preserved => identical station set, broken station->latent assignment).
+# Compare against the live runs in training_runs_snapshot_14y_southern_africa_tessera_1B-M_2017.
 # ==========================================================================
 - name: t2m_snap_vae_crop64_lat16_auxon_shuffled_concat_mtpi
   label: "t2m VAE crop64-lat16 auxon SHUFFLED latents concat (elev + mTPI, no static, wd=1e-4)"
   colour: "#7f7f7f"
   target_variables: [t2m]
-  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_DIR}/station_latents_${TESSERA_VARIANT}_p128_${EMBED_YEAR}_crop64_lat16_grad0.5_auxon_shuffle_seed0.npy --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --no-static-fields --use-mtpi --weight-decay 1e-4"
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_DIR}/station_latents_${TESSERA_VARIANT}_p128_${EMBED_YEAR}_crop64_lat16_grad0.5_auxon_shuffle_seed0.npy --vae-latents-station-csv ${VAE_LATENTS_CSV} --no-static-fields --use-mtpi --weight-decay 1e-4"
 
 - name: wind_truncnormal_snap_vae_crop64_lat16_auxon_shuffled_concat_mtpi
   label: "Wind (TruncNormal) VAE crop64-lat16 auxon SHUFFLED latents concat (elev + mTPI, no static, wd=1e-4)"
   colour: "#7f7f7f"
   target_variables: [wind]
-  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_DIR}/station_latents_${TESSERA_VARIANT}_p128_${EMBED_YEAR}_crop64_lat16_grad0.5_auxon_shuffle_seed0.npy --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --no-static-fields --use-mtpi --weight-decay 1e-4 --likelihood wind=truncated_normal"
+  extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_DIR}/station_latents_${TESSERA_VARIANT}_p128_${EMBED_YEAR}_crop64_lat16_grad0.5_auxon_shuffle_seed0.npy --vae-latents-station-csv ${VAE_LATENTS_CSV} --no-static-fields --use-mtpi --weight-decay 1e-4 --likelihood wind=truncated_normal"

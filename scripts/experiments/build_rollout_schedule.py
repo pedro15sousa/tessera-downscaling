@@ -9,9 +9,9 @@ Takes an existing ``probe_station_ids.json`` (e.g. one produced by
 * Schedule metadata (``T_0``, rollout completion, dataset train_start/end,
   activation order seed, cadence shape).
 
-Output shape matches the existing
-``snapshot_14y_eu_temporal_rollout_alps/rollout_schedule.json`` byte-for-byte,
-modulo the input probe-set contents.
+Output shape matches
+``snapshot_14y_eu_temporal_rollout_norway_lat16_mtpi/rollout_schedule.json``
+byte-for-byte, modulo the input probe-set contents.
 
 Anchoring rule
 --------------
@@ -32,23 +32,13 @@ seeds (the order is part of the *experiment design*, not noise).
 
 Refuses to overwrite an existing file (use ``--force`` to override).
 
-Example: replicate the Alps rollout schedule
---------------------------------------------
+Example: build the Norway rollout schedule of the paper
+------------------------------------------------------
 
-    uv run --project projects/tessera_downscaling python \\
-        projects/tessera_downscaling/scripts/experiments/build_rollout_schedule.py \\
-        --dataset-dir .tmp_output/dataset_timestamp_global \\
-        --probe-ids-json projects/tessera_downscaling/scripts/experiments/snapshot_14y_eu_temporal_rollout_alps/probe_station_ids.json \\
-        --out projects/tessera_downscaling/scripts/experiments/snapshot_14y_eu_temporal_rollout_alps/rollout_schedule.json
-
-Example: build the matching Norway rollout schedule
----------------------------------------------------
-
-    uv run --project projects/tessera_downscaling python \\
-        projects/tessera_downscaling/scripts/experiments/build_rollout_schedule.py \\
-        --dataset-dir .tmp_output/dataset_timestamp_global \\
-        --probe-ids-json projects/tessera_downscaling/scripts/experiments/snapshot_14y_eu_temporal_rollout_norway/probe_station_ids.json \\
-        --out projects/tessera_downscaling/scripts/experiments/snapshot_14y_eu_temporal_rollout_norway/rollout_schedule.json
+    uv run python scripts/experiments/build_rollout_schedule.py \\
+        --dataset-dir <data root>/dataset_timestamp_global \\
+        --probe-ids-json scripts/experiments/snapshot_14y_eu_temporal_rollout_norway_lat16_mtpi/probe_station_ids.json \\
+        --out scripts/experiments/snapshot_14y_eu_temporal_rollout_norway_lat16_mtpi/rollout_schedule.json
 """
 from __future__ import annotations
 
@@ -69,8 +59,9 @@ except ImportError as e:
     )
 
 
-# Default sweep grid — matches the Alps rollout schedule on disk.
-DEFAULT_SWEEP_POINTS = "r1mo:1,r3mo:3,r6mo:6,r1y:12,r2y:24,r3y:36,r6y:72"
+# Default sweep grid — the paper's Norway rollout (10 points; r0 = the
+# pre-rollout anchor with no probes deployed, r3y = rollout complete).
+DEFAULT_SWEEP_POINTS = "r0:0,r1mo:1,r3mo:3,r6mo:6,r1y:12,r2y:24,r3y:36,r4y:48,r5y:60,r6y:72"
 
 # Future-sentinel string used to mark a probe as "not yet deployed at this
 # sweep point". Lexicographically greater than every real timestamp in
@@ -138,7 +129,7 @@ def _parse_args() -> argparse.Namespace:
     )
     p.add_argument(
         "--t-rollout-months", type=int, default=36,
-        help="Rollout duration in months; default 36 (Alps schedule's value). "
+        help="Rollout duration in months; default 36 (the paper's value). "
              "Must be ≤ max(sweep months).",
     )
     p.add_argument(
@@ -150,18 +141,15 @@ def _parse_args() -> argparse.Namespace:
     )
     p.add_argument(
         "--order-ids-json", type=Path, default=None,
-        help="Optional JSON with an 'ordered_station_ids' list (e.g. from "
-             "rank_probes_by_coverage.py) giving the probe DEPLOYMENT ORDER, "
-             "earliest-deployed first. When set, it REPLACES the random "
-             "--activation-seed permutation; the ids must be a permutation of "
-             "the probe set. Use it to compare coverage-driven placement "
-             "against the random rollout.",
+        help="Optional JSON with an 'ordered_station_ids' list giving the probe "
+             "DEPLOYMENT ORDER, earliest-deployed first. When set, it REPLACES "
+             "the random --activation-seed permutation; the ids must be a "
+             "permutation of the probe set. (The paper uses the random order.)",
     )
     p.add_argument(
         "--sweep-points", type=str, default=DEFAULT_SWEEP_POINTS,
-        help=f"Comma-separated 'label:months' pairs; default matches the Alps "
-             f"schedule. Example: 'r1mo:1,r3mo:3,r6mo:6,r1y:12,"
-             f"r2y:24,r3y:36,r6y:72'. Default: {DEFAULT_SWEEP_POINTS}",
+        help=f"Comma-separated 'label:months' pairs. Default (the paper's "
+             f"Norway grid): {DEFAULT_SWEEP_POINTS}",
     )
     p.add_argument(
         "--out", type=Path, required=True,

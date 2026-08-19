@@ -1,152 +1,84 @@
-# Snapshot-cadence experiments
+# Experiment folders
 
-Each subdirectory here is self-contained: one YAML (the experiment
-list) + one bash script (the Slurm submitter). The YAML is the single
-source of truth for what experiments belong to each output directory;
-the notebook's `EXPERIMENT_DEFS` will be migrated to load from the
-same YAMLs in a follow-up.
+Every folder here is one output directory of the paper: `<folder>/` drives
+`<data root>/training_runs_<folder>/` (data root = `$TESSERA_DATA_ROOT`,
+default `/data/weather-downscaling`; see `DATA.md`). Each folder holds
 
-## Layout
+* `experiments.yaml` -- the list of configurations (the single source of truth;
+  `notebooks/_helpers.py` and `scripts/paper/*` read the same files), and
+* `submit.sh` -- the Slurm submitter, a few lines on top of `_lib.sh`.
 
-```
-experiments/
-├── README.md
-├── snapshot_6y_eu/
-│   ├── experiments.yaml
-│   └── submit.sh
-├── snapshot_14y_eu/
-│   ├── experiments.yaml
-│   └── submit.sh
-├── snapshot_14y_us/
-│   ├── experiments.yaml
-│   └── submit.sh
-├── snapshot_14y_east_asia/
-│   ├── experiments.yaml
-│   └── submit.sh
-├── snapshot_14y_australia/
-│   ├── experiments.yaml
-│   └── submit.sh
-├── snapshot_14y_southern_africa/
-│   ├── experiments.yaml
-│   └── submit.sh
-└── snapshot_global_14y/
-    ├── experiments.yaml
-    └── submit.sh
-```
+All trained runs share the dataset `dataset_timestamp_global`
+(`multi_region_snapshot_v1` layout, per-region normalisation stats), the
+hyperparameters in `_lib.sh` (batch 1, 100 epochs, patience 10, lr 2.5e-5
+with 5 % warm-up, CNN 128x7, MLP 128x3) and seeds 42/123/456. Every run --
+no-model references included -- is filtered to the TESSERA-valid station set
+(`processed/tessera_global/patch_embeddings_2024.npy`, centre pixel non-zero
+and >= 50 % coverage; filter only, no patches are loaded).
 
-Each folder's name matches its output directory
-(`.tmp_output/training_runs_<folder_name>/`), so `snapshot_14y_us/`
-drives `training_runs_snapshot_14y_us/`, and so on.
+## Folders
 
-## What each script does
+| Folder | Entries | What |
+|---|---|---|
+| `snapshot_14y_{eu,us,east_asia,australia,southern_africa}` | 12 | latents-independent arms of one region: persistence and ERA5-interp references (t2m also with lapse-rate correction), the no-TESSERA ConvCNP (+mTPI, static fields on), the same + 17 hand-crafted descriptors, and the v1 TESSERA arm |
+| `snapshot_14y_<region>_tessera_1B-M_2017` | 20 (eu, east_asia) / 12 (others) | the paper's TESSERA arm (`*_vae_crop64_lat16_auxon_concat_mtpi`), the VAE-variant model-selection sweep, the +descriptors and summary-statistics controls |
+| `snapshot_14y_<region>_tessera_1B-M_2017_shuffled` | 2 | shuffled-latent control (Table 4 / App. C) |
+| `snapshot_14y_cross_lead` | 7 | lead-conditioned models trained on the ERA5 + Aurora {6, 24, 72} h mix for europe and east_asia, evaluated per lead into `eval_lead{0,6,24,72}h/`; plus the per-lead interp references on the matched station set |
+| `snapshot_14y_cross_lead_tessera_1B-M_2017` | 2 | the paper's TESSERA arm of the cross-lead experiment |
+| `snapshot_14y_eu_temporal_rollout_norway_lat16_mtpi` | 4 architectures x 10 sweep points + 4 references | Norway station-network rollout (Fig 7), baseline and v1 TESSERA arms |
+| `snapshot_14y_eu_temporal_rollout_norway_tessera_1B-M_2017` | 2 x 10 | the paper's TESSERA arm of the rollout (same schedule files) |
 
-| Folder | Dataset | Region(s) | Normalisation | Configs | Jobs |
-|---|---|---|---|---|---|
-| snapshot_6y_eu | dataset_timestamp (flat, 2017-23) | Europe | built-in | 28 | 84 |
-| snapshot_14y_eu | dataset_timestamp_global | europe | per_region | 28 | 84 |
-| snapshot_14y_us | dataset_timestamp_global | us | per_region | 28 | 84 |
-| snapshot_14y_east_asia | dataset_timestamp_global | east_asia | per_region | 28 | 84 |
-| snapshot_14y_australia | dataset_timestamp_global | australia | per_region | 28 | 84 |
-| snapshot_14y_southern_africa | dataset_timestamp_global | southern_africa | per_region | 28 | 84 |
-| snapshot_global_14y | dataset_timestamp_global | multi-region + transfer | global | 24 | 72 |
-
-Grand total at 14y cadence: 6 × 84 + 72 = 576 jobs. Add the 84 for
-6y-EU (being re-run for clean comparison) = 660 jobs.
+The regional folders are kept entry-for-entry identical across the five
+regions; the `_tessera_1B-M_2017` folders differ only in how much of the
+variant sweep was run in that region.
 
 ## Running
 
 ```bash
-# From anywhere (the script resolves its YAML relative to itself):
-bash projects/tessera_downscaling/scripts/experiments/snapshot_14y_us/submit.sh
+bash scripts/experiments/snapshot_14y_eu/submit.sh              # sbatch one job per (entry, seed)
+DRY_RUN=1 bash scripts/experiments/snapshot_14y_eu/submit.sh    # print the commands only
+LOCAL=1   bash scripts/experiments/snapshot_14y_eu/submit.sh    # run sequentially in this shell
 ```
 
-Dry run (prints sbatch commands without submitting):
+Runs with a `test_summary.json` are skipped, so re-running a submitter only
+dispatches what is missing. Knobs (env): `TESSERA_DATA_ROOT`, `OUTPUT_ROOT`,
+`SEEDS="42 123"`, `TIME`, `PARTITION`, `LOG_DIR`. Trained entries are one GPU
+job (`uv run tessera-train ... && uv run tessera-evaluate ...`); reference
+entries (`baseline_kind` / `simple_baselines`) are one CPU job running
+`uv run tessera-baselines`.
 
-```bash
-DRY_RUN=1 bash projects/tessera_downscaling/scripts/experiments/snapshot_14y_us/submit.sh
-```
+## YAML grammar
 
-## YAML schema
-
-Each entry in an `experiments.yaml` is a dict with these fields:
+Flat folders (everything except the two rollout folders) are a list:
 
 ```yaml
-- name: wind_snap_vae_lat16_concat_with_elev_no_static_wd_drop0
-  label: "Wind snap VAE-lat16 concat (with elev, no static, wd=1e-4)"
-  colour: "#1f77b4"           # used by the notebook's plotting
-  target_variables: [wind]    # list; multi-task = [t2m, wind]
+- name: t2m_snap_vae_crop64_lat16_auxon_concat_mtpi
+  label: "t2m VAE crop64-lat16 auxon concat (elev + mTPI, no static, wd=1e-4)"
+  colour: "#1f77b4"                 # plotting only
+  target_variables: [t2m]           # t2m | wind
   extra_args: "--interpolation bilinear --tessera-injection concat ..."
-  # Only used by snapshot_global_14y/experiments.yaml:
-  region_specs_train: {europe: train, us: all}
-  region_specs_test: {europe: test}
+  baseline_kind: era5_interp        # only on no-model references
 ```
 
-`extra_args` is shell-formatted as it would appear on the `train.py`
-command line. The submit script expands `${VAE_LATENTS_PATH}`,
-`${VAE_LATENTS_PATH_LAT64}`, and `${VAE_LATENTS_CSV}` from the
-environment (set at the top of each `submit.sh`) so the YAML doesn't
-hardcode absolute paths.
+`extra_args` is the tail of the `tessera-train` command line. `${VAR}`
+references are expanded from the environment exported by `_lib.sh` /
+`submit.sh` (`VAE_LATENTS_PATH`, `VAE_LATENTS_CSV`, `VAE_LATENTS_DIR`,
+`TESSERA_VARIANT`, `EMBED_YEAR`, `EXTRA_DESCRIPTORS_PATH`,
+`SUMMARY_STATS_PATH`), so no absolute path lives in a yaml.
 
-`region_specs_train` / `region_specs_test` are only used by the
-`snapshot_global_14y` YAML — for single-region experiments, the
-script's `--train-regions` flag handles region selection.
+The rollout folders use three top-level keys: `sweep_points`
+(`label`/`description`), `architectures` (`name`/`label`/`family`/
+`target_variables`/`extra_args`) and `simple_baselines`
+(`name`/`baseline`/`target_variables`[/`extra_args`]). Their sidecars are
+built once and committed: `probe_station_ids.json` by `pick_probe_set.py`,
+`rollout_schedule.json` by `build_rollout_schedule.py`; `submit.sh` derives
+`probe_active_from_<sweep>.json`, `train_end_overrides.json` and
+`region_specs_{train,test}.json` from them on every run.
 
-## Editing the 28-config matrix
+## Outputs
 
-The 6 single-region YAMLs (5 × 14y + 1 × 6y EU) share an identical
-28-config matrix — they differ only in which dataset the submit
-script points at. If you add, remove, or modify an entry, **apply
-the same change to all 6 YAMLs**. Each YAML's header comment names
-the other 5 siblings to make the required edits obvious.
-
-A diff check to catch drift:
-
-```bash
-cd projects/tessera_downscaling/scripts/experiments
-for f in snapshot_6y_eu snapshot_14y_eu snapshot_14y_us \
-         snapshot_14y_east_asia snapshot_14y_australia \
-         snapshot_14y_southern_africa; do
-    python3 -c "
-import yaml
-exps = yaml.safe_load(open('$f/experiments.yaml'))
-for e in exps:
-    print(e['name'], e['target_variables'], e['extra_args'])
-" > /tmp/$f.txt
-done
-md5sum /tmp/snapshot_*.txt  # all 6 should be byte-identical
-```
-
-The `snapshot_global_14y` YAML is structurally different (uses
-`region_specs_train`/`region_specs_test`) and is not part of this
-6-way sync.
-
-## How a submit.sh runs
-
-1. Loads hyperparameters (seeds, epochs, patience, LR schedule, etc.)
-   at the top.
-2. Exports `VAE_LATENTS_PATH{,_LAT64}`, `VAE_LATENTS_CSV` so the
-   Python-in-bash YAML loader can expand the shell refs.
-3. Runs a preflight check: dataset exists, `metadata.json` has the
-   expected `layout_version`, per-region stats file exists (for
-   single-region scripts), or global stats file exists (for
-   `snapshot_global_14y`).
-4. Iterates `(config, seed)`. For each pair:
-   - If `<run_dir>/test_summary.json` exists already, skip (lets you
-     re-run the script to submit any new configs without re-running
-     the existing ones).
-   - Builds an `sbatch --wrap "cd <repo> && python train.py ... && python evaluate.py ..."`.
-   - Submits (or prints, under `DRY_RUN=1`).
-
-## Expected runtime
-
-At 14y cadence, each job runs for up to the Slurm `--time=24:00:00`
-cap with `--patience 10`. Most jobs finish well within the budget.
-The full suite (660 jobs) completes in ~2-3 days wall-clock given
-typical GPU availability on Isambard.
-
-## Renames and preservation
-
-The old `training_runs_snapshot_global/` directory (from the 6y
-multi-region experiments) has been renamed to
-`training_runs_snapshot_global_6y/` to preserve those results
-alongside the new 14y ones.
+`<data root>/training_runs_<folder>/<name>_seed<S>/` (cross-lead:
+`<region>/<name>_seed<S>/eval_lead<L>h/`; rollout: `<arch>_<sweep>_seed<S>/`)
+with `best_model.pt`, `config.json`, `test_summary.json`, `test_results.json`,
+`test_predictions.npz`, `test_station_errors.npz`, `training_curves.npz`,
+`training_summary.json`. `DATA.md` lists the per-file contents.

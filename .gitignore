@@ -27,3 +27,6 @@ wandb/
 
 # Regenerable PNG previews written by scripts/paper/make_paper_figures.py
 paper/figures/preview/
+
+# Slurm logs written by scripts/experiments/_lib.sh
+logs/

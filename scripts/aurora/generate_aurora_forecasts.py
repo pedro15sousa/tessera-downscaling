@@ -10,16 +10,15 @@ per-region subtree:
 
     <output_root>/lead{L}h/<region>/processed/era5_wb2_quarter_<var>/data/<valid_ts>.nc
 
-The crop reuses the exact ``compute_grid_crop_indices`` logic from
-``scripts/preprocessing/helpers.py`` (inlined below to avoid a cross-package
-import), including the longitude roll that makes Europe's 0-deg-crossing box
-contiguous. For the existing dataset regions (europe, east_asia) the crop is
-asserted bit-for-bit against the global dataset's reference grid, so the Aurora
-context aligns exactly with the ERA5 dataset. ``uk`` is a NEW region (no dataset
-scaffolding yet) defined by ``--uk-bbox``; it is cropped forward-looking so the
-data exists once the UK dataset region is built. Because the per-region crops
-are already regional, the companion Stage-2 script must consume them directly
-(no second crop) -- that change lands alongside this one.
+The crop uses ``compute_grid_crop_indices`` from
+``tessera_downscaling.preprocessing.helpers`` -- the same function the dataset
+preprocessor uses, including the longitude roll that makes Europe's
+0-deg-crossing box contiguous -- and is asserted bit-for-bit against each
+region's reference grid in ``dataset_timestamp_global``, so the Aurora context
+aligns exactly with the ERA5 dataset. Region bboxes come from the global
+dataset's ``metadata.json``. Because the per-region crops are already regional,
+the companion Stage-2 script (``scripts/preprocessing/preprocess_aurora.py``)
+consumes them directly (no second crop).
 
 Design decisions (see session notes):
   * Model: Aurora 0.25 deg *Pretrained*. The fine-tuned 0.25 checkpoint is
@@ -30,28 +29,28 @@ Design decisions (see session notes):
     all 13 pressure levels = 69 dynamic fields per frame), fp32, leaving any
     channel/level subsetting to Stage 2 -- only the *spatial* extent is cropped
     here.
-  * No latents are needed (unlike Will's extract script), so NO source patch to
-    the upstream ``aurora`` package is required -- we only use ``rollout``'s
-    predictions.
+  * Only ``rollout``'s predictions are used, so no source patch to the upstream
+    ``aurora`` package is required.
 
 Lead times are harvested from a SINGLE rollout per init:
     6 h  -> step 1,   24 h -> step 4,   72 h -> step 12
 so adding the 24 h lead costs no extra rollouts. Per-init we only roll out as
 many steps as the longest lead that init actually feeds.
 
+Inputs: 13-level ERA5 staging (``scripts/data/download_era5_wb2_aurora_levels.py``)
+and the ERA5 static file (z / lsm / slt); see ``scripts/aurora/submit_aurora_forecasts.sh``.
+Needs the ``aurora`` extra (``uv sync --extra aurora``).
+
 Usage (dry run first -- no model load, just accounting):
-    python generate_aurora_forecasts.py \
-        --global-metadata /path/dataset_timestamp_global/metadata.json \
-        --era5-staging-root /path/_staging/processed \
-        --static-file /path/_staging/processed/era5_static/era5_static_0p25_all.nc \
-        --output-root /path/_staging/aurora \
+    uv run python scripts/aurora/generate_aurora_forecasts.py \
+        --global-metadata <data root>/dataset_timestamp_global/metadata.json \
+        --era5-staging-root <data root>/_staging/aurora_inputs \
+        --static-file <data root>/_staging/processed/era5_static/era5_static_0p25_all.nc \
+        --output-root <data root>/_staging/aurora \
         --dry-run
 
-Real run (Isambard GPU node):
-    python generate_aurora_forecasts.py ... --model pretrained
-
-Local plumbing smoke test (RTX 4070 Ti):
-    python generate_aurora_forecasts.py ... --model small --limit 3
+Real run (GPU node):        ... --model pretrained
+Plumbing smoke test (GPU):  ... --model small --limit 3
 """
 
 from __future__ import annotations
@@ -62,6 +61,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from tessera_downscaling.io_utils import WB_LEVELS  # the 13 Aurora pressure levels
+
 # --------------------------------------------------------------------------- #
 # Constants / mappings (no heavy imports -- this section is unit-testable).
 # --------------------------------------------------------------------------- #
@@ -69,18 +70,11 @@ import pandas as pd
 TIME_DELTA_HOURS = 6  # Aurora 0.25 native rollout step.
 DEFAULT_LEADS_HOURS = [6, 24, 72]  # short / medium / long.
 
-# Regions of interest cropped at write time. europe/east_asia bboxes are read
-# from the global dataset metadata (so they match the ERA5 dataset exactly). uk
-# is NOT a dataset region yet; its box is defined here and overridable via
-# --uk-bbox. UK overlaps europe (it is a sub-box), stored separately so the UK
-# region is directly available downstream.
-DEFAULT_REGIONS = ["europe", "us", "east_asia", "australia", "southern_africa", "uk"]
-# (lat_min, lat_max, lon_min, lon_max) in degrees, lon in -180/180. Covers all
-# of the UK incl. Shetland (~60.85N), Northern Ireland / west coast (~-8.2E) and
-# East Anglia (~1.8E), with a small margin and snapped to the 0.25deg grid.
-UK_BBOX = (49.0, 61.0, -11.0, 2.0)
+# Regions of interest cropped at write time; bboxes are read from the global
+# dataset metadata so they match the ERA5 dataset exactly. The paper's Aurora
+# datasets use europe and east_asia only.
+DEFAULT_REGIONS = ["europe", "us", "east_asia", "australia", "southern_africa"]
 
-WB_LEVELS = [50, 100, 150, 200, 250, 300, 400, 500, 600, 700, 850, 925, 1000]
 
 # Aurora short name -> WeatherBench2 / ERA5-staging variable name. The staged
 # .nc files (and the DataArray name inside them) use the WB2 name, so Stage 2's
@@ -276,62 +270,22 @@ def harvest_done(output_root: Path, lead_hours: int, valid: pd.Timestamp, region
 
 
 # --------------------------------------------------------------------------- #
-# Region cropping. compute_grid_crop_indices is inlined verbatim from
-# scripts/preprocessing/helpers.py so Stage 1 crops to the exact same grids as
-# the dataset preprocessing (incl. the longitude roll for 0-deg-crossing boxes).
+# Region cropping (same crop as the dataset preprocessor).
 # --------------------------------------------------------------------------- #
 
-def compute_grid_crop_indices(lats, lons, lat_range, lon_range):
-    """Mirror of preprocessing/helpers.py: ERA5/Aurora-grid indices for a crop.
-
-    lats descending (90..-90), lons 0..360. lon_range is in -180/180. Returns
-    (lat_indices, lon_indices, roll_amount, lats_crop, lons_crop), lons in
-    -180/180. The roll makes the requested longitude band contiguous.
-    """
-    import numpy as np
-
-    if lat_range is not None:
-        lat_mask = (lats >= lat_range[0]) & (lats <= lat_range[1])
-        lat_indices = np.where(lat_mask)[0]
-    else:
-        lat_indices = np.arange(len(lats))
-
-    if lon_range is not None:
-        lon_min_360 = lon_range[0] % 360
-        roll_start_idx = np.argmin(np.abs(lons - lon_min_360))
-        roll_amount = -roll_start_idx
-        lons_rolled = np.roll(lons, roll_amount)
-        lons_rolled_180 = np.where(lons_rolled > 180, lons_rolled - 360, lons_rolled)
-        lon_mask = (lons_rolled_180 >= lon_range[0]) & (lons_rolled_180 <= lon_range[1])
-        lon_indices = np.where(lon_mask)[0]
-    else:
-        roll_amount = 0
-        lons_rolled_180 = np.where(lons > 180, lons - 360, lons)
-        lon_indices = np.arange(len(lons))
-
-    return lat_indices, lon_indices, roll_amount, lats[lat_indices], lons_rolled_180[lon_indices]
-
-
-def resolve_region_bboxes(global_metadata_path, region_names, uk_bbox):
-    """Map region name -> (lat_min, lat_max, lon_min, lon_max).
-
-    europe/east_asia (and any other dataset region) come from the global
-    metadata's regions[r]['bbox_lat_lon']; 'uk' uses uk_bbox.
-    """
+def resolve_region_bboxes(global_metadata_path, region_names):
+    """Map region name -> (lat_min, lat_max, lon_min, lon_max) from the global metadata."""
     import json
 
     meta = json.loads(Path(global_metadata_path).read_text())
     regs = meta.get("regions", {})
     out = {}
     for name in region_names:
-        if name == "uk":
-            out[name] = tuple(uk_bbox)
-        elif name in regs and regs[name].get("bbox_lat_lon"):
+        if name in regs and regs[name].get("bbox_lat_lon"):
             out[name] = tuple(regs[name]["bbox_lat_lon"])
         else:
             raise SystemExit(
-                f"Region '{name}' has no bbox: it is not in the global metadata "
-                f"({sorted(regs)}) and is not 'uk'. Add its bbox to the dataset or pass a known region."
+                f"Region '{name}' has no bbox in the global metadata ({sorted(regs)})."
             )
     return out
 
@@ -350,10 +304,12 @@ def resolve_region_crops(bboxes, aurora_lats, aurora_lons, global_dataset_dir, l
     For regions that have a reference grid in the global dataset
     (regions/<r>/lats.npy), assert the crop matches it bit-for-bit (atol 1e-4),
     exactly as Stage 2's build_region does -- this catches the dropped-pole
-    offset or any grid drift. 'uk' has no reference, so it is produced as-is.
-    Returns an ordered list of dicts with name/lat_idx/lon_idx/roll/lats/lons.
+    offset or any grid drift. Returns an ordered list of dicts with
+    name/lat_idx/lon_idx/roll/lats/lons.
     """
     import numpy as np
+
+    from tessera_downscaling.preprocessing.helpers import compute_grid_crop_indices
 
     crops = []
     for name, bbox in bboxes.items():
@@ -417,26 +373,25 @@ def dry_run_report(
     print("=" * 70)
     print("Aurora forecast generation -- DRY RUN")
     print("=" * 70)
-    print(f"Leads (hours)         : {leads_hours}  ->  steps {[lead_to_step(l) for l in leads_hours]}")
+    print(f"Leads (hours)         : {leads_hours}  ->  steps {[lead_to_step(h) for h in leads_hours]}")
     print(f"Valid-times (split)   : {len(test_times)}  ({test_times[0]} .. {test_times[-1]})")
     print(f"Init times (union)    : {len(inits)}  ({inits[0]} .. {inits[-1]})")
     print(f"Rollouts to run       : {n_rollouts}  (after skipping completed)")
     print(f"Total rollout steps   : {total_steps}")
     for lead in leads_hours:
-        n = sum(1 for harvs in per_init.values() for (l, _s, valid) in harvs if l == lead)
+        n = sum(1 for harvs in per_init.values() for (h, _s, valid) in harvs if h == lead)
         n_todo = sum(
             1
             for harvs in per_init.values()
-            for (l, _s, valid) in harvs
-            if l == lead and not harvest_done(output_root, lead, valid, region_names)
+            for (h, _s, valid) in harvs
+            if h == lead and not harvest_done(output_root, lead, valid, region_names)
         )
         print(f"  lead {lead:>3}h frames    : {n} total, {n_todo} to write (x {len(region_names)} regions)")
     print(f"Input frames needed   : {len(in_frames)}  ({in_frames[0]} .. {in_frames[-1]})")
     print("Regions (cropped)     :")
     for r in region_names:
         lat_min, lat_max, lon_min, lon_max = region_bboxes[r]
-        ref = "from metadata" if r != "uk" else "NEW (--uk-bbox)"
-        print(f"  {r:10s} bbox=[{lat_min},{lat_max},{lon_min},{lon_max}]  ~{region_cells[r]:,} cells  ({ref})")
+        print(f"  {r:10s} bbox=[{lat_min},{lat_max},{lon_min},{lon_max}]  ~{region_cells[r]:,} cells")
     pct = 100.0 * sum(region_cells[r] for r in region_names) / (721 * 1440)
     print(f"  -> cropped extent is ~{pct:.1f}% of the global grid")
 
@@ -464,10 +419,12 @@ def dry_run_report(
 # --------------------------------------------------------------------------- #
 
 def _load_model(kind: str, device):
-    """Load the requested Aurora model. Class names are pinned defensively
-    because the `microsoft-aurora` API moved from `Aurora(use_lora=...)` +
-    manual checkpoint to named classes (`AuroraPretrained`, ...). Confirm
-    against the installed version on the target host."""
+    """Load the requested Aurora model.
+
+    Both spellings of the `microsoft-aurora` API are supported: the newer named
+    classes (`AuroraPretrained`, `AuroraSmallPretrained`) and the older
+    `Aurora(use_lora=...)` + manual checkpoint load.
+    """
     import aurora  # noqa: F401
 
     if kind == "pretrained":
@@ -476,7 +433,7 @@ def _load_model(kind: str, device):
             model = Cls()
             model.load_checkpoint()
         except ImportError:
-            from aurora import Aurora as Cls  # older API (Will's script)
+            from aurora import Aurora as Cls  # older API
             model = Cls(use_lora=False)
             model.load_checkpoint("microsoft/aurora", "aurora-0.25-pretrained.ckpt")
     elif kind == "small":
@@ -617,8 +574,8 @@ def run(args) -> None:
     inits, per_init = build_schedule(test_times, args.leads)
     dtype_bytes = 2 if args.dtype == "float16" else 4
 
-    # Region bboxes (europe/east_asia from metadata, uk from --uk-bbox) + cell counts.
-    region_bboxes = resolve_region_bboxes(args.global_metadata, args.regions, args.uk_bbox)
+    # Region bboxes (from the global metadata) + cell counts.
+    region_bboxes = resolve_region_bboxes(args.global_metadata, args.regions)
     region_names = list(region_bboxes)
     region_cells = {r: region_n_cells(bb) for r, bb in region_bboxes.items()}
 
@@ -688,11 +645,8 @@ def parse_args():
     p.add_argument("--static-file", required=True, help="era5_static_0p25_all.nc (provides z/lsm/slt)")
     p.add_argument("--output-root", required=True, help="Aurora staging root; writes lead{L}h/<region>/processed/... under it")
     p.add_argument("--regions", nargs="+", default=DEFAULT_REGIONS,
-                   help="Regions to crop to (default: europe east_asia uk). europe/east_asia bboxes are read "
-                        "from --global-metadata; 'uk' uses --uk-bbox.")
-    p.add_argument("--uk-bbox", type=float, nargs=4, default=list(UK_BBOX),
-                   metavar=("LAT_MIN", "LAT_MAX", "LON_MIN", "LON_MAX"),
-                   help="UK bounding box (lon in -180/180). Default covers all of the UK incl. Shetland.")
+                   help="Regions to crop to; bboxes are read from --global-metadata "
+                        "(default: all five dataset regions).")
     p.add_argument("--leads", type=int, nargs="+", default=DEFAULT_LEADS_HOURS, help="Lead times in hours")
     p.add_argument("--split", choices=["train", "val", "trainval", "test", "all"], default="test",
                    help="Which split's valid-times to generate forecasts for. Default 'test' "

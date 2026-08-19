@@ -1,39 +1,42 @@
+# ==========================================================================
+# snapshot_14y_eu_temporal_rollout_norway_lat16_mtpi -- Norway station-network
+# rollout (Fig 7 of the preprint / Fig 9 of the AMS draft), baseline arms
+# ==========================================================================
+# Design. A set of 1,505 Norwegian probe stations (probe_station_ids.json,
+# built by pick_probe_set.py) is "deployed" linearly over T_rollout = 36 months
+# starting at T_0 = 2014-12-31: each probe gets an activation timestamp
+# (rollout_schedule.json, built by build_rollout_schedule.py) before which its
+# observations are hidden from training. Each sweep point r<X> trains a fresh
+# model on all European data up to train_end_override(X) (train_end_overrides.json)
+# with the probes active from their activation dates
+# (probe_active_from_r<X>.json), then evaluates on Europe with region_specs
+# "all" so the probe / always-on / spatial-test breakdown comes out of a single
+# eval pass. Runs land in
+# <data root>/training_runs_snapshot_14y_eu_temporal_rollout_norway_lat16_mtpi/
+# <arch>_<sweep>_seed<S>; the no-model references in <name>_seed42.
 #
-# Norway temporal-rollout, LAT16-DIRECT + mTPI architecture variant.
+# Architectures mirror the canonical main-table spec of snapshot_14y_eu:
+#   * TESSERA latents concatenated DIRECTLY at their native 16-d.
+#   * --use-mtpi adds per-station mTPI as a 3rd MLP feature (elevation,
+#     delta_elevation, mTPI) for BOTH arms; the baseline keeps its 13 ERA5
+#     static channels.
+#   * wind uses the truncated-normal head; t2m stays Gaussian.
+# ${VAE_LATENTS_PATH} is the v1 lat16 file here (this folder = baseline arm +
+# v1 TESSERA arm + interp references); the paper's TESSERA arm with the 1B-M
+# 2017 latents is the sibling folder
+# snapshot_14y_eu_temporal_rollout_norway_tessera_1B-M_2017 (same schedule
+# files, same architectures, only the latents file differs).
 #
-# Identical experiment DESIGN to snapshot_14y_eu_temporal_rollout_norway
-# (same 1505-station Norway probe set, same rollout_schedule.json: same T_0,
-# T_rollout, activation order, per-sweep train_end_override). The ONLY
-# difference is the trained architecture, switched to match the canonical
-# main-table spec (snapshot_14y_eu):
+# The r6y point (full train window, all probes online) reconciles with the
+# fixed-region snapshot_14y_eu results of the same architectures.
 #
-#   * TESSERA latents concatenated DIRECTLY at their native 16-d
-#     (no --vae-latents-proj-dim 8 projection head; proj-dim defaults to 0).
-#   * --use-mtpi adds per-station mTPI (multi-scale topographic position
-#     index) as a 3rd MLP feature (elevation, delta_elevation, mTPI) for
-#     BOTH the TESSERA and the no-TESSERA baseline — mTPI is independent of
-#     --no-static-fields, so the baseline keeps its 13 ERA5 static channels
-#     AND gains mTPI (a stronger, fairer baseline).
-#   * WIND uses a TRUNCATED-NORMAL head (--likelihood wind=truncated_normal),
-#     the canonical wind likelihood (wind >= 0); t2m stays Gaussian (default).
-#     NOTE: truncated-normal point metrics are reported on the predictive
-#     MEDIAN (wind_*_mae_at_median) rather than the mean — see
-#     reeval_truncated_normal.sh; the notebook helpers alias the keys.
+# Sweep grid: 10 points; the post-completion regime (r3y..r6y) is sampled
+# yearly.
 #
-# These configs mirror snapshot_14y_eu's canonical mTPI variants:
-#   t2m_snap_vae_lat16_concat_with_elev_mtpi_no_static_wd            (tessera, Gaussian)
-#   t2m_snap_bilinear_baseline_mtpi_wd                              (baseline, Gaussian)
-#   wind_truncnormal_snap_vae_lat16_concat_with_elev_mtpi_no_static_wd (tessera, trunc-normal)
-#   wind_truncnormal_snap_bilinear_baseline_mtpi_wd                  (baseline, trunc-normal)
-# so the rollout's r6y point (full train window, all probes online) should
-# reconcile with those fixed-region snapshot results.
-#
-# NOTE: this folder is SEPARATE from the proj8/no-mTPI rollout on purpose —
-# the architectures are not comparable, so they must not share a results
-# directory (submit.sh's skip-logic keys on run-dir existence).
-#
-# Sweep grid extended to 9 points: the post-completion regime (r3y..r6y) is
-# now sampled yearly (r3y, r4y, r5y, r6y) instead of a single 3-year jump.
+# Grammar (parsed by notebooks/_helpers.py): sweep_points (label/description),
+# architectures (name/label/family/target_variables/extra_args), and
+# simple_baselines (name/baseline/target_variables[/extra_args]).
+# ==========================================================================
 
 sweep_points:
   - label: r0
@@ -64,7 +67,7 @@ architectures:
     label: "t2m snap VAE-lat16 concat DIRECT (with elev + mTPI, no static, wd=1e-4)"
     family: tessera
     target_variables: [t2m]
-    extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --no-static-fields --use-mtpi --weight-decay 1e-4"
+    extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --no-static-fields --use-mtpi --weight-decay 1e-4"
 
   - name: t2m_snap_bilinear_baseline_mtpi_wd
     label: "t2m snap ConvCNP no-TESSERA (with elev + mTPI + static, wd=1e-4)"
@@ -77,7 +80,7 @@ architectures:
     label: "wind snap VAE-lat16 concat DIRECT (with elev + mTPI, no static, wd=1e-4) — truncated-normal head"
     family: tessera
     target_variables: [wind]
-    extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --vae-latents-drop-prob 0.0 --no-static-fields --use-mtpi --weight-decay 1e-4 --likelihood wind=truncated_normal"
+    extra_args: "--interpolation bilinear --tessera-injection concat --vae-latents-path ${VAE_LATENTS_PATH} --vae-latents-station-csv ${VAE_LATENTS_CSV} --no-static-fields --use-mtpi --weight-decay 1e-4 --likelihood wind=truncated_normal"
 
   - name: wind_truncnormal_snap_bilinear_baseline_mtpi_wd
     label: "wind snap ConvCNP no-TESSERA (with elev + mTPI + static, wd=1e-4) — truncated-normal head"
@@ -102,12 +105,9 @@ architectures:
 # keeps plain era5_interp.
 #
 # G defaults to the textbook 6.5 K/km. A Gamma fitted on the train split
-# (3.90 K/km here) was also run ad hoc into
-# t2m_snap_era5_interp_lapse_fitted_baseline_seed42 and lands within
-# 0.006 C of it (1.3442 vs 1.3500 MAE), so the row is not sensitive to the
-# choice; it is NOT registered here because this folder's submit.sh does
-# not forward extra_args to the simple-baseline path, and an unregistered
-# re-run would silently produce fixed-Gamma numbers in that directory.
+# (3.90 K/km here) lands within 0.006 C of it (1.3442 vs 1.3500 MAE), so
+# the row is not sensitive to the choice; it is kept as the
+# ..._lapse_fitted_baseline row for that sensitivity check.
 simple_baselines:
   - name: t2m_snap_era5_interp_baseline
     baseline: era5_interp
@@ -115,6 +115,10 @@ simple_baselines:
   - name: t2m_snap_era5_interp_lapse_baseline
     baseline: era5_interp_lapse
     target_variables: [t2m]
+  - name: t2m_snap_era5_interp_lapse_fitted_baseline
+    baseline: era5_interp_lapse
+    target_variables: [t2m]
+    extra_args: "--lapse-rate-mode fitted --lapse-fit-stride 4"
   - name: wind_snap_era5_interp_baseline
     baseline: era5_interp
     target_variables: [wind]

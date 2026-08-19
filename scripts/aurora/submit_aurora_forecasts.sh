@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=aurora_forecast
-#SBATCH --output=logs/aurora_forecast_%j.out
-#SBATCH --error=logs/aurora_forecast_%j.err
+#SBATCH --output=logs/aurora/aurora_forecast_%j.out
+#SBATCH --error=logs/aurora/aurora_forecast_%j.err
 #SBATCH --time=24:00:00
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
@@ -10,72 +10,62 @@
 #SBATCH --mem=64G
 #
 # Stage 1 of the Aurora-context pipeline. Runs the pretrained Aurora 0.25 deg
-# model from ERA5 initial conditions over the test window and writes global
-# forecasts (4 surface + 5 atmos x 13 levels, fp32) in ERA5-staging layout, per
-# lead {6, 24, 72}h. Resume-safe: re-submitting skips (lead, valid) frames
-# already written.
+# model from ERA5 initial conditions and writes region-cropped forecasts
+# (4 surface + 5 atmos x 13 levels, fp32) in ERA5-staging layout under
+# <DATA_ROOT>/_staging/aurora/lead{6,24,72}h/<region>/processed/. Resume-safe:
+# re-submitting skips (lead, valid) frames already written.
 #
-# ---------------------------------------------------------------------------
-# ONE-TIME SETUP (login node -- has internet; uv venvs ship without pip, so
-# install via `uv pip --python`):
-#   cd /projects/u6do/pmms2/end-to-end-forecasting
-#   uv venv .venv-aurora --python 3.11
-#   uv pip install --python .venv-aurora/bin/python \
-#       microsoft-aurora xarray h5netcdf h5py netcdf4 pandas tqdm
-#   # NOTE: h5py is required as h5netcdf's HDF5 backend for writing. Also, if a
-#   # fresh install pulls a torch built for a newer CUDA than the node driver
-#   # (e.g. cu130 vs the 12.7 driver), mirror your training .venv's torch:
-#   #   uv pip install --python .venv-aurora/bin/python "torch==<VER>" torchvision \
-#   #       --index-url https://download.pytorch.org/whl/cu126
-#   # The Aurora package is kept in its OWN venv so its torch/timm pins cannot
-#   # perturb the training env (.venv). The first model load (in the job)
-#   # downloads the checkpoint from HuggingFace and caches it under
-#   # ~/.cache/huggingface for subsequent runs.
-# ---------------------------------------------------------------------------
+# Environment: Aurora is an optional extra of this project --
+#     uv sync --extra aurora
+# -- kept out of the default env because microsoft-aurora pins its own
+# torch/timm. The first model load downloads the checkpoint from HuggingFace
+# and caches it under ~/.cache/huggingface. If the resolved torch was built for
+# a newer CUDA than the node driver supports, pin torch to a matching wheel
+# (see pyproject's pytorch-cu126 index).
+#
+# Inputs: 13-level ERA5 staging from scripts/data/download_era5_wb2_aurora_levels.py
+# (ERA5_STAGING, default <DATA_ROOT>/_staging/aurora_inputs) and the ERA5 static
+# file (z / lsm / slt).
 #
 # RECOMMENDED SEQUENCE
 #   1) Dry run (login node, no GPU -- verifies every required ERA5 input frame
 #      and the static file are present, prints rollout/storage accounting):
-#        DRY_RUN=1 bash projects/tessera_downscaling/scripts/aurora/submit_aurora_forecasts.sh
-#   2) Smoke test (GPU node, 3 inits, small model -- shakes out the Aurora API,
-#      static load, write path, and gives a real per-step time):
-#        MODEL=small LIMIT=3 sbatch projects/tessera_downscaling/scripts/aurora/submit_aurora_forecasts.sh
+#        DRY_RUN=1 bash scripts/aurora/submit_aurora_forecasts.sh
+#   2) Smoke test (GPU node, 3 inits, small model):
+#        MODEL=small LIMIT=3 sbatch scripts/aurora/submit_aurora_forecasts.sh
 #   3) Full run:
-#        sbatch projects/tessera_downscaling/scripts/aurora/submit_aurora_forecasts.sh
+#        SPLIT=all sbatch scripts/aurora/submit_aurora_forecasts.sh
 #
-# Monitor:  squeue --me ; tail -f logs/aurora_forecast_<JOB_ID>.out
+# Monitor:  squeue --me ; tail -f logs/aurora/aurora_forecast_<JOB_ID>.out
 
 set -euo pipefail
 
-# ---- Paths ----
-REPO_ROOT="/projects/u6do/pmms2/end-to-end-forecasting"
-BASE_DIR="${REPO_ROOT}/projects/tessera_downscaling/.tmp_output"
-VENV="${REPO_ROOT}/.venv-aurora"
-SCRIPT="${REPO_ROOT}/projects/tessera_downscaling/scripts/aurora/generate_aurora_forecasts.py"
+REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+DATA_ROOT="${TESSERA_DATA_ROOT:-/data/weather-downscaling}"
+export TESSERA_DATA_ROOT="${DATA_ROOT}"
 
-DATASET_META="${BASE_DIR}/dataset_timestamp_global/metadata.json"
-ERA5_STAGING="${BASE_DIR}/_staging/processed"
-STATIC_FILE="${ERA5_STAGING}/era5_static/era5_static_0p25_all.nc"
-OUTPUT_ROOT="${BASE_DIR}/_staging/aurora"
+DATASET_META="${DATASET_META:-${DATA_ROOT}/dataset_timestamp_global/metadata.json}"
+ERA5_STAGING="${ERA5_STAGING:-${DATA_ROOT}/_staging/aurora_inputs}"
+STATIC_FILE="${STATIC_FILE:-${DATA_ROOT}/_staging/processed/era5_static/era5_static_0p25_all.nc}"
+OUTPUT_ROOT="${OUTPUT_ROOT:-${DATA_ROOT}/_staging/aurora}"
 
 # ---- Knobs (override via env) ----
-MODEL="${MODEL:-pretrained}"   # pretrained | small
-LIMIT="${LIMIT:-0}"            # 0 = all inits; >0 = first N (smoke test)
-LEADS="${LEADS:-6 24 72}"      # lead times in hours
+MODEL="${MODEL:-pretrained}"       # pretrained | small
+LIMIT="${LIMIT:-0}"                # 0 = all inits; >0 = first N (smoke test)
+LEADS="${LEADS:-6 24 72}"          # lead times in hours
 DTYPE="${DTYPE:-float32}"
+SPLIT="${SPLIT:-test}"             # test | trainval | all (cross-lead training needs all)
+REGIONS="${REGIONS:-europe east_asia}"
 
-# ---- Guard: venv exists ----
-if [ ! -x "${VENV}/bin/python" ]; then
-    echo "ERROR: ${VENV} not found. Run the ONE-TIME SETUP block in this script's header first." >&2
-    exit 1
-fi
-
+# shellcheck disable=SC2206  # LEADS / REGIONS are intentionally word-split.
 ARGS=(
     --global-metadata "${DATASET_META}"
     --era5-staging-root "${ERA5_STAGING}"
     --static-file "${STATIC_FILE}"
     --output-root "${OUTPUT_ROOT}"
     --leads ${LEADS}
+    --regions ${REGIONS}
+    --split "${SPLIT}"
     --model "${MODEL}"
     --dtype "${DTYPE}"
 )
@@ -84,19 +74,19 @@ if [ "${LIMIT}" != "0" ]; then
 fi
 
 cd "${REPO_ROOT}"
-mkdir -p logs "${OUTPUT_ROOT}"
+mkdir -p logs/aurora "${OUTPUT_ROOT}"
 
 # ---- Dry run path (no GPU; safe on the login node) ----
 if [ "${DRY_RUN:-0}" = "1" ]; then
     echo "DRY RUN -- no model load, no GPU"
-    "${VENV}/bin/python" "${SCRIPT}" "${ARGS[@]}" --dry-run
+    uv run python scripts/aurora/generate_aurora_forecasts.py "${ARGS[@]}" --dry-run
     exit 0
 fi
 
 echo "Aurora forecast generation starting on $(hostname) at $(date)"
-echo "Job ID: ${SLURM_JOB_ID:-unknown} | model=${MODEL} | limit=${LIMIT} | leads=${LEADS} | dtype=${DTYPE}"
+echo "Job ID: ${SLURM_JOB_ID:-unknown} | model=${MODEL} | limit=${LIMIT} | leads=${LEADS} | split=${SPLIT} | dtype=${DTYPE}"
 nvidia-smi || true
 
-"${VENV}/bin/python" "${SCRIPT}" "${ARGS[@]}"
+uv run --extra aurora python scripts/aurora/generate_aurora_forecasts.py "${ARGS[@]}"
 
 echo "Aurora forecast generation finished at $(date)"
