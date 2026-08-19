@@ -10,10 +10,32 @@ Scoping decisions taken:
 - **Vanilla SetConv stays**: `RBFSetConv`, `setconv_length_scale` and `--interpolation setconv` are **KEEP** for future re-runs; only the embedding-conditioned / stream / attention SetConv variants are cut. **Default `--interpolation` is `bilinear`** (what every paper run used), so a bare invocation reproduces the paper.
 - **Mechanics**: the monorepo checkout is left exactly as is; the new repository is built locally at `/home/pmms2/tessera-downscaling` and pushed to a new remote when ready.
 
-Done so far (all in the new repo, nothing changed in the monorepo):
-1. `b588808` — verbatim import of `projects/tessera_downscaling` (595 files, 83 MB) minus `wind_energy/`, git-ignored `scripts/maps/outputs/`, build caches, and the 18 MB `convcnp_experiment_analysis.ipynb` (declared replaced by `notebooks/README.md`).
-2. `78fad9e` — vendored `dataprocessing` ingestion scripts + root `download_{era5,ghcnh}.sh` under `vendored/` (working-tree versions incl. the uncommitted `arco.py`/`weatherbench2.py`/`utils.py` edits).
-3. `5d40b06` — `pyproject.toml` (uv, cu126 torch index, pinned deps, ruff/pytest config), `README.md`, `HISTORY.md`, `.gitignore`, `uv.lock`. **Verified:** fresh `uv sync` + `uv run pytest` → 74 passed (tests unmodified); `make_paper_figures.py --only fig02,fig06,fig07` regenerates from `/data` with no drift warnings.
+Done (all in the new repo `/home/pmms2/tessera-downscaling`; the monorepo checkout is unchanged). The history was rebuilt once on 2026-08-18 to include the data package in the import commit, so the SHAs below supersede earlier ones:
+
+| commit | content |
+|---|---|
+| `0e6ea1c` | verbatim import of `projects/tessera_downscaling` (601 files) minus `wind_energy/`, the git-ignored `maps/outputs`, caches, the 18 MB `convcnp_experiment_analysis.ipynb` |
+| `de1856b` | vendored `dataprocessing` ingestion scripts + `download_{era5,ghcnh}.sh` (working-tree versions) |
+| `3ea484f` | `pyproject.toml` (uv, cu126 torch index, pinned deps), README, HISTORY, `uv.lock`; fresh env → 74/74 tests |
+| `1b8dfd1` `6814c1b` `1d9fcab` | this plan (+ directives; VAE aux heads verified) |
+| `dbfe546` | `tessera_downscaling.paths` — the single data-root resolver with Isambard-prefix remapping |
+| `19ed42c` | gitignore fix (`/data/` anchored) |
+| `de5cfff` | model package pruned 2,578 → 1,115 lines; vanilla SetConv kept, default bilinear; bit-identical outputs on three real checkpoints (`tests/test_checkpoint_compat.py`); params 984,322 / 997,250 |
+| `aa9d456` | data package pruned 2,283 → 812 lines; synthetic tests; real-dataset smoke test |
+| `0137c7a` | figures / maps / analysis scripts and notebooks reorganised on the data root; 7 dead notebooks deleted; 21 figures regenerate with 0 drift warnings |
+| `40697d8` | `scripts/paper/make_paper_tables.py` + `paper/tables/`: Table 1 144/144, Table 4 120/120, Table 6 120/120 reproduced; AMS hand-crafted row typos 2.73→2.72, 1.30→1.29 |
+| `90ae969` | data pipeline under `scripts/data` + `scripts/preprocessing` + `scripts/aurora`; `io_utils.py`, `preprocessing/helpers.py` in the package; 19 experiment folders on a shared `_lib.sh`, regional YAMLs pruned to 12 entries; `DATA.md`, Makefile, pre-commit, CI |
+| `07791df` | `tessera-train` / `tessera-evaluate` / `tessera-baselines` console entry points (train 2088→1228, evaluate 1615→915, baselines 1136→1017 lines); tolerant config reads; `tests/test_evaluate_config_compat.py` loads every checkpoint family on disk |
+| `b181570` | `ruff format` + lint policy (E, W, F, I, B, UP), tree lint-clean |
+| `89412d9` | notebook outputs stripped (hook), hooks scoped, LICENSE, README |
+
+Verification on the final tree: `uv run pytest` 65 passed; `make_paper_figures.py` 21/21 PDFs, 23 `[ok]`, 0 `[warn]`; `make_paper_tables.py` identical to the committed tables; `pre-commit run --all-files` clean; no legacy path literal left in code (`paths.py` holds the two Isambard prefixes for remapping). Repository size 27 MB (was 83 MB imported, 194 MB in the monorepo).
+
+Still to do:
+1. **Data rescue** (in progress): `dsg_top` and `dsg_ghcnh` landed; the five regional ERA5 pulls and `pe_repo` were interrupted by an Isambard outage on 2026-08-19 ~19:00 UTC, requeued, and resume automatically (`bash /data/weather-downscaling/_migration/status.sh`). When done: verify shapes, relink `dataset_timestamp_aurora_lead*h/ghcnh_snapshot → ../dataset_timestamp_global/ghcnh_snapshot`, run `tessera-evaluate` on one stored checkpoint and diff `test_summary.json` against the on-disk original (Phase 5.4), smoke-train one epoch on `southern_africa` (5.5).
+2. **Fold the VAE patch encoder in** once `tessera_patch_encoder/repo/` has arrived: `src/tessera_downscaling/patch_encoder/` (VAE model/losses/dataset/blocks) + `scripts/patch_encoder/` (train, eval, encode_stations, encode_dense_grid); drop JEPA / AlphaEarth / OlmoEarth.
+3. Push to a new remote (`cambridge-mlg/tessera-downscaling` or personal), enable the two GitHub workflows, then retire the monorepo copy (Phase 6).
+4. Manuscript items §0.1–0.4 (bilinear vs SetConv wording; dense-map provenance; VAE aux heads; the two AMS Table 1 typos).
 
 Answer to "is anything still missing from the mount?" — two things, both Isambard-only:
 - **`dataset_timestamp_global`** (the 6-hourly ERA5 crops + GHCNh snapshots + `metadata.json` for all five regions, 2010–2023; ~176 GB). On `/data` it is a 7.6 MB skeleton (verified 2026-08-18: all five `era5_snapshot/` empty, no `ghcnh_snapshot/`, no `metadata.json`; the three `dataset_timestamp_aurora_lead*h/ghcnh_snapshot` symlinks dangle into it; it was never in `_migration/jobs.tsv`). It is *not* needed to regenerate the paper figures/tables from the stored run outputs, but it is needed for anything else: retraining, re-evaluating a checkpoint, the Aurora-lead evaluations, simple baselines, regenerating the dense maps. It **is rebuildable** from what is on the mount (`_staging/processed/era5_wb2_quarter_*` 2 TB + `ghcnh/data` 153 GB + `era5_static`) via `preprocess_timestamp_global.py` — hours of compute and a risk of tiny differences in station sets / normalisation stats — so pulling the original 176 GB while Isambard is up is the better option.
@@ -75,12 +97,11 @@ Both drafts contain the same experiment set; the AMS draft promotes the hand-cra
 --interpolation bilinear --tessera-injection concat
 --vae-latents-path processed/vae_tessera_1B-M/station_latents_1B-M_p128_2017_crop64_lat16_grad0.5_auxon.npy
 --vae-latents-station-csv processed/tessera_global/station_list_filtered.csv
---vae-latents-drop-prob 0.0 --no-static-fields --use-mtpi --weight-decay 1e-4
-[--likelihood wind=truncated_normal]         # t2m → gaussian
+--no-static-fields --use-mtpi --weight-decay 1e-4 [--likelihood wind=truncated_normal]   # t2m → gaussian
 # ConvCNP no-Tessera baseline
 --interpolation bilinear --use-mtpi --weight-decay 1e-4   # static ERA5 fields ON
 # every run additionally: --tessera-path processed/tessera_global/patch_embeddings_2024.npy (station-validity filter only)
-#   --min-tessera-patch-coverage 0.5, --normalisation-policy per_region, seeds 42/123/456, cnn 128×7×k3, mlp 128×3
+#   --min-tessera-patch-coverage 0.5, per-region normalisation, seeds 42/123/456, cnn 128×7×k3, mlp 128×3
 ```
 
 ---
@@ -98,7 +119,7 @@ Verdicts: **KEEP** · **CUT** · **?** (decision needed; my recommendation in br
 | `data/vae_latents.py` (153) | all | — | load path for VAE latents, shuffled latents, summary-stats, extra descriptors |
 | `data/dense_grid_patches.py` (405) | all | unused `Iterable` import | map inference; uses `geotessera` download path; year default 2024 (see §0.2) |
 | `data/tessera.py` (326) | — | `extract_point_embeddings` (36) at minimum | **?** whole module [cut] — the paper's patches were produced by `scripts/extract_tessera_patches_local.py` (v2 mount, bit-identical to geotessera mosaic). Keep only if you want a mount-free geotessera path; if cut, also cut `scripts/extract_tessera.py` + `tests/test_tessera.py` |
-| `model/convcnp.py` (1,280) | `ResidualBlock`, `GridCNN`, `BilinearInterp`, **`RBFSetConv` (vanilla SetConv, kept for future re-runs; default `--interpolation` → `bilinear`)**, `DecoderMLP`, `ConvCNPDownscaler` (trimmed), `tessera_injection ∈ {concat, none}` (`none` used by cross-lead baselines) | `EmbeddingConditionedSetConv`, `EmbeddingStreamSetConv`, `TargetEmbeddingAttention` + design-note block (~300, only `snapshot_14y_east_asia` sweep + `embedding_mechanism_analysis.ipynb`), `FiLMDecoderMLP` (107), `tessera_encoder` arg, `precomputed_proj_*`, `decoder_kernel`, `use_target_embed_stream`, `target_embed_attention`, `detach_attn_embed` ≈ **530** | **?** `precomputed_drop_prob` (10) [cut]. `setconv_length_scale` stays with `RBFSetConv`; fix the module docstring so it describes both interpolators |
+| `model/convcnp.py` (1,280) | `ResidualBlock`, `GridCNN`, `BilinearInterp`, **`RBFSetConv` (vanilla SetConv, kept for future re-runs; default `--interpolation` → `bilinear`)**; state-dict prefixes `cnn.`, `interp.` (setconv), `mlp.`, `heads.heads.<var>.`, `DecoderMLP`, `ConvCNPDownscaler` (trimmed), `tessera_injection ∈ {concat, none}` (`none` used by cross-lead baselines) | `EmbeddingConditionedSetConv`, `EmbeddingStreamSetConv`, `TargetEmbeddingAttention` + design-note block (~300, only `snapshot_14y_east_asia` sweep + `embedding_mechanism_analysis.ipynb`), `FiLMDecoderMLP` (107), `tessera_encoder` arg, `precomputed_proj_*`, `decoder_kernel`, `use_target_embed_stream`, `target_embed_attention`, `detach_attn_embed` ≈ **530** | **?** `precomputed_drop_prob` (10) [cut]. `setconv_length_scale` stays with `RBFSetConv`; fix the module docstring so it describes both interpolators |
 | `model/heads.py` (1,006) | `LikelihoodHead`, `_ensemble_crps` (the 200-sample fair CRPS), `GaussianHead`, `TruncatedNormalHead` (incl. `initialise_from_climatology`, `_quantile` stability path — do not simplify), `HEAD_REGISTRY`, `build_head` | `WeibullHead` (65; also broken — `train.py:1644` calls a method it lacks), `BernoulliGammaHead` (142), `GenerativeHead` (173), `_softplus_floor`, `has_density`, unused clamps ≈ **410** | |
 | `model/heads_dispatch.py` (190) | `LikelihoodHeadDict` + `forward` | `total_nll`, `predictive_means`, `predictive_medians` (0 callers) ≈ **62** | |
 | `model/tessera_encoder.py` (102) | — | whole module (`--tessera-method` appears in no YAML/submit) + ~100 downstream lines | |
@@ -200,7 +221,7 @@ Not needed: all of `core/` (20k lines), `projects/downscaling`, `auroraft`, `obs
 3. **Snapshot the untracked/ignored keep-set** somewhere durable (`/data/weather-downscaling/_migration/repo_snapshot_2026-08-17.tar` — `paper/`, `scripts/paper_figures/`, `scripts/extract_tessera_patches_local.py`, `scripts/maps/outputs/`, `MIGRATION_PLAN.md`).
 4. Repoint the dangling `dataset_timestamp_aurora_lead{6,24,72}h/ghcnh_snapshot` symlinks to `../dataset_timestamp_global/ghcnh_snapshot` (relative) once step 1 lands.
 
-### Phase 1 — New repository skeleton  ✅ done (`5d40b06`; pre-commit + CI workflows still to add)
+### Phase 1 — New repository skeleton  ✅ done
 
 Fresh `git init` (recommended name: `tessera-downscaling`; keep the *package* name `tessera_downscaling` so checkpoints, `config.json` keys and notebooks keep working). Files written from scratch:
 
@@ -242,22 +263,22 @@ tessera-downscaling/
 └── tests/             test_convcnp.py, test_heads.py, test_lapse_rate_baseline.py (+ smoke tests)
 ```
 
-### Phase 2 — Import commit (verbatim, reviewable)  ✅ done (`b588808`, `78fad9e`)
+### Phase 2 — Import commit (verbatim, reviewable)  ✅ done
 
 Copy the keep-set **file by file** (an explicit `rsync --files-from` manifest, not a directory copy) from the monorepo checkout — including the untracked `paper/`, `scripts/paper_figures/`, `scripts/extract_tessera_patches_local.py` and the vendored `dataprocessing` files — into the new layout, and commit as `Import from cambridge-mlg/end-to-end-forecasting@68e54b0 (projects/tessera_downscaling)`. No edits in this commit, so every later prune/refactor is a clean diff. Keep the 5 paper notebooks' outputs in this commit (they are the record of the numbers as computed on Isambard); strip afterwards.
 
-### Phase 3 — Decouple paths and packaging
+### Phase 3 — Decouple paths and packaging  ✅ done
 
 1. `src/tessera_downscaling/paths.py`: `DATA_ROOT = Path(os.environ.get("TESSERA_DS_DATA_ROOT", "/data/weather-downscaling"))`, plus `MOUNT_ROOT` (`/tessera/v2/…`), `LANDMASK_DIR`, and `remap(path)` that rewrites the two Isambard prefixes (`/projects/u6do/…/.tmp_output`, `/lus/lfs1aip2/…/.tmp_output`) recorded inside `config.json`/checkpoints to `DATA_ROOT`. Replace: `train.py:1026`, `evaluate.py:199`, `make_paper_figures.py:45,886` (`DATA`, `HPC_TMP`, and `MAPS_OUT` → `DATA_ROOT/paper_figure_outputs/maps_outputs`), `notebooks/_helpers.py:50-59`, `scripts/maps/regions.py:24-27` (+ the other six `/lus/…` `REPO=` lines), `norway_descriptor_spaces.py:88`, `residual_probe_spaces.py:88`, `extract_tessera_patches_local.py:77-81`, `evaluate_simple_baselines.py`, every kept `submit.sh` header, both `reeval_*.sh`, `submit_aurora_forecasts.sh`, `submit_preprocess_*.sh`. (Full inventory: 31 files with `/projects/u6do/…`, 7 with `/lus/…`, ~73 with `.tmp_output`.)
 2. Make the package installable (`uv sync`; `hatchling` build backend) and delete the ~30 `sys.path.insert` bootstraps; move `train.py`/`evaluate.py`/`evaluate_simple_baselines.py` into the package with console entry points; update `tests/test_lapse_rate_baseline.py` to import instead of loading by path.
 3. Slurm-agnostic runner: factor the per-entry loop of `submit.sh` into `scripts/experiments/run_folder.py --folder … --seeds … [--sbatch|--local|--dry-run]` reading `experiments.yaml`; keep the YAML grammar unchanged so `notebooks/_helpers.py` still parses it.
 4. `notebooks`: replace the hard-coded `BASE_DIR`/`RESULTS_ROOT` cells with `from tessera_downscaling.paths import DATA_ROOT`; `nbstripout` them; rely on `*_analysis_outputs/` for stored numbers.
 
-### Phase 4 — Prune (one commit per area, tests green after each)
+### Phase 4 — Prune (one commit per area, tests green after each)  ✅ done
 
 Order: (a) `wind_energy/`, daily/, dead scripts, dead experiment folders, dead notebooks; (b) `tessera_encoder.py` + `--tessera-method` plumbing + raw-patch serving in datasets; (c) heads (Weibull/B-G/Generative) + their train/eval blocks + tests; (d) convcnp mechanisms (embedding kernels, attention, stream, FiLM, projection); (e) datasets (daily, allowlist, global-norm; flat `snapshot_v1` if agreed); (f) `data/tessera.py` if agreed; (g) YAML pruning of the five regional folders; (h) `SUPPORTED_TARGET_VARIABLES`, `--target-variables` choices, docstrings (the `train.py` module docstring is entirely about the dead `--tessera-method` path). Keep `config.get(...)` tolerant reads in `evaluate.py` throughout.
 
-### Phase 5 — Verify
+### Phase 5 — Verify  ✅ 1–3, 6 done; 4–5 wait for `dataset_timestamp_global`
 
 1. `uv run pytest` (4 → 3 files) green.
 2. `tessera-figures --out /tmp/figs` regenerates all 21 PDFs from `/data` with **zero `[warn]` drift lines** (the script cross-checks Fig 2/5/6/8/11/12 numbers against stored expectations and `all_results_tidy.csv`).
@@ -299,7 +320,7 @@ Document this as `DATA.md` in the new repo; the run directories carry **no** cop
 6. Cut `data/tessera.py` (geotessera download extractor) [cut; the local-mount extractor is byte-identical and documented].
 7. Keep the `_tessera_1B-M_2024` folders/runs [drop configs, keep run dirs until submission].
 8. Which optional notebooks survive (`uncertainty_estimation`, `stratified_performance`, `tessera_1bm_variant_shortlist`, `single_folder_analysis`) [keep the first three].
-9. ~~History~~ — done: fresh repo at `/home/pmms2/tessera-downscaling`, verbatim import commit `b588808`.
+9. ~~History~~ — done: fresh repo at `/home/pmms2/tessera-downscaling`, verbatim import commit `0e6ea1c`.
 10. ~~`wind_energy/`~~ — decided: stays in the monorepo for a later separate migration.
 
 ## 6. Gaps found (not blockers, but worth knowing)
