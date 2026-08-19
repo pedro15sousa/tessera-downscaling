@@ -41,6 +41,7 @@ Usage (from the repo root):
         --out-dir <data root>/processed/tile_shortlist \
         --patch-size 128
 """
+
 from __future__ import annotations
 
 import argparse
@@ -70,12 +71,14 @@ LAT_CELL_MIN, LAT_CELL_MAX = -900, 899
 def load_stations(csv_path: Path) -> pd.DataFrame:
     """Load station lat/lon, accepting GHCNh or canonical column names."""
     df = pd.read_csv(csv_path)
-    df = df.rename(columns={
-        "GHCN_ID": "station_id",
-        "LATITUDE": "latitude",
-        "LONGITUDE": "longitude",
-        "ELEVATION": "elevation",
-    })
+    df = df.rename(
+        columns={
+            "GHCN_ID": "station_id",
+            "LATITUDE": "latitude",
+            "LONGITUDE": "longitude",
+            "ELEVATION": "elevation",
+        }
+    )
     if "latitude" not in df.columns or "longitude" not in df.columns:
         msg = (
             f"Expected latitude/longitude (or LATITUDE/LONGITUDE) columns. "
@@ -142,31 +145,45 @@ def tiles_for_bbox(
                 continue  # patch spilled past a pole; no tile exists there
             c_lat = (kj + 0.5) * TILE_DEG
             name = f"grid_{c_lon:.2f}_{c_lat:.2f}"
-            tiles.append((
-                name, round(c_lon, 2), round(c_lat, 2),
-                round(ki * TILE_DEG, 2), round(kj * TILE_DEG, 2),
-                round((ki + 1) * TILE_DEG, 2), round((kj + 1) * TILE_DEG, 2),
-            ))
+            tiles.append(
+                (
+                    name,
+                    round(c_lon, 2),
+                    round(c_lat, 2),
+                    round(ki * TILE_DEG, 2),
+                    round(kj * TILE_DEG, 2),
+                    round((ki + 1) * TILE_DEG, 2),
+                    round((kj + 1) * TILE_DEG, 2),
+                )
+            )
     return tiles
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--station-csv", type=Path, required=True,
+        "--station-csv",
+        type=Path,
+        required=True,
         help="CSV with station locations (GHCNh or canonical lat/lon columns).",
     )
     parser.add_argument(
-        "--out-dir", type=Path, required=True,
+        "--out-dir",
+        type=Path,
+        required=True,
         help="Directory for tessera_tiles_shortlist.csv / .txt.",
     )
     parser.add_argument(
-        "--patch-size", type=int, default=128,
+        "--patch-size",
+        type=int,
+        default=128,
         help="Patch side length in pixels at 10m (default 128; covers 64×64 "
-             "'or larger' with headroom). Sizes the per-station safety margin.",
+        "'or larger' with headroom). Sizes the per-station safety margin.",
     )
     parser.add_argument(
-        "--pixel-res-m", type=float, default=10.0,
+        "--pixel-res-m",
+        type=float,
+        default=10.0,
         help="TESSERA pixel resolution in metres (default 10).",
     )
     args = parser.parse_args()
@@ -179,7 +196,9 @@ def main() -> None:
     for lat, lon in zip(
         stations["latitude"].to_numpy(), stations["longitude"].to_numpy(), strict=False
     ):
-        bbox = compute_patch_bbox(float(lon), float(lat), args.patch_size, args.pixel_res_m)
+        bbox = compute_patch_bbox(
+            float(lon), float(lat), args.patch_size, args.pixel_res_m
+        )
         hits = tiles_for_bbox(*bbox)
         if len(hits) > 1:
             n_multi += 1
@@ -190,13 +209,23 @@ def main() -> None:
             else:
                 rec[6] += 1
 
-    tiles_df = pd.DataFrame(
-        [[name, *vals] for name, vals in tile_records.items()],
-        columns=[
-            "tile_name", "center_lon", "center_lat",
-            "lon_min", "lat_min", "lon_max", "lat_max", "n_stations",
-        ],
-    ).sort_values(["center_lat", "center_lon"]).reset_index(drop=True)
+    tiles_df = (
+        pd.DataFrame(
+            [[name, *vals] for name, vals in tile_records.items()],
+            columns=[
+                "tile_name",
+                "center_lon",
+                "center_lat",
+                "lon_min",
+                "lat_min",
+                "lon_max",
+                "lat_max",
+                "n_stations",
+            ],
+        )
+        .sort_values(["center_lat", "center_lon"])
+        .reset_index(drop=True)
+    )
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
     csv_path = args.out_dir / "tessera_tiles_shortlist.csv"

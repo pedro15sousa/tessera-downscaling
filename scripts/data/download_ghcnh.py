@@ -118,7 +118,7 @@ def open_ghcnh_df(year_id_pair: tuple[int, str]) -> pd.DataFrame:
                 "wind_direction",
                 "wind_speed",
                 "precipitation",
-                "precipitation_6_hour"
+                "precipitation_6_hour",
             ]
 
             if elev_col is not None:
@@ -151,7 +151,7 @@ def open_ghcnh_df(year_id_pair: tuple[int, str]) -> pd.DataFrame:
                 "wind_direction",
                 "wind_speed",
                 "precipitation",
-                "precipitation_6_hour"
+                "precipitation_6_hour",
             ]
             if elev_col is not None:
                 obs_cols.append("Elevation")
@@ -166,19 +166,32 @@ def open_ghcnh_df(year_id_pair: tuple[int, str]) -> pd.DataFrame:
     except Exception:
         return None
 
+
 def main() -> None:
     global RAW_ROOT, PROCESSED_ROOT
 
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument(
-        "--root", type=Path, default=staging_dir(),
+        "--root",
+        type=Path,
+        default=staging_dir(),
         help="Staging root; raw PSVs go to <root>/raw/ghcnh/, 6-hourly NetCDFs to "
-             "<root>/processed/ghcnh/data/ (default: <data root>/_staging).",
+        "<root>/processed/ghcnh/data/ (default: <data root>/_staging).",
     )
-    p.add_argument("--years", type=int, nargs=2, default=[2010, 2023],
-                   metavar=("FIRST", "LAST"), help="Inclusive year range.")
-    p.add_argument("--num-processes", type=int, default=4,
-                   help="Workers for both the download and the parse phase.")
+    p.add_argument(
+        "--years",
+        type=int,
+        nargs=2,
+        default=[2010, 2023],
+        metavar=("FIRST", "LAST"),
+        help="Inclusive year range.",
+    )
+    p.add_argument(
+        "--num-processes",
+        type=int,
+        default=4,
+        help="Workers for both the download and the parse phase.",
+    )
     args = p.parse_args()
     RAW_ROOT = args.root / "raw" / "ghcnh"
     PROCESSED_ROOT = args.root / "processed" / "ghcnh"

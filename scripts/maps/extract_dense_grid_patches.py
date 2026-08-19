@@ -26,6 +26,7 @@ Usage:
 The script is **resumable**: if it crashes or is killed, re-running the
 same command picks up at the next unfinished sub-bbox.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -40,12 +41,22 @@ from tessera_downscaling.paths import processed_dir
 
 # Pre-defined regions (bounding boxes of the dense-map crops).
 PREDEFINED_REGIONS: dict[str, dict[str, float]] = {
-    "alps":         {"lat_min": 45.5, "lat_max": 48.0, "lon_min": 6.0,   "lon_max": 16.0},
-    "norway":       {"lat_min": 58.0, "lat_max": 71.0, "lon_min": 4.0,   "lon_max": 16.0},
-    "iberia":       {"lat_min": 36.0, "lat_max": 43.5, "lon_min": -10.0, "lon_max": 3.0},
-    "british_isles":{"lat_min": 50.0, "lat_max": 59.0, "lon_min": -11.0, "lon_max": 2.0},
-    "north_eu_plain":{"lat_min": 50.0, "lat_max": 55.0, "lon_min": 5.0,  "lon_max": 25.0},
-    "med_coast":    {"lat_min": 36.0, "lat_max": 44.0, "lon_min": -5.0,  "lon_max": 20.0},
+    "alps": {"lat_min": 45.5, "lat_max": 48.0, "lon_min": 6.0, "lon_max": 16.0},
+    "norway": {"lat_min": 58.0, "lat_max": 71.0, "lon_min": 4.0, "lon_max": 16.0},
+    "iberia": {"lat_min": 36.0, "lat_max": 43.5, "lon_min": -10.0, "lon_max": 3.0},
+    "british_isles": {
+        "lat_min": 50.0,
+        "lat_max": 59.0,
+        "lon_min": -11.0,
+        "lon_max": 2.0,
+    },
+    "north_eu_plain": {
+        "lat_min": 50.0,
+        "lat_max": 55.0,
+        "lon_min": 5.0,
+        "lon_max": 25.0,
+    },
+    "med_coast": {"lat_min": 36.0, "lat_max": 44.0, "lon_min": -5.0, "lon_max": 20.0},
 }
 
 
@@ -56,47 +67,66 @@ def main() -> None:
     )
     region_group = parser.add_mutually_exclusive_group(required=True)
     region_group.add_argument(
-        "--region", choices=list(PREDEFINED_REGIONS.keys()),
+        "--region",
+        choices=list(PREDEFINED_REGIONS.keys()),
         help="One of the predefined regions matching the analysis notebook.",
     )
     region_group.add_argument(
-        "--bbox", nargs=4, type=float, metavar=("LAT_MIN", "LAT_MAX", "LON_MIN", "LON_MAX"),
+        "--bbox",
+        nargs=4,
+        type=float,
+        metavar=("LAT_MIN", "LAT_MAX", "LON_MIN", "LON_MAX"),
         help="Custom bounding box. Use --region-name to label the output dir.",
     )
     parser.add_argument(
-        "--region-name", type=str, default=None,
+        "--region-name",
+        type=str,
+        default=None,
         help="Output subfolder name when using --bbox. Required with --bbox.",
     )
     parser.add_argument(
-        "--resolution", type=float, default=0.05,
+        "--resolution",
+        type=float,
+        default=0.05,
         help="Grid spacing in degrees (default: 0.05° ≈ 5km).",
     )
     parser.add_argument(
-        "--year", type=int, default=2024,
+        "--year",
+        type=int,
+        default=2024,
         help="TESSERA embedding year (default: 2024).",
     )
     parser.add_argument(
-        "--patch-size", type=int, default=64,
+        "--patch-size",
+        type=int,
+        default=64,
         help="Patch side length in pixels at 10m resolution (default: 64).",
     )
     parser.add_argument(
-        "--sub-bbox-size", type=float, default=0.3,
+        "--sub-bbox-size",
+        type=float,
+        default=0.3,
         help="Sub-bbox side length for batched mosaic fetching, degrees "
-             "(default: 0.3 → ~5 GB peak mosaic at mid-latitudes).",
+        "(default: 0.3 → ~5 GB peak mosaic at mid-latitudes).",
     )
     parser.add_argument(
-        "--output-dir", type=Path, default=processed_dir("tessera_dense_grid"),
+        "--output-dir",
+        type=Path,
+        default=processed_dir("tessera_dense_grid"),
         help="Parent directory under which the run's output subfolder is "
-             "created (default: <data_root>/processed/tessera_dense_grid).",
+        "created (default: <data_root>/processed/tessera_dense_grid).",
     )
     parser.add_argument(
-        "--embeddings-cache-dir", type=Path, default=None,
+        "--embeddings-cache-dir",
+        type=Path,
+        default=None,
         help="Where geotessera caches downloaded TESSERA tiles. "
-             "Defaults to {output_dir}/{run_name}/_tile_cache. Tiles are "
-             "preserved across runs to avoid re-downloads.",
+        "Defaults to {output_dir}/{run_name}/_tile_cache. Tiles are "
+        "preserved across runs to avoid re-downloads.",
     )
     parser.add_argument(
-        "--no-resume", action="store_true",
+        "--no-resume",
+        action="store_true",
         help="Start fresh, ignoring any existing progress.json.",
     )
     args = parser.parse_args()
@@ -126,8 +156,10 @@ def main() -> None:
 
     # Build the grid.
     grid_points = compute_grid_points(
-        lat_min=lat_min, lat_max=lat_max,
-        lon_min=lon_min, lon_max=lon_max,
+        lat_min=lat_min,
+        lat_max=lat_max,
+        lon_min=lon_min,
+        lon_max=lon_max,
         resolution_deg=args.resolution,
     )
     print(

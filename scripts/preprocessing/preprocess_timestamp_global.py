@@ -102,17 +102,18 @@ logger = logging.getLogger("preprocess_timestamp_global")
 # ---------------------------------------------------------------------------
 
 REGIONS: dict[str, tuple[float, float, float, float]] = {
-    "europe":          (35.0,  75.0,  -24.0,  40.0),
-    "us":              (24.0,  50.0, -125.0, -66.0),
-    "east_asia":       (20.0,  46.0,  100.0, 146.0),
-    "australia":      (-44.0, -10.0,  112.0, 154.0),
-    "southern_africa":(-35.0, -15.0,   15.0,  35.0),
+    "europe": (35.0, 75.0, -24.0, 40.0),
+    "us": (24.0, 50.0, -125.0, -66.0),
+    "east_asia": (20.0, 46.0, 100.0, 146.0),
+    "australia": (-44.0, -10.0, 112.0, 154.0),
+    "southern_africa": (-35.0, -15.0, 15.0, 35.0),
 }
 
 
 # ---------------------------------------------------------------------------
 # Station assignment
 # ---------------------------------------------------------------------------
+
 
 def assign_stations_to_regions(
     stations: pd.DataFrame,
@@ -127,8 +128,10 @@ def assign_stations_to_regions(
 
     for name, (lat_min, lat_max, lon_min, lon_max) in region_bboxes.items():
         in_box = (
-            (lats >= lat_min) & (lats <= lat_max)
-            & (lons >= lon_min) & (lons <= lon_max)
+            (lats >= lat_min)
+            & (lats <= lat_max)
+            & (lons >= lon_min)
+            & (lons <= lon_max)
         )
         newly_assigned = in_box & (assignments == "__none__")
         collision = in_box & (assignments != "__none__")
@@ -157,6 +160,7 @@ def assign_stations_to_regions(
 # ---------------------------------------------------------------------------
 # Per-region ERA5 grid setup
 # ---------------------------------------------------------------------------
+
 
 def build_region_grids(
     region_names: list[str],
@@ -187,12 +191,16 @@ def build_region_grids(
             raise ValueError(f"Unknown region '{name}'. Defined: {list(region_bboxes)}")
         lat_min, lat_max, lon_min, lon_max = region_bboxes[name]
         lat_idx, lon_idx, roll, lats_c, lons_c = compute_grid_crop_indices(
-            lats, lons,
+            lats,
+            lons,
             lat_range=(lat_min, lat_max),
             lon_range=(lon_min, lon_max),
         )
         static_array, static_var_names = load_static_fields(
-            static_path, lat_idx, lon_idx, roll,
+            static_path,
+            lat_idx,
+            lon_idx,
+            roll,
         )
         logger.info(
             f"Region '{name}': grid {len(lats_c)}×{len(lons_c)} cells "
@@ -253,62 +261,96 @@ def write_region_scaffolding(
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main():
     parser = argparse.ArgumentParser(
         description="Preprocess raw ERA5 + GHCNh into a multi-region "
-                    "snapshot (6-hourly) training dataset",
+        "snapshot (6-hourly) training dataset",
     )
-    parser.add_argument("--era5-dir", type=Path, default=staging_dir("processed"),
-                        help="Root containing era5_wb2_quarter_*/data/ subdirectories "
-                             "(default: <data root>/_staging/processed)")
-    parser.add_argument("--ghcnh-dir", type=Path,
-                        default=staging_dir("processed", "ghcnh", "data"),
-                        help="Directory containing GHCNh 6-hourly NetCDF files "
-                             "(default: <data root>/_staging/processed/ghcnh/data)")
-    parser.add_argument("--static-path", type=Path,
-                        default=staging_dir("processed", "era5_static",
-                                            "era5_static_0p25_all.nc"),
-                        help="ERA5 static-fields NetCDF (13 invariant fields on the "
-                             "0.25 deg grid; provided with the data root)")
-    parser.add_argument("--mtpi-csv", type=Path, default=None,
-                        help="Optional CSV (station_id, mtpi) of per-station "
-                             "ALOS mTPI from scripts/data/fetch_station_mtpi.py "
-                             "(the paper's: <data root>/processed/station_mtpi.csv). "
-                             "When given, an `mtpi` column is added to "
-                             "stations.csv, which --use-mtpi runs require "
-                             "(3-feature elevation, delta_elevation, mTPI vector "
-                             "of Vaughan et al. 2022).")
-    parser.add_argument("--station-csv", type=Path,
-                        default=staging_dir("raw", "ghcnh", "station_list.csv"),
-                        help="Global GHCNh station list CSV "
-                             "(default: <data root>/_staging/raw/ghcnh/station_list.csv)")
-    parser.add_argument("--output-dir", type=Path, default=dataset_dir(),
-                        help="Output directory (default: <data root>/dataset_timestamp_global)")
-    parser.add_argument("--start-date", type=str, default="2010-01-01")
-    parser.add_argument("--end-date", type=str, default="2024-01-01",
-                        help="Inclusive. Days without ERA5 files are skipped, so the "
-                             "dataset ends with the WeatherBench2 archive (2023-01-10).")
     parser.add_argument(
-        "--target-variables", type=str, nargs="+",
+        "--era5-dir",
+        type=Path,
+        default=staging_dir("processed"),
+        help="Root containing era5_wb2_quarter_*/data/ subdirectories "
+        "(default: <data root>/_staging/processed)",
+    )
+    parser.add_argument(
+        "--ghcnh-dir",
+        type=Path,
+        default=staging_dir("processed", "ghcnh", "data"),
+        help="Directory containing GHCNh 6-hourly NetCDF files "
+        "(default: <data root>/_staging/processed/ghcnh/data)",
+    )
+    parser.add_argument(
+        "--static-path",
+        type=Path,
+        default=staging_dir("processed", "era5_static", "era5_static_0p25_all.nc"),
+        help="ERA5 static-fields NetCDF (13 invariant fields on the "
+        "0.25 deg grid; provided with the data root)",
+    )
+    parser.add_argument(
+        "--mtpi-csv",
+        type=Path,
+        default=None,
+        help="Optional CSV (station_id, mtpi) of per-station "
+        "ALOS mTPI from scripts/data/fetch_station_mtpi.py "
+        "(the paper's: <data root>/processed/station_mtpi.csv). "
+        "When given, an `mtpi` column is added to "
+        "stations.csv, which --use-mtpi runs require "
+        "(3-feature elevation, delta_elevation, mTPI vector "
+        "of Vaughan et al. 2022).",
+    )
+    parser.add_argument(
+        "--station-csv",
+        type=Path,
+        default=staging_dir("raw", "ghcnh", "station_list.csv"),
+        help="Global GHCNh station list CSV "
+        "(default: <data root>/_staging/raw/ghcnh/station_list.csv)",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=dataset_dir(),
+        help="Output directory (default: <data root>/dataset_timestamp_global)",
+    )
+    parser.add_argument("--start-date", type=str, default="2010-01-01")
+    parser.add_argument(
+        "--end-date",
+        type=str,
+        default="2024-01-01",
+        help="Inclusive. Days without ERA5 files are skipped, so the "
+        "dataset ends with the WeatherBench2 archive (2023-01-10).",
+    )
+    parser.add_argument(
+        "--target-variables",
+        type=str,
+        nargs="+",
         default=list(GHCNH_SNAPSHOT_VARS.keys()),
         choices=list(GHCNH_SNAPSHOT_VARS.keys()),
         help="Snapshot target variables to extract. Default: all supported.",
     )
     parser.add_argument(
-        "--regions", type=str, nargs="+",
+        "--regions",
+        type=str,
+        nargs="+",
         default=list(REGIONS.keys()),
         choices=list(REGIONS.keys()),
         help="Which regions to process. Default: all defined regions.",
     )
     parser.add_argument(
-        "--hours", type=int, nargs="+", default=list(SNAPSHOT_HOURS),
+        "--hours",
+        type=int,
+        nargs="+",
+        default=list(SNAPSHOT_HOURS),
         choices=list(SNAPSHOT_HOURS),
         help="Which hours of day to process. Default: all four 6-hourly slots.",
     )
     parser.add_argument(
-        "--min-valid-episodes", type=int, default=MIN_VALID_EPISODES,
+        "--min-valid-episodes",
+        type=int,
+        default=MIN_VALID_EPISODES,
         help="Minimum valid snapshot observations per station for inclusion. "
-             "Default 0 (no filter).",
+        "Default 0 (no filter).",
     )
     args = parser.parse_args()
 
@@ -323,7 +365,10 @@ def main():
     logger.info(f"Processing hours: {args.hours}")
     region_bboxes = {k: REGIONS[k] for k in args.regions}
     region_grids = build_region_grids(
-        args.regions, args.era5_dir, args.static_path, region_bboxes,
+        args.regions,
+        args.era5_dir,
+        args.static_path,
+        region_bboxes,
     )
     for name, grid in region_grids.items():
         write_region_scaffolding(output_dir, name, grid)
@@ -332,18 +377,25 @@ def main():
     # Step 2: Load all stations, assign to regions, drop unassigned.
     # ------------------------------------------------------------------
     stations_all = pd.read_csv(args.station_csv)
-    stations_all = stations_all.rename(columns={
-        "GHCN_ID": "station_id",
-        "LATITUDE": "latitude",
-        "LONGITUDE": "longitude",
-        "ELEVATION": "elevation",
-    })
+    stations_all = stations_all.rename(
+        columns={
+            "GHCN_ID": "station_id",
+            "LATITUDE": "latitude",
+            "LONGITUDE": "longitude",
+            "ELEVATION": "elevation",
+        }
+    )
     # Drops missing-elevation rows AND sentinel/out-of-range values that
     # GHCN encodes as -999.9 or 9999. See helpers.filter_valid_elevation.
     stations_all = filter_valid_elevation(stations_all, logger=logger)
-    stations_all = stations_all[[
-        "station_id", "latitude", "longitude", "elevation",
-    ]]
+    stations_all = stations_all[
+        [
+            "station_id",
+            "latitude",
+            "longitude",
+            "elevation",
+        ]
+    ]
     stations = assign_stations_to_regions(stations_all, region_bboxes)
     station_ids = stations["station_id"].values
 
@@ -389,8 +441,7 @@ def main():
     #     stations. Shared at the top level, keyed by station index.
     # ------------------------------------------------------------------
     valid_episode_counts: dict[str, np.ndarray] = {
-        v: np.zeros(len(station_ids), dtype=np.int32)
-        for v in args.target_variables
+        v: np.zeros(len(station_ids), dtype=np.int32) for v in args.target_variables
     }
 
     episodes_processed = 0
@@ -428,8 +479,12 @@ def main():
                 continue
             grid = region_grids[name]
             era5_snap = aggregate_era5_snapshot(
-                args.era5_dir, date_str, hour,
-                grid["lat_indices"], grid["lon_indices"], grid["roll_amount"],
+                args.era5_dir,
+                date_str,
+                hour,
+                grid["lat_indices"],
+                grid["lon_indices"],
+                grid["roll_amount"],
             )
             if era5_snap is None:
                 any_era5_missing = True
@@ -443,7 +498,10 @@ def main():
         # GHCNh aggregated once for all regional stations.
         if not ghcnh_path.exists() or missing_vars:
             ghcnh_results = aggregate_ghcnh_snapshot(
-                args.ghcnh_dir, date_str, hour, station_ids,
+                args.ghcnh_dir,
+                date_str,
+                hour,
+                station_ids,
                 target_variables=args.target_variables,
             )
             np.savez_compressed(ghcnh_path, **ghcnh_results)
@@ -473,7 +531,7 @@ def main():
     if args.min_valid_episodes > 0:
         valid_mask = np.zeros(len(station_ids), dtype=bool)
         for counts in valid_episode_counts.values():
-            valid_mask |= (counts >= args.min_valid_episodes)
+            valid_mask |= counts >= args.min_valid_episodes
         logger.info(
             f"Station filter (min_valid_episodes={args.min_valid_episodes}): "
             f"{int(valid_mask.sum())}/{len(stations)} stations kept"
@@ -514,15 +572,22 @@ def main():
     # lazily: two stats files per region, one including static fields and
     # one not.
     # ------------------------------------------------------------------
-    valid_timestamps = sorted([
-        f"{d}-{h:02d}" for (d, h) in episodes
-        if all(
-            (output_dir / "regions" / name / "era5_snapshot" / f"{d}-{h:02d}.npy").exists()
-            for name in args.regions
-        )
-    ])
+    valid_timestamps = sorted(
+        [
+            f"{d}-{h:02d}"
+            for (d, h) in episodes
+            if all(
+                (
+                    output_dir / "regions" / name / "era5_snapshot" / f"{d}-{h:02d}.npy"
+                ).exists()
+                for name in args.regions
+            )
+        ]
+    )
     temporal_split = partition_timestamps_by_temporal_split(
-        valid_timestamps, train_end=TRAIN_END, val_end=VAL_END,
+        valid_timestamps,
+        train_end=TRAIN_END,
+        val_end=VAL_END,
     )
 
     for region_name in args.regions:
@@ -650,20 +715,22 @@ def _compute_region_normalisation_stats(
             n_pixels += combined.shape[1] * combined.shape[2]
 
         mean = running_sum / n_pixels
-        std = np.sqrt(running_sq_sum / n_pixels - mean ** 2)
+        std = np.sqrt(running_sq_sum / n_pixels - mean**2)
         std = np.maximum(std, 1e-8)
         return mean.astype(np.float32), std.astype(np.float32)
 
     mean_full, std_full = _accumulate(include_static=True)
     np.savez(
         region_dir / "normalisation_stats.npz",
-        era5_mean=mean_full, era5_std=std_full,
+        era5_mean=mean_full,
+        era5_std=std_full,
     )
 
     mean_nostatic, std_nostatic = _accumulate(include_static=False)
     np.savez(
         region_dir / "normalisation_stats_no_static.npz",
-        era5_mean=mean_nostatic, era5_std=std_nostatic,
+        era5_mean=mean_nostatic,
+        era5_std=std_nostatic,
     )
 
     logger.info(

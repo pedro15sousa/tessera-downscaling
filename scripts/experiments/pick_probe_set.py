@@ -53,6 +53,7 @@ Example: build the Norway probe set of the paper
 
 Pass ``--description "..."`` to override the auto-generated description.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -67,68 +68,92 @@ import pandas as pd
 # CLI
 # ---------------------------------------------------------------------------
 
+
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
         description=__doc__.split("\n\n")[0],
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     p.add_argument(
-        "--dataset-dir", type=Path, required=True,
+        "--dataset-dir",
+        type=Path,
+        required=True,
         help="Path to the dataset directory containing stations.csv "
-             "(e.g. <data root>/dataset_timestamp_global).",
+        "(e.g. <data root>/dataset_timestamp_global).",
     )
     p.add_argument(
-        "--vae-latents-path", type=Path, required=True,
+        "--vae-latents-path",
+        type=Path,
+        required=True,
         help="Path to the VAE-latents .npy file. A station is considered "
-             "TESSERA-valid iff its row in this array has no NaN.",
+        "TESSERA-valid iff its row in this array has no NaN.",
     )
     p.add_argument(
-        "--vae-latents-csv", type=Path, required=True,
+        "--vae-latents-csv",
+        type=Path,
+        required=True,
         help="CSV row-aligned with --vae-latents-path. Must contain a "
-             "station_id column.",
+        "station_id column.",
     )
     p.add_argument(
-        "--region", type=str, required=True,
+        "--region",
+        type=str,
+        required=True,
         help="Dataset region name to filter by (e.g. 'europe'). Matched "
-             "against the 'region' column of stations.csv.",
+        "against the 'region' column of stations.csv.",
     )
     p.add_argument(
-        "--spatial-split", type=str, default="train",
+        "--spatial-split",
+        type=str,
+        default="train",
         choices=["train", "test", "all"],
         help="Source split for the probe pool. Default 'train'.",
     )
     p.add_argument(
-        "--bbox-lat", type=float, nargs=2, metavar=("LAT_MIN", "LAT_MAX"),
+        "--bbox-lat",
+        type=float,
+        nargs=2,
+        metavar=("LAT_MIN", "LAT_MAX"),
         required=True,
         help="Latitude bounding box (degrees). Stations with latitude in "
-             "[LAT_MIN, LAT_MAX] (inclusive) are kept.",
+        "[LAT_MIN, LAT_MAX] (inclusive) are kept.",
     )
     p.add_argument(
-        "--bbox-lon", type=float, nargs=2, metavar=("LON_MIN", "LON_MAX"),
+        "--bbox-lon",
+        type=float,
+        nargs=2,
+        metavar=("LON_MIN", "LON_MAX"),
         required=True,
         help="Longitude bounding box (degrees). Stations with longitude in "
-             "[LON_MIN, LON_MAX] (inclusive) are kept.",
+        "[LON_MIN, LON_MAX] (inclusive) are kept.",
     )
     p.add_argument(
-        "--elev-min", type=float, default=None,
+        "--elev-min",
+        type=float,
+        default=None,
         help="Optional elevation floor in metres. Stations with elevation "
-             "< this value are excluded. Omit for no elevation filter.",
+        "< this value are excluded. Omit for no elevation filter.",
     )
     p.add_argument(
-        "--out-dir", type=Path, required=True,
+        "--out-dir",
+        type=Path,
+        required=True,
         help="Destination experiment folder. The file probe_station_ids.json "
-             "will be written here. Folder must already exist (the script "
-             "won't auto-create — that's the experiment author's call).",
+        "will be written here. Folder must already exist (the script "
+        "won't auto-create — that's the experiment author's call).",
     )
     p.add_argument(
-        "--description", type=str, default=None,
+        "--description",
+        type=str,
+        default=None,
         help="Optional free-text description for the JSON's 'description' "
-             "field. Auto-generated from bbox/elev/region if omitted.",
+        "field. Auto-generated from bbox/elev/region if omitted.",
     )
     p.add_argument(
-        "--force", action="store_true",
+        "--force",
+        action="store_true",
         help="Overwrite probe_station_ids.json if it already exists. "
-             "Default: refuse and exit non-zero.",
+        "Default: refuse and exit non-zero.",
     )
     return p.parse_args()
 
@@ -137,14 +162,21 @@ def _parse_args() -> argparse.Namespace:
 # Filtering
 # ---------------------------------------------------------------------------
 
+
 def _load_stations(dataset_dir: Path) -> pd.DataFrame:
     csv_path = dataset_dir / "stations.csv"
     if not csv_path.exists():
         sys.exit(f"ERROR: stations.csv not found at {csv_path}.")
     stations = pd.read_csv(csv_path)
     stations["station_id"] = stations["station_id"].astype(str)
-    required_cols = {"station_id", "region", "spatial_split",
-                     "latitude", "longitude", "elevation"}
+    required_cols = {
+        "station_id",
+        "region",
+        "spatial_split",
+        "latitude",
+        "longitude",
+        "elevation",
+    }
     missing = required_cols - set(stations.columns)
     if missing:
         sys.exit(
@@ -155,7 +187,8 @@ def _load_stations(dataset_dir: Path) -> pd.DataFrame:
 
 
 def _load_vae_valid_ids(
-    latents_path: Path, csv_path: Path,
+    latents_path: Path,
+    csv_path: Path,
 ) -> set[str]:
     """Return the set of station_ids with non-NaN VAE latent rows.
 
@@ -169,9 +202,7 @@ def _load_vae_valid_ids(
     csv = pd.read_csv(csv_path)
     csv["station_id"] = csv["station_id"].astype(str)
     if "station_id" not in csv.columns:
-        sys.exit(
-            f"ERROR: VAE latents CSV {csv_path} has no station_id column."
-        )
+        sys.exit(f"ERROR: VAE latents CSV {csv_path} has no station_id column.")
     latents = np.load(str(latents_path), mmap_mode="r")
     if latents.shape[0] != len(csv):
         sys.exit(
@@ -220,8 +251,10 @@ def _filter_probe_set(
     )
     n_post_bbox = int(mask.sum())
     print(f"  region+spatial_split pool:        {n_pool}")
-    print(f"  after bbox lat=[{lat_min},{lat_max}] lon=[{lon_min},{lon_max}]:  "
-          f"{n_post_bbox}")
+    print(
+        f"  after bbox lat=[{lat_min},{lat_max}] lon=[{lon_min},{lon_max}]:  "
+        f"{n_post_bbox}"
+    )
 
     if elev_min is not None:
         mask &= stations["elevation"] >= elev_min
@@ -250,6 +283,7 @@ def _filter_probe_set(
 # Output
 # ---------------------------------------------------------------------------
 
+
 def _build_payload(
     probe_ids: list[str],
     n_pool: int,
@@ -276,15 +310,15 @@ def _build_payload(
         )
         description = ", ".join(bits[:1]) + " " + " ".join(bits[1:])
     return {
-        "probe_station_ids":  probe_ids,
-        "n_probe":            len(probe_ids),
-        "n_pool":             n_pool,
-        "fraction_actual":    len(probe_ids) / n_pool,
-        "selection_method":   selection_method,
-        "bbox_lat":           list(bbox_lat),
-        "bbox_lon":           list(bbox_lon),
-        "elev_min_m":         elev_min,
-        "description":        description,
+        "probe_station_ids": probe_ids,
+        "n_probe": len(probe_ids),
+        "n_pool": n_pool,
+        "fraction_actual": len(probe_ids) / n_pool,
+        "selection_method": selection_method,
+        "bbox_lat": list(bbox_lat),
+        "bbox_lon": list(bbox_lon),
+        "elev_min_m": elev_min,
+        "description": description,
     }
 
 
@@ -311,7 +345,8 @@ def main() -> None:
 
     print(f"Loading VAE-valid station IDs from {args.vae_latents_path.name}...")
     vae_valid_ids = _load_vae_valid_ids(
-        args.vae_latents_path, args.vae_latents_csv,
+        args.vae_latents_path,
+        args.vae_latents_csv,
     )
     print(f"  {len(vae_valid_ids)} stations have non-NaN VAE latents.")
 
@@ -339,10 +374,12 @@ def main() -> None:
     out_path.write_text(json.dumps(payload, indent=2))
     print()
     print(f"Wrote {out_path}")
-    print(f"  n_probe={payload['n_probe']}, "
-          f"n_pool={payload['n_pool']}, "
-          f"fraction_actual={payload['fraction_actual']:.4f}, "
-          f"selection_method={payload['selection_method']}")
+    print(
+        f"  n_probe={payload['n_probe']}, "
+        f"n_pool={payload['n_pool']}, "
+        f"fraction_actual={payload['fraction_actual']:.4f}, "
+        f"selection_method={payload['selection_method']}"
+    )
 
 
 if __name__ == "__main__":

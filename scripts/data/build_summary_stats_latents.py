@@ -59,49 +59,80 @@ def parse_args() -> argparse.Namespace:
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    p.add_argument("--tessera-path", required=True, type=Path,
-                   help="Path to patch_embeddings_*.npy of shape (N, 64, 64, 128).")
-    p.add_argument("--tessera-station-csv", required=True, type=Path,
-                   help="CSV row-aligned with the patches file (station_id column).")
-    p.add_argument("--dataset-stations-csv", required=True, type=Path,
-                   help="Dataset's stations.csv with station_id + spatial_split columns. "
-                        "Only spatial_split=='train' rows contribute to channel-selection variance.")
-    p.add_argument("--output-dir", required=True, type=Path,
-                   help="Where to write station_summary_stats_dim{N}.npy + meta JSON.")
-    p.add_argument("--dims", default="16,64",
-                   help="Comma-separated output dims. Each must be a multiple of 4 "
-                        "(4 stats per channel: mean, std, p10, p90). Default: 16,64.")
-    p.add_argument("--chunk-size", type=int, default=128,
-                   help="Stations per chunk for streaming. Peak RAM ≈ chunk_size * 2 MB.")
-    p.add_argument("--force", action="store_true",
-                   help="Overwrite existing output files.")
     p.add_argument(
-        "--outlier-threshold", type=float, default=1000.0,
+        "--tessera-path",
+        required=True,
+        type=Path,
+        help="Path to patch_embeddings_*.npy of shape (N, 64, 64, 128).",
+    )
+    p.add_argument(
+        "--tessera-station-csv",
+        required=True,
+        type=Path,
+        help="CSV row-aligned with the patches file (station_id column).",
+    )
+    p.add_argument(
+        "--dataset-stations-csv",
+        required=True,
+        type=Path,
+        help="Dataset's stations.csv with station_id + spatial_split columns. "
+        "Only spatial_split=='train' rows contribute to channel-selection variance.",
+    )
+    p.add_argument(
+        "--output-dir",
+        required=True,
+        type=Path,
+        help="Where to write station_summary_stats_dim{N}.npy + meta JSON.",
+    )
+    p.add_argument(
+        "--dims",
+        default="16,64",
+        help="Comma-separated output dims. Each must be a multiple of 4 "
+        "(4 stats per channel: mean, std, p10, p90). Default: 16,64.",
+    )
+    p.add_argument(
+        "--chunk-size",
+        type=int,
+        default=128,
+        help="Stations per chunk for streaming. Peak RAM ≈ chunk_size * 2 MB.",
+    )
+    p.add_argument(
+        "--force", action="store_true", help="Overwrite existing output files."
+    )
+    p.add_argument(
+        "--outlier-threshold",
+        type=float,
+        default=1000.0,
         help="Patch-level outlier filter (mirrors TESSERA patch-encoder repo "
-             "at src/common/dataset.py:66). A patch is flagged outlier and its "
-             "output row set to NaN if any of its 64*64*128 values is "
-             "non-finite OR exceeds this threshold in absolute value. "
-             "Default 1000.0 matches the upstream VAE training pipeline.",
+        "at src/common/dataset.py:66). A patch is flagged outlier and its "
+        "output row set to NaN if any of its 64*64*128 values is "
+        "non-finite OR exceeds this threshold in absolute value. "
+        "Default 1000.0 matches the upstream VAE training pipeline.",
     )
     p.add_argument(
-        "--center-crop", type=int, default=0,
+        "--center-crop",
+        type=int,
+        default=0,
         help="If > 0, statistics (and the outlier filter) are computed over "
-             "the central crop x crop spatial window of each patch instead of "
-             "its full extent. Use 64 on the p128 extractions so the stats "
-             "see exactly the crop64 VAE encoder's input window (~640 m).",
+        "the central crop x crop spatial window of each patch instead of "
+        "its full extent. Use 64 on the p128 extractions so the stats "
+        "see exactly the crop64 VAE encoder's input window (~640 m).",
     )
     p.add_argument(
-        "--align-nan-mask-to", type=Path, default=None,
+        "--align-nan-mask-to",
+        type=Path,
+        default=None,
         help="Optional station-aligned VAE-latents .npy. After the stats are "
-             "computed, every station whose row in this file contains NaN is "
-             "also set to NaN in the output, so the dataset loader's NaN "
-             "filter yields the same station set as the reference latent arm "
-             "(plus any rows the stats pass itself flagged as outliers).",
+        "computed, every station whose row in this file contains NaN is "
+        "also set to NaN in the output, so the dataset loader's NaN "
+        "filter yields the same station set as the reference latent arm "
+        "(plus any rows the stats pass itself flagged as outliers).",
     )
     p.add_argument(
-        "--output-prefix", default="station_summary_stats",
+        "--output-prefix",
+        default="station_summary_stats",
         help="Output basename prefix; files are written as "
-             "<prefix>_dim{N}.npy with a sibling _meta.json.",
+        "<prefix>_dim{N}.npy with a sibling _meta.json.",
     )
     return p.parse_args()
 
@@ -130,13 +161,18 @@ def build_train_mask(
         )
 
     # Map station_id -> spatial_split via dataset (subset of tessera).
-    id_to_split = dict(zip(
-        dataset["station_id"].astype(str),
-        dataset["spatial_split"].astype(str), strict=False,
-    ))
+    id_to_split = dict(
+        zip(
+            dataset["station_id"].astype(str),
+            dataset["spatial_split"].astype(str),
+            strict=False,
+        )
+    )
     train_mask = np.array(
-        [id_to_split.get(str(sid), "") == "train"
-         for sid in tessera["station_id"].values],
+        [
+            id_to_split.get(str(sid), "") == "train"
+            for sid in tessera["station_id"].values
+        ],
         dtype=bool,
     )
     return train_mask, tessera["station_id"].values
@@ -176,9 +212,8 @@ def compute_per_station_channel_means(
         # through .max(...) so ~np.isfinite catches them together with the
         # explicit magnitude check.
         max_abs_per_patch = np.abs(chunk).max(axis=(1, 2, 3))
-        is_outlier = (
-            ~np.isfinite(max_abs_per_patch)
-            | (max_abs_per_patch > outlier_threshold)
+        is_outlier = ~np.isfinite(max_abs_per_patch) | (
+            max_abs_per_patch > outlier_threshold
         )
         n_outliers += int(is_outlier.sum())
 
@@ -247,9 +282,8 @@ def compute_stats_for_selected(
             chunk = np.asarray(patches[start:end])
 
         max_abs_per_patch = np.abs(chunk).max(axis=(1, 2, 3))
-        is_outlier = (
-            ~np.isfinite(max_abs_per_patch)
-            | (max_abs_per_patch > outlier_threshold)
+        is_outlier = ~np.isfinite(max_abs_per_patch) | (
+            max_abs_per_patch > outlier_threshold
         )
         keep_local = np.where(~is_outlier)[0]
         if keep_local.size > 0:
@@ -258,15 +292,17 @@ def compute_stats_for_selected(
             kept_flat = kept_sel.reshape(kept_sel.shape[0], -1, k)
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", category=RuntimeWarning)
-                means = np.nanmean(kept_flat, axis=1, dtype=np.float64).astype(np.float32)
-                stds  = np.nanstd(kept_flat,  axis=1, dtype=np.float64).astype(np.float32)
-                p10s  = np.nanpercentile(kept_flat, 10, axis=1).astype(np.float32)
-                p90s  = np.nanpercentile(kept_flat, 90, axis=1).astype(np.float32)
+                means = np.nanmean(kept_flat, axis=1, dtype=np.float64).astype(
+                    np.float32
+                )
+                stds = np.nanstd(kept_flat, axis=1, dtype=np.float64).astype(np.float32)
+                p10s = np.nanpercentile(kept_flat, 10, axis=1).astype(np.float32)
+                p90s = np.nanpercentile(kept_flat, 90, axis=1).astype(np.float32)
             tgt_rows = start + keep_local
-            out[tgt_rows, 0*k:1*k] = means
-            out[tgt_rows, 1*k:2*k] = stds
-            out[tgt_rows, 2*k:3*k] = p10s
-            out[tgt_rows, 3*k:4*k] = p90s
+            out[tgt_rows, 0 * k : 1 * k] = means
+            out[tgt_rows, 1 * k : 2 * k] = stds
+            out[tgt_rows, 2 * k : 3 * k] = p10s
+            out[tgt_rows, 3 * k : 4 * k] = p90s
         chunk_count += 1
         if chunk_count % log_every == 0 or end == n_stations:
             pct = 100 * end // n_stations
@@ -288,8 +324,7 @@ def main() -> None:
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
     target_paths = {
-        d: args.output_dir / f"{args.output_prefix}_dim{d}.npy"
-        for d in dims
+        d: args.output_dir / f"{args.output_prefix}_dim{d}.npy" for d in dims
     }
     if not args.force:
         existing = [p for p in target_paths.values() if p.exists()]
@@ -310,7 +345,7 @@ def main() -> None:
     n_train = int(train_mask.sum())
     logger.info(
         f"  Total tessera rows: {n_stations:,}; "
-        f"train stations in dataset: {n_train:,} ({100*n_train/n_stations:.1f}%)"
+        f"train stations in dataset: {n_train:,} ({100 * n_train / n_stations:.1f}%)"
     )
     if n_train == 0:
         raise RuntimeError(
@@ -346,19 +381,23 @@ def main() -> None:
         h0, w0 = (h - c) // 2, (w - c) // 2
         crop = (slice(h0, h0 + c), slice(w0, w0 + c))
         logger.info(
-            f"  Central crop: [{h0}:{h0+c}, {w0}:{w0+c}] of {h}x{w} "
+            f"  Central crop: [{h0}:{h0 + c}, {w0}:{w0 + c}] of {h}x{w} "
             f"({c}x{c} window)"
         )
 
     # ---- Step 3: Pass 1 — per-station per-channel means ----
     logger.info(f"Pass 1: computing per-station means across {n_channels} channels...")
     per_station_means, n_outliers = compute_per_station_channel_means(
-       patches, n_stations, n_channels, args.chunk_size, args.outlier_threshold,
-       crop=crop,
+        patches,
+        n_stations,
+        n_channels,
+        args.chunk_size,
+        args.outlier_threshold,
+        crop=crop,
     )
     logger.info(
-       f"  Outlier patches (|x|>{args.outlier_threshold:.0f} or non-finite): "
-       f"{n_outliers:,}/{n_stations:,} ({100*n_outliers/n_stations:.2f}%)"
+        f"  Outlier patches (|x|>{args.outlier_threshold:.0f} or non-finite): "
+        f"{n_outliers:,}/{n_stations:,} ({100 * n_outliers / n_stations:.2f}%)"
     )
 
     # ---- Step 4: channel selection (do once for the max-K, slice prefixes for smaller dims) ----
@@ -368,7 +407,9 @@ def main() -> None:
         f"(n_train={n_train:,})..."
     )
     all_selected, channel_variances = select_top_k_channels(
-        per_station_means, train_mask, max_k,
+        per_station_means,
+        train_mask,
+        max_k,
     )
     logger.info(
         f"  Variance (top-{max_k}): "
@@ -385,7 +426,11 @@ def main() -> None:
             f"-> stats {{mean, std, p10, p90}} -> {d}-d output"
         )
         out = compute_stats_for_selected(
-            patches, n_stations, selected, args.chunk_size, args.outlier_threshold,
+            patches,
+            n_stations,
+            selected,
+            args.chunk_size,
+            args.outlier_threshold,
             crop=crop,
         )
 
@@ -442,7 +487,9 @@ def main() -> None:
             ),
             "n_channels_selected": int(k),
             "selected_channel_indices": [int(c) for c in selected.tolist()],
-            "selected_channel_variances": [float(channel_variances[c]) for c in selected],
+            "selected_channel_variances": [
+                float(channel_variances[c]) for c in selected
+            ],
             "channel_selection_rule": (
                 "top-K by cross-train-station variance of per-station "
                 "per-channel means (over patch spatial dims), after applying "
@@ -460,7 +507,8 @@ def main() -> None:
             "n_nan_rows_pre_vae_alignment": n_nan_pre_align,
             "nan_mask_aligned_to_vae": (
                 str(args.align_nan_mask_to)
-                if args.align_nan_mask_to is not None else None
+                if args.align_nan_mask_to is not None
+                else None
             ),
         }
         with open(meta_path, "w") as f:

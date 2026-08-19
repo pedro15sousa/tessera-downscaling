@@ -16,6 +16,8 @@ import pytest
 
 from tessera_downscaling.baselines import (
     DEFAULT_LAPSE_RATE_K_PER_M as DEFAULT_LAPSE_RATE,
+)
+from tessera_downscaling.baselines import (
     apply_lapse_rate_correction,
 )
 

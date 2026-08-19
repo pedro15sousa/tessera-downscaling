@@ -79,9 +79,7 @@ def load_vae_latents(
 
     valid_mask = ~np.isnan(latents).any(axis=1)
 
-    id_to_row = {
-        sid: i for i, sid in enumerate(stations["station_id"].values)
-    }
+    id_to_row = {sid: i for i, sid in enumerate(stations["station_id"].values)}
 
     return latents, id_to_row, valid_mask
 

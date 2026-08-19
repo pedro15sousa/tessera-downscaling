@@ -11,6 +11,7 @@ Tiles are cached under <data_root>/processed/dem_cache/ so re-runs are instant.
 
   REGION=norway uv run python scripts/maps/fetch_dem.py
 """
+
 import gzip
 import math
 import urllib.request
@@ -29,8 +30,8 @@ BASEURL = "https://elevation-tiles-prod.s3.amazonaws.com/skadi"
 
 
 def tile_name(tlat, tlon):
-    ns = ("N%02d" % tlat) if tlat >= 0 else ("S%02d" % -tlat)
-    ew = ("E%03d" % tlon) if tlon >= 0 else ("W%03d" % -tlon)
+    ns = f"N{tlat:02d}" if tlat >= 0 else f"S{-tlat:02d}"
+    ew = f"E{tlon:03d}" if tlon >= 0 else f"W{-tlon:03d}"
     return ns, ew
 
 
@@ -48,7 +49,7 @@ def load_tile(tlat, tlon):
     raw = fn.read_bytes()
     n = int((len(raw) / 2) ** 0.5)
     a = np.frombuffer(raw, dtype=">i2").reshape(n, n).astype(np.float32)
-    a[a < -1000] = np.nan          # SRTM voids / sea
+    a[a < -1000] = np.nan  # SRTM voids / sea
     return a, n
 
 
@@ -68,7 +69,7 @@ def main():
 
     for (tlat, tlon), idxs in sorted(tiles.items()):
         idxs = np.array(idxs)
-        if not vm[idxs].any():          # skip ocean-only tiles
+        if not vm[idxs].any():  # skip ocean-only tiles
             continue
         res = load_tile(tlat, tlon)
         if res is None:
@@ -80,16 +81,25 @@ def main():
         y0, x0 = np.floor(fy).astype(int), np.floor(fx).astype(int)
         wy, wx = fy - y0, fx - x0
         c = np.stack([a[y0, x0], a[y0, x0 + 1], a[y0 + 1, x0], a[y0 + 1, x0 + 1]], 0)
-        val = c[0] * (1 - wy) * (1 - wx) + c[1] * (1 - wy) * wx + c[2] * wy * (1 - wx) + c[3] * wy * wx
+        val = (
+            c[0] * (1 - wy) * (1 - wx)
+            + c[1] * (1 - wy) * wx
+            + c[2] * wy * (1 - wx)
+            + c[3] * wy * wx
+        )
         bad = ~np.isfinite(val)
         if bad.any():
-            val[bad] = np.nanmean(c[:, bad], axis=0)   # fall back to valid corners
+            val[bad] = np.nanmean(c[:, bad], axis=0)  # fall back to valid corners
         dem[idxs] = val
-        print(f"  tile {tlat:+03d},{tlon:+04d} cells={len(idxs):4d} elev[{np.nanmin(val):.0f},{np.nanmax(val):.0f}]")
+        print(
+            f"  tile {tlat:+03d},{tlon:+04d} cells={len(idxs):4d} elev[{np.nanmin(val):.0f},{np.nanmax(val):.0f}]"
+        )
 
     np.save(OUT, dem)
-    print(f"SAVED {OUT.name}: {int(np.isfinite(dem).sum())}/{N} cells, "
-          f"valid-land dem max {np.nanmax(np.where(vm, dem, np.nan)):.0f} m")
+    print(
+        f"SAVED {OUT.name}: {int(np.isfinite(dem).sum())}/{N} cells, "
+        f"valid-land dem max {np.nanmax(np.where(vm, dem, np.nan)):.0f} m"
+    )
 
 
 if __name__ == "__main__":

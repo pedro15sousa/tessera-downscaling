@@ -66,24 +66,27 @@ the same inputs by scripts/paper/make_paper_figures.py fig11/fig12):
                                               overlapping / adjacent / isolated)
         descriptor_spaces_report.json        (all three groups, all metrics)
 """
+
 from __future__ import annotations
+
 import json
 import os
 from pathlib import Path
 
+import matplotlib
 import numpy as np
 import pandas as pd
-import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from scipy.interpolate import RegularGridInterpolator
-from sklearn.preprocessing import StandardScaler
-from sklearn.neighbors import NearestNeighbors
-from sklearn.linear_model import LogisticRegression
-from sklearn.pipeline import make_pipeline
-from sklearn.model_selection import cross_val_score, StratifiedKFold
 from sklearn.decomposition import PCA
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import StratifiedKFold, cross_val_score
+from sklearn.neighbors import NearestNeighbors
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
 
 from tessera_downscaling.paths import dataset_dir, processed_dir
 
@@ -96,7 +99,8 @@ NB_LAT, NB_LON = (58.0, 71.0), (4.0, 31.0)
 # ---- TESSERA latents generation (pick ONE) -----------------------------
 # Current main: TESSERA v2 "1B-M", 2017 embeddings (crop64_lat16_auxon).
 LATENTS_NPY = processed_dir(
-    "vae_tessera_1B-M", "station_latents_1B-M_p128_2017_crop64_lat16_grad0.5_auxon.npy")
+    "vae_tessera_1B-M", "station_latents_1B-M_p128_2017_crop64_lat16_grad0.5_auxon.npy"
+)
 # Previous main: TESSERA v1 16-d latents.
 # LATENTS_NPY = processed_dir("station_latents_lat16_grad0.5.npy")
 
@@ -108,7 +112,8 @@ lat_of = {s: i for i, s in enumerate(ll["station_id"])}
 st = pd.read_csv(DATASET / "stations.csv")
 st["station_id"] = st["station_id"].astype(str)
 st["lrow"] = st["station_id"].map(lat_of)
-st = st[st["lrow"].notna()].copy(); st["lrow"] = st["lrow"].astype(int)
+st = st[st["lrow"].notna()].copy()
+st["lrow"] = st["lrow"].astype(int)
 st = st[~np.isnan(lat[st["lrow"].to_numpy()]).any(axis=1)].reset_index(drop=True)
 Z16 = lat[st["lrow"].to_numpy()]
 
@@ -128,29 +133,41 @@ Z16 = lat[st["lrow"].to_numpy()]
 # whether a persistent surface analogue exists, so the time-invariant static
 # input is the right space; the encoded-latent version is not used.
 _eu_static = DATASET / "regions" / "europe"
-_sfield = np.load(_eu_static / "static_fields.npy")    # (n_static, H, W)
-_glat = np.load(_eu_static / "lats.npy")               # (H,) increasing
-_glon = np.load(_eu_static / "lons.npy")               # (W,) increasing
-_qpts = np.column_stack([
-    np.clip(st["latitude"].to_numpy(),  _glat.min(), _glat.max()),
-    np.clip(st["longitude"].to_numpy(), _glon.min(), _glon.max()),
-])
-ERA5_STATIC = np.column_stack([
-    RegularGridInterpolator((_glat, _glon), _sfield[c], method="linear",
-                            bounds_error=False, fill_value=None)(_qpts)
-    for c in range(_sfield.shape[0])
-]).astype(np.float32)
+_sfield = np.load(_eu_static / "static_fields.npy")  # (n_static, H, W)
+_glat = np.load(_eu_static / "lats.npy")  # (H,) increasing
+_glon = np.load(_eu_static / "lons.npy")  # (W,) increasing
+_qpts = np.column_stack(
+    [
+        np.clip(st["latitude"].to_numpy(), _glat.min(), _glat.max()),
+        np.clip(st["longitude"].to_numpy(), _glon.min(), _glon.max()),
+    ]
+)
+ERA5_STATIC = np.column_stack(
+    [
+        RegularGridInterpolator(
+            (_glat, _glon),
+            _sfield[c],
+            method="linear",
+            bounds_error=False,
+            fill_value=None,
+        )(_qpts)
+        for c in range(_sfield.shape[0])
+    ]
+).astype(np.float32)
 
-in_nb = (st.latitude.between(*NB_LAT) & st.longitude.between(*NB_LON)
-         & (st.region == "europe")).to_numpy()
+in_nb = (
+    st.latitude.between(*NB_LAT)
+    & st.longitude.between(*NB_LON)
+    & (st.region == "europe")
+).to_numpy()
 eu = (st.region == "europe").to_numpy()
 tr = (st.spatial_split == "train").to_numpy()
 te = (st.spatial_split == "test").to_numpy()
 groups = {
-    "norway_test":    in_nb & eu & te,
-    "norway_probe":   in_nb & eu & tr,
-    "nonnorway_test": eu & te & ~in_nb,   # the held-out "control" group
-    "rest_train":     eu & tr & ~in_nb,
+    "norway_test": in_nb & eu & te,
+    "norway_probe": in_nb & eu & tr,
+    "nonnorway_test": eu & te & ~in_nb,  # the held-out "control" group
+    "rest_train": eu & tr & ~in_nb,
 }
 
 # Hand-crafted land-surface descriptor: the 17-feature GEE vector built by
@@ -174,8 +191,10 @@ _EXTRA_NPY = processed_dir("extra_descriptors.npy")
 _WITH_EXTRA = os.environ.get("WITH_EXTRA_DESCRIPTORS", "0") not in ("0", "", "false")
 EXTRA_DESC = None
 if not _WITH_EXTRA:
-    print("[extra descriptors] disabled (set WITH_EXTRA_DESCRIPTORS=1 to include "
-          "the hand-crafted land-cover + terrain spaces)")
+    print(
+        "[extra descriptors] disabled (set WITH_EXTRA_DESCRIPTORS=1 to include "
+        "the hand-crafted land-cover + terrain spaces)"
+    )
 elif _EXTRA_NPY.exists():
     _extra_all = np.load(_EXTRA_NPY)
     _extra = _extra_all[st["lrow"].to_numpy()]
@@ -192,16 +211,18 @@ else:
     print(f"[extra descriptors] {_EXTRA_NPY} not found — skipping those spaces")
 
 SPACES = {
-    "geographic\n(lat, lon)":        st[["latitude", "longitude"]].to_numpy(),
-    "elevation\n+ mTPI":             st[["elevation", "delta_elevation", "mtpi"]].to_numpy(),
-    "ERA5 static\n(interp)":         ERA5_STATIC,
+    "geographic\n(lat, lon)": st[["latitude", "longitude"]].to_numpy(),
+    "elevation\n+ mTPI": st[["elevation", "delta_elevation", "mtpi"]].to_numpy(),
+    "ERA5 static\n(interp)": ERA5_STATIC,
 }
-COLOUR = {"geographic\n(lat, lon)": "#7f7f7f",
-          "elevation\n+ mTPI": "#ff7f0e",
-          "ERA5 static\n(interp)": "#9467bd",
-          "land surface\n(hand-crafted)": "#8c564b",
-          "elev+mTPI\n+ land surface": "#c49a6c",
-          "TESSERA\nlat16 embedding": "#1f77b4"}
+COLOUR = {
+    "geographic\n(lat, lon)": "#7f7f7f",
+    "elevation\n+ mTPI": "#ff7f0e",
+    "ERA5 static\n(interp)": "#9467bd",
+    "land surface\n(hand-crafted)": "#8c564b",
+    "elev+mTPI\n+ land surface": "#c49a6c",
+    "TESSERA\nlat16 embedding": "#1f77b4",
+}
 
 if EXTRA_DESC is not None:
     # Two variants: the hand-crafted land-surface features on their own (the
@@ -210,9 +231,12 @@ if EXTRA_DESC is not None:
     # `*_extradesc_*` ConvCNP arm receives, so the model row and this
     # model-free row measure the same input.
     SPACES["land surface\n(hand-crafted)"] = EXTRA_DESC
-    SPACES["elev+mTPI\n+ land surface"] = np.column_stack([
-        st[["elevation", "delta_elevation", "mtpi"]].to_numpy(), EXTRA_DESC,
-    ])
+    SPACES["elev+mTPI\n+ land surface"] = np.column_stack(
+        [
+            st[["elevation", "delta_elevation", "mtpi"]].to_numpy(),
+            EXTRA_DESC,
+        ]
+    )
 
 # TESSERA last so it reads as the rightmost bar in every panel.
 SPACES["TESSERA\nlat16 embedding"] = Z16
@@ -233,25 +257,35 @@ def metrics(X: np.ndarray, query_mask: np.ndarray) -> dict:
     dq, _ = NearestNeighbors(n_neighbors=1).fit(ref).kneighbors(q)
     dq = dq[:, 0]
     # separability AUC (Norway vs rest-train)
-    Xa = np.vstack([q, ref]); ya = np.r_[np.ones(len(q)), np.zeros(len(ref))]
-    auc = float(cross_val_score(
-        make_pipeline(StandardScaler(),
-                      LogisticRegression(max_iter=2000, class_weight="balanced")),
-        Xa, ya, cv=StratifiedKFold(4, shuffle=True, random_state=0),
-        scoring="roc_auc").mean())
+    Xa = np.vstack([q, ref])
+    ya = np.r_[np.ones(len(q)), np.zeros(len(ref))]
+    auc = float(
+        cross_val_score(
+            make_pipeline(
+                StandardScaler(),
+                LogisticRegression(max_iter=2000, class_weight="balanced"),
+            ),
+            Xa,
+            ya,
+            cv=StratifiedKFold(4, shuffle=True, random_state=0),
+            scoring="roc_auc",
+        ).mean()
+    )
     return {
-        "isolation":    float(np.median(dq) / base),
+        "isolation": float(np.median(dq) / base),
         "reachability": float(np.mean(dq <= r95)),
-        "auc":          auc,
-        "median_nn":    float(np.median(dq)),
-        "indist_nn":    base,
-        "n_query":      int(query_mask.sum()),
-        "n_ref":        int(groups["rest_train"].sum()),
+        "auc": auc,
+        "median_nn": float(np.median(dq)),
+        "indist_nn": base,
+        "n_query": int(query_mask.sum()),
+        "n_ref": int(groups["rest_train"].sum()),
     }
 
 
-report = {q: {s: metrics(X, groups[q]) for s, X in SPACES.items()}
-          for q in ("norway_test", "norway_probe", "nonnorway_test")}
+report = {
+    q: {s: metrics(X, groups[q]) for s, X in SPACES.items()}
+    for q in ("norway_test", "norway_probe", "nonnorway_test")
+}
 (OUT / "descriptor_spaces_report.json").write_text(json.dumps(report, indent=2))
 print(json.dumps(report["norway_test"], indent=2))
 
@@ -271,14 +305,33 @@ fig, ax = plt.subplots(1, 2, figsize=(2.9 * len(SPACES), 4.8))
 bars = ax[0].bar(range(len(names)), iso, color=cols, edgecolor="black", linewidth=0.6)
 ax[0].set_yscale("log")
 ax[0].axhline(1.0, color="black", ls=":", lw=1, label="in-distribution (=1)")
-ax[0].set_ylabel("isolation factor\n(NN$_{\\mathrm{Norway\\to rest}}$ / NN$_{\\mathrm{rest\\to rest}}$, log)")
-ax[0].set_title("(a) How far is Norway from European training\nsurfaces? (lower = more reachable)")
-for i, (b, r) in enumerate(zip(bars, reach)):
-    ax[0].text(i, b.get_height() * 1.15, f"×{iso[i]:.1f}", ha="center",
-               va="bottom", fontsize=10, fontweight="bold")
-    ax[0].text(i, min(iso) * 0.55, f"{r:.0f}% reachable", ha="center",
-               va="top", fontsize=8, color="#333333")
-ax[0].set_xticks(range(len(names))); ax[0].set_xticklabels(names, fontsize=9)
+ax[0].set_ylabel(
+    "isolation factor\n(NN$_{\\mathrm{Norway\\to rest}}$ / NN$_{\\mathrm{rest\\to rest}}$, log)"
+)
+ax[0].set_title(
+    "(a) How far is Norway from European training\nsurfaces? (lower = more reachable)"
+)
+for i, (b, r) in enumerate(zip(bars, reach, strict=False)):
+    ax[0].text(
+        i,
+        b.get_height() * 1.15,
+        f"×{iso[i]:.1f}",
+        ha="center",
+        va="bottom",
+        fontsize=10,
+        fontweight="bold",
+    )
+    ax[0].text(
+        i,
+        min(iso) * 0.55,
+        f"{r:.0f}% reachable",
+        ha="center",
+        va="top",
+        fontsize=8,
+        color="#333333",
+    )
+ax[0].set_xticks(range(len(names)))
+ax[0].set_xticklabels(names, fontsize=9)
 ax[0].set_ylim(min(iso) * 0.35, max(iso) * 2.2)
 ax[0].legend(fontsize=8, loc="upper right")
 
@@ -287,11 +340,21 @@ bars = ax[1].bar(range(len(names)), auc, color=cols, edgecolor="black", linewidt
 ax[1].axhline(0.5, color="black", ls=":", lw=1, label="chance (0.5)")
 ax[1].set_ylim(0.5, 1.02)
 ax[1].set_ylabel("separability AUC\n(Norway vs rest-EU-train)")
-ax[1].set_title("(b) Does the descriptor faithfully\ndistinguish Norway? (higher = more faithful)")
+ax[1].set_title(
+    "(b) Does the descriptor faithfully\ndistinguish Norway? (higher = more faithful)"
+)
 for i, b in enumerate(bars):
-    ax[1].text(i, b.get_height() + 0.008, f"{auc[i]:.2f}", ha="center",
-               va="bottom", fontsize=10, fontweight="bold")
-ax[1].set_xticks(range(len(names))); ax[1].set_xticklabels(names, fontsize=9)
+    ax[1].text(
+        i,
+        b.get_height() + 0.008,
+        f"{auc[i]:.2f}",
+        ha="center",
+        va="bottom",
+        fontsize=10,
+        fontweight="bold",
+    )
+ax[1].set_xticks(range(len(names)))
+ax[1].set_xticklabels(names, fontsize=9)
 ax[1].legend(fontsize=8, loc="lower left")
 
 fig.suptitle(
@@ -299,7 +362,9 @@ fig.suptitle(
     "Geography isolates it (a); elevation+mTPI make it look reachable (a) but cannot tell it apart "
     "(b, superficial);\nthe baseline's ERA5 static input is faithful (b) but only partly reachable (a); "
     "TESSERA is both reachable (a) and faithful (b).",
-    fontsize=10.5, y=1.02)
+    fontsize=10.5,
+    y=1.02,
+)
 fig.tight_layout(rect=(0, 0, 1, 0.93))
 fig.savefig(OUT / "fig_descriptor_spaces.png", dpi=150, bbox_inches="tight")
 plt.close(fig)
@@ -319,54 +384,94 @@ print("\nWrote", OUT / "fig_descriptor_spaces.png")
 #      distinct embedding corner, only superficially matched by elevation.
 CT = {
     "Norway — newly deployed (probe)": report["norway_probe"],
-    "Norway — held-out":               report["norway_test"],
-    "non-Norway — held-out (control)":  report["nonnorway_test"],
+    "Norway — held-out": report["norway_test"],
+    "non-Norway — held-out (control)": report["nonnorway_test"],
 }
 QCOL = {
     "Norway — newly deployed (probe)": "#1f77b4",
-    "Norway — held-out":               "#d62728",
-    "non-Norway — held-out (control)":  "#2ca02c",
+    "Norway — held-out": "#d62728",
+    "non-Norway — held-out (control)": "#2ca02c",
 }
 space_names = list(SPACES)
-xx = np.arange(len(space_names)); w = 0.27
+xx = np.arange(len(space_names))
+w = 0.27
 offs = {0: -w, 1: 0.0, 2: +w}
 
 fig, ax = plt.subplots(1, 2, figsize=(3.1 * len(SPACES), 5.2))
 # Panel A: reachability (% with an in-distribution analogue)
 for k, (qn, r) in enumerate(CT.items()):
     vals = [r[s]["reachability"] * 100 for s in space_names]
-    bars = ax[0].bar(xx + offs[k], vals, w, color=QCOL[qn],
-                     edgecolor="black", linewidth=0.6, label=qn)
-    for b, v in zip(bars, vals):
-        ax[0].text(b.get_x() + b.get_width() / 2, v + 1.5, f"{v:.0f}%",
-                   ha="center", va="bottom", fontsize=8, fontweight="bold")
-ax[0].set_ylim(0, 108); ax[0].set_ylabel("% of stations with an\nin-distribution analogue")
+    bars = ax[0].bar(
+        xx + offs[k],
+        vals,
+        w,
+        color=QCOL[qn],
+        edgecolor="black",
+        linewidth=0.6,
+        label=qn,
+    )
+    for b, v in zip(bars, vals, strict=False):
+        ax[0].text(
+            b.get_x() + b.get_width() / 2,
+            v + 1.5,
+            f"{v:.0f}%",
+            ha="center",
+            va="bottom",
+            fontsize=8,
+            fontweight="bold",
+        )
+ax[0].set_ylim(0, 108)
+ax[0].set_ylabel("% of stations with an\nin-distribution analogue")
 ax[0].set_title("(a) Reachable? (higher = more in-distribution)")
-ax[0].set_xticks(xx); ax[0].set_xticklabels(space_names, fontsize=9)
+ax[0].set_xticks(xx)
+ax[0].set_xticklabels(space_names, fontsize=9)
 
 # Panel B: separability AUC (in-distribution iff ~0.5)
 for k, (qn, r) in enumerate(CT.items()):
     vals = [r[s]["auc"] for s in space_names]
-    bars = ax[1].bar(xx + offs[k], vals, w, color=QCOL[qn],
-                     edgecolor="black", linewidth=0.6, label=qn)
-    for b, v in zip(bars, vals):
+    bars = ax[1].bar(
+        xx + offs[k],
+        vals,
+        w,
+        color=QCOL[qn],
+        edgecolor="black",
+        linewidth=0.6,
+        label=qn,
+    )
+    for b, v in zip(bars, vals, strict=False):
         # Keep every value label clear of the 0.5 reference line; labels for
         # sub-0.5 bars would otherwise be bisected by it.
         ly = v + 0.012 if v >= 0.52 else 0.515
-        ax[1].text(b.get_x() + b.get_width() / 2, ly, f"{v:.2f}",
-                   ha="center", va="bottom", fontsize=8, fontweight="bold")
+        ax[1].text(
+            b.get_x() + b.get_width() / 2,
+            ly,
+            f"{v:.2f}",
+            ha="center",
+            va="bottom",
+            fontsize=8,
+            fontweight="bold",
+        )
 # The dotted line is identified by the panel title ("0.5 = in-distribution")
 # and the y-axis tick, so it needs no in-axes annotation.
 ax[1].axhline(0.5, color="black", ls=":", lw=1)
-ax[1].set_ylim(0.4, 1.08); ax[1].set_ylabel("separability AUC\n(group vs training)")
+ax[1].set_ylim(0.4, 1.08)
+ax[1].set_ylabel("separability AUC\n(group vs training)")
 ax[1].set_title("(b) Distinguishable from training?\n(0.5 = in-distribution)")
-ax[1].set_xticks(xx); ax[1].set_xticklabels(space_names, fontsize=9)
+ax[1].set_xticks(xx)
+ax[1].set_xticklabels(space_names, fontsize=9)
 
 # No suptitle: the interpretation lives in the LaTeX caption. Keep the
 # group legend (the only on-figure key the reader needs).
 handles, labels = ax[0].get_legend_handles_labels()
-fig.legend(handles, labels, fontsize=8.5, loc="upper center", ncol=3,
-           bbox_to_anchor=(0.5, 0.99), frameon=True)
+fig.legend(
+    handles,
+    labels,
+    fontsize=8.5,
+    loc="upper center",
+    ncol=3,
+    bbox_to_anchor=(0.5, 0.99),
+    frameon=True,
+)
 fig.tight_layout(rect=(0, 0, 1, 0.93))
 fig.savefig(OUT / "fig_heldout_descriptor_control.png", dpi=150, bbox_inches="tight")
 plt.close(fig)
@@ -392,10 +497,12 @@ SCHED = REPO / "scripts" / "experiments" / ROLLOUT_FOLDER / "rollout_schedule.js
 # Through full deployment: at r3y all 1505 probes are online, so the query is
 # exactly the held-out test set; r4y..r6y add no stations and are omitted.
 HORIZON_ORDER = ["r1mo", "r3mo", "r6mo", "r1y", "r2y", "r3y"]
-LABEL = {"geographic\n(lat, lon)": "geographic",
-         "elevation\n+ mTPI": "elevation + mTPI",
-         "ERA5 static\n(interp)": "ERA5 static (interp)",
-         "TESSERA\nlat16 embedding": "TESSERA embedding"}
+LABEL = {
+    "geographic\n(lat, lon)": "geographic",
+    "elevation\n+ mTPI": "elevation + mTPI",
+    "ERA5 static\n(interp)": "ERA5 static (interp)",
+    "TESSERA\nlat16 embedding": "TESSERA embedding",
+}
 
 if not SCHED.exists():
     print(f"(no rollout_schedule.json at {SCHED} -> skipping horizon figure)")
@@ -409,8 +516,11 @@ else:
     for name, X in SPACES.items():
         sc = StandardScaler().fit(X[groups["rest_train"]])
         Xs = sc.transform(X)
-        d_loo = NearestNeighbors(n_neighbors=2).fit(Xs[groups["rest_train"]]).kneighbors(
-            Xs[groups["rest_train"]])[0][:, 1]
+        d_loo = (
+            NearestNeighbors(n_neighbors=2)
+            .fit(Xs[groups["rest_train"]])
+            .kneighbors(Xs[groups["rest_train"]])[0][:, 1]
+        )
         prep[name] = (Xs, float(np.percentile(d_loo, 95)))
 
     def _reach_auc_rows(deployed):
@@ -423,7 +533,7 @@ else:
         """
         out_of_training = (norway_probe & ~deployed) | groups["norway_test"]
         ref_mask = groups["rest_train"] | deployed
-        n_dep = int(deployed.sum())   # x-axis: # Norwegian probes in training
+        n_dep = int(deployed.sum())  # x-axis: # Norwegian probes in training
         rows = []
         for name, (Xs, r95) in prep.items():
             q = Xs[out_of_training]
@@ -432,11 +542,18 @@ else:
             reach = float(np.mean(dq <= r95)) * 100
             Xa = np.vstack([q, ref])
             ya = np.r_[np.ones(len(q)), np.zeros(len(ref))]
-            auc = float(cross_val_score(
-                make_pipeline(StandardScaler(),
-                              LogisticRegression(max_iter=2000, class_weight="balanced")),
-                Xa, ya, cv=StratifiedKFold(4, shuffle=True, random_state=0),
-                scoring="roc_auc").mean())
+            auc = float(
+                cross_val_score(
+                    make_pipeline(
+                        StandardScaler(),
+                        LogisticRegression(max_iter=2000, class_weight="balanced"),
+                    ),
+                    Xa,
+                    ya,
+                    cv=StratifiedKFold(4, shuffle=True, random_state=0),
+                    scoring="roc_auc",
+                ).mean()
+            )
             rows.append(dict(x=n_dep, space=name, reach=reach, auc=auc))
         return rows
 
@@ -447,8 +564,11 @@ else:
     hz.extend(_reach_auc_rows(np.zeros(len(st), dtype=bool)))
     for hlabel in HORIZON_ORDER:
         sp = sched["sweep_points"][hlabel]
-        deployed_ids = {sid for sid, v in sp["probe_active_from"].items()
-                        if not str(v).startswith("9999")}
+        deployed_ids = {
+            sid
+            for sid, v in sp["probe_active_from"].items()
+            if not str(v).startswith("9999")
+        }
         deployed = norway_probe & np.isin(st_id, list(deployed_ids))
         hz.extend(_reach_auc_rows(deployed))
     hz = pd.DataFrame(hz)
@@ -456,16 +576,25 @@ else:
     fig, ax = plt.subplots(1, 2, figsize=(3.1 * len(SPACES), 4.8))
     for name in SPACES:
         s = hz[hz["space"] == name].sort_values("x")
-        ax[0].plot(s["x"], s["reach"], marker="o", color=COLOUR[name],
-                   lw=1.8, label=LABEL[name])
-        ax[1].plot(s["x"], s["auc"], marker="o", color=COLOUR[name],
-                   lw=1.8, label=LABEL[name])
+        ax[0].plot(
+            s["x"],
+            s["reach"],
+            marker="o",
+            color=COLOUR[name],
+            lw=1.8,
+            label=LABEL[name],
+        )
+        ax[1].plot(
+            s["x"], s["auc"], marker="o", color=COLOUR[name], lw=1.8, label=LABEL[name]
+        )
     # No panel titles and a single legend (panel a): the panel reading and the
     # 0.5-line meaning live in the LaTeX caption; the curves are the same
     # spaces in both panels.
     ax[0].set_ylim(-5, 108)
-    ax[0].set_ylabel("% of out-of-training Norwegian stations\n"
-                     "with an in-distribution training analogue")
+    ax[0].set_ylabel(
+        "% of out-of-training Norwegian stations\n"
+        "with an in-distribution training analogue"
+    )
     ax[0].set_xlabel("Norwegian probe stations deployed into training")
     ax[0].grid(alpha=0.3)
     ax[0].legend(fontsize=8.5, loc="lower right")
@@ -479,8 +608,9 @@ else:
     # foot of the line and below every curve so it never crosses one.
     for a in ax:
         a.axvline(0, color="#bbbbbb", ls=":", lw=1.0, zorder=0)
-    ax[0].text(15, -3, "cold start", fontsize=8, color="#666666",
-               va="center", ha="left")
+    ax[0].text(
+        15, -3, "cold start", fontsize=8, color="#666666", va="center", ha="left"
+    )
     fig.tight_layout()
     fig.savefig(OUT / "fig_norway_reach_horizon.png", dpi=150, bbox_inches="tight")
     plt.close(fig)
@@ -499,13 +629,16 @@ else:
 # genuinely in-distribution case.
 _norway = groups["norway_probe"] | groups["norway_test"]
 _rng = np.random.RandomState(0)
-_sub = _rng.choice(np.where(groups["rest_train"])[0],
-                   size=min(2500, int(groups["rest_train"].sum())), replace=False)
+_sub = _rng.choice(
+    np.where(groups["rest_train"])[0],
+    size=min(2500, int(groups["rest_train"].sum())),
+    replace=False,
+)
 _sub_mask = np.zeros(len(st), bool)
 _sub_mask[_sub] = True
 
 fig, ax = plt.subplots(1, len(SPACES), figsize=(5 * len(SPACES), 5))
-for a, (name, X) in zip(ax, SPACES.items()):
+for a, (name, X) in zip(ax, SPACES.items(), strict=False):
     Xs = StandardScaler().fit(X[groups["rest_train"]]).transform(X)
     if name.startswith("geographic"):
         P = Xs[:, [1, 0]]
@@ -520,15 +653,29 @@ for a, (name, X) in zip(ax, SPACES.items()):
         py = PCA(n_components=1).fit(resid[groups["rest_train"]]).transform(resid)[:, 0]
         P = np.column_stack([px, py])
         xl, yl = "Norway-vs-rest discriminant", "residual PC1"
-    a.scatter(P[_sub_mask, 0], P[_sub_mask, 1], s=4, c="#cccccc",
-              label="rest-train", rasterized=True)
-    a.scatter(P[groups["nonnorway_test"], 0], P[groups["nonnorway_test"], 1],
-              s=6, c="#2ca02c", alpha=0.6, label="non-Norway held-out (control)")
+    a.scatter(
+        P[_sub_mask, 0],
+        P[_sub_mask, 1],
+        s=4,
+        c="#cccccc",
+        label="rest-train",
+        rasterized=True,
+    )
+    a.scatter(
+        P[groups["nonnorway_test"], 0],
+        P[groups["nonnorway_test"], 1],
+        s=6,
+        c="#2ca02c",
+        alpha=0.6,
+        label="non-Norway held-out (control)",
+    )
     a.scatter(P[_norway, 0], P[_norway, 1], s=6, c="#d62728", alpha=0.6, label="Norway")
     _r = report["norway_probe"][name]
-    a.set_title(f"{name.replace(chr(10), ' ')}\n"
-                f"reachable {_r['reachability'] * 100:.0f}%,  AUC {_r['auc']:.2f}",
-                fontsize=10)
+    a.set_title(
+        f"{name.replace(chr(10), ' ')}\n"
+        f"reachable {_r['reachability'] * 100:.0f}%,  AUC {_r['auc']:.2f}",
+        fontsize=10,
+    )
     a.set_xlabel(xl, fontsize=9)
     a.set_ylabel(yl, fontsize=9)
     a.tick_params(labelsize=8)

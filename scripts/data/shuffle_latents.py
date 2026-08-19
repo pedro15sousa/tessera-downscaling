@@ -19,6 +19,7 @@ Usage (the paper's shuffled control, Table 4 / App. C):
         --output <data root>/processed/vae_tessera_1B-M/station_latents_1B-M_p128_2017_crop64_lat16_grad0.5_auxon_shuffle_seed0.npy \\
         --seed   0
 """
+
 from __future__ import annotations
 
 import argparse
@@ -31,14 +32,22 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Row-shuffle a VAE latents .npy for the shuffled-latent control."
     )
-    parser.add_argument("--input", type=Path, required=True,
-                        help="Path to unshuffled latents .npy.")
-    parser.add_argument("--output", type=Path, required=True,
-                        help="Path to write shuffled latents .npy. "
-                             "Must be different from --input.")
-    parser.add_argument("--seed", type=int, required=True,
-                        help="Random seed for the permutation. The shuffled "
-                             "file is fully deterministic from this seed.")
+    parser.add_argument(
+        "--input", type=Path, required=True, help="Path to unshuffled latents .npy."
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        required=True,
+        help="Path to write shuffled latents .npy. Must be different from --input.",
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        required=True,
+        help="Random seed for the permutation. The shuffled "
+        "file is fully deterministic from this seed.",
+    )
     args = parser.parse_args()
 
     if not args.input.exists():
@@ -83,11 +92,11 @@ def main() -> None:
     )
 
     # Invariant: every valid row must be a permutation of the originals.
-    n_fixed_points = int(
-        (new_to_old[valid_row_indices] == valid_row_indices).sum()
+    n_fixed_points = int((new_to_old[valid_row_indices] == valid_row_indices).sum())
+    print(
+        f"Permutation fixed points (rows where shuffle is a no-op): "
+        f"{n_fixed_points}/{n_valid}"
     )
-    print(f"Permutation fixed points (rows where shuffle is a no-op): "
-          f"{n_fixed_points}/{n_valid}")
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     np.save(args.output, shuffled)
@@ -97,8 +106,10 @@ def main() -> None:
     print(f"Wrote shuffled latents: {args.output}")
     print(f"Wrote row mapping (new→old): {perm_path}")
     print(f"Seed: {args.seed}")
-    print(f"Spot check — valid row {valid_row_indices[0]} now contains "
-          f"the latent originally at row {new_to_old[valid_row_indices[0]]}.")
+    print(
+        f"Spot check — valid row {valid_row_indices[0]} now contains "
+        f"the latent originally at row {new_to_old[valid_row_indices[0]]}."
+    )
 
 
 if __name__ == "__main__":

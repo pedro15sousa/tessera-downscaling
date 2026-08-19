@@ -60,6 +60,7 @@ Usage:
     uv run python scripts/analysis/residual_probe_spaces.py \\
         --regions europe us --target-variables t2m wind
 """
+
 from __future__ import annotations
 
 import argparse
@@ -88,7 +89,8 @@ from tessera_downscaling.paths import dataset_dir, processed_dir  # noqa: E402
 
 logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(message)s",
-    datefmt="%H:%M:%S", level=logging.INFO,
+    datefmt="%H:%M:%S",
+    level=logging.INFO,
 )
 logger = logging.getLogger("residual_probe")
 
@@ -108,7 +110,13 @@ DEFAULT_MIN_SNAPSHOTS = 50
 # from richer terrain — a distinction that decides how the result can be
 # described.
 TERRAIN_FEATURES = {
-    "elev_mean", "elev_std", "elev_min", "elev_max", "slope", "dz_dn", "dz_de",
+    "elev_mean",
+    "elev_std",
+    "elev_min",
+    "elev_max",
+    "slope",
+    "dz_dn",
+    "dz_de",
 }
 
 SPACE_COLOUR = {
@@ -128,8 +136,11 @@ SPACE_ORDER = list(SPACE_COLOUR)
 # Residual target
 # ---------------------------------------------------------------------------
 
+
 def per_station_residuals(
-    args, region: str, variable: str,
+    args,
+    region: str,
+    variable: str,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """``(station_ids, r_s, n_snapshots)`` over the test split of one region.
 
@@ -141,7 +152,9 @@ def per_station_residuals(
     ns.train_regions = [region]
     ns.target_variables = [variable]
 
-    dataset = build_dataset(ns, [variable], split="test", station_split=args.station_split)
+    dataset = build_dataset(
+        ns, [variable], split="test", station_split=args.station_split
+    )
     era5_dirs = Era5DirResolver(dataset)
 
     n_stations = len(dataset.station_ids)
@@ -161,8 +174,11 @@ def per_station_residuals(
             continue
         era5_raw = np.load(path)
         interp = era5_interp_predict(
-            variable, era5_raw, episode["grid_lats"].numpy(),
-            episode["grid_lons"].numpy(), episode["target_coords"].numpy(),
+            variable,
+            era5_raw,
+            episode["grid_lats"].numpy(),
+            episode["grid_lons"].numpy(),
+            episode["target_coords"].numpy(),
         )
         obs = episode["target_values"].numpy()
         if obs.ndim > 1:
@@ -191,6 +207,7 @@ def per_station_residuals(
 # ---------------------------------------------------------------------------
 # Descriptor spaces
 # ---------------------------------------------------------------------------
+
 
 def load_descriptor_tables(region: str) -> dict:
     """Per-station descriptor tables, keyed by station_id."""
@@ -253,7 +270,8 @@ def load_descriptor_tables(region: str) -> dict:
 
 
 def build_spaces(
-    tables: dict, station_ids: np.ndarray,
+    tables: dict,
+    station_ids: np.ndarray,
 ) -> tuple[dict[str, np.ndarray], np.ndarray]:
     """Descriptor matrices aligned to ``station_ids``.
 
@@ -264,35 +282,38 @@ def build_spaces(
     st = tables["stations"].set_index("station_id")
     ids = [str(s) for s in station_ids]
 
-    present = np.array([
-        (s in st.index) and (s in tables["lat_row"]) for s in ids
-    ])
-    lat_rows = np.array([
-        tables["lat_row"].get(s, -1) for s in ids
-    ])
+    present = np.array([(s in st.index) and (s in tables["lat_row"]) for s in ids])
+    lat_rows = np.array([tables["lat_row"].get(s, -1) for s in ids])
     latent_ok = np.zeros(len(ids), dtype=bool)
     valid_rows = lat_rows >= 0
-    latent_ok[valid_rows] = ~np.isnan(
-        tables["latents"][lat_rows[valid_rows]]
-    ).any(axis=1)
+    latent_ok[valid_rows] = ~np.isnan(tables["latents"][lat_rows[valid_rows]]).any(
+        axis=1
+    )
     mask = present & latent_ok
 
-    kept_ids = [s for s, m in zip(ids, mask) if m]
+    kept_ids = [s for s, m in zip(ids, mask, strict=False) if m]
     sub = st.loc[kept_ids]
     rows = lat_rows[mask]
 
     sfield, glat, glon = tables["static"]
-    qpts = np.column_stack([
-        np.clip(sub["latitude"].to_numpy(), glat.min(), glat.max()),
-        np.clip(sub["longitude"].to_numpy(), glon.min(), glon.max()),
-    ])
-    era5_static = np.column_stack([
-        RegularGridInterpolator(
-            (glat, glon), sfield[c], method="linear",
-            bounds_error=False, fill_value=None,
-        )(qpts)
-        for c in range(sfield.shape[0])
-    ])
+    qpts = np.column_stack(
+        [
+            np.clip(sub["latitude"].to_numpy(), glat.min(), glat.max()),
+            np.clip(sub["longitude"].to_numpy(), glon.min(), glon.max()),
+        ]
+    )
+    era5_static = np.column_stack(
+        [
+            RegularGridInterpolator(
+                (glat, glon),
+                sfield[c],
+                method="linear",
+                bounds_error=False,
+                fill_value=None,
+            )(qpts)
+            for c in range(sfield.shape[0])
+        ]
+    )
 
     topo = sub[["elevation", "delta_elevation", "mtpi"]].to_numpy()
     spaces = {
@@ -323,6 +344,7 @@ def build_spaces(
 # Probe
 # ---------------------------------------------------------------------------
 
+
 def cv_r2(x: np.ndarray, y: np.ndarray, args) -> float:
     """Pooled K-fold CV R², folds taken over stations."""
     kf = KFold(n_splits=args.n_folds, shuffle=True, random_state=args.seed)
@@ -347,28 +369,34 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--dataset-dir", type=Path, default=DATASET)
     parser.add_argument(
-        "--regions", nargs="+", default=["europe", "us"],
+        "--regions",
+        nargs="+",
+        default=["europe", "us"],
         help="Restricted by default to the well-sampled regions, where the "
-             "per-station CV is not dominated by a handful of noisy stations.",
+        "per-station CV is not dominated by a handful of noisy stations.",
     )
     parser.add_argument("--target-variables", nargs="+", default=["t2m", "wind"])
-    parser.add_argument("--station-split", default="test",
-                        choices=["train", "test", "all"])
+    parser.add_argument(
+        "--station-split", default="test", choices=["train", "test", "all"]
+    )
     parser.add_argument("--min-snapshots", type=int, default=DEFAULT_MIN_SNAPSHOTS)
     parser.add_argument("--n-folds", type=int, default=4)
     parser.add_argument("--n-trees", type=int, default=400)
     parser.add_argument("--min-samples-leaf", type=int, default=2)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument(
-        "--latents-npy", type=Path,
+        "--latents-npy",
+        type=Path,
         default=processed_dir("station_latents_lat16_grad0.5.npy"),
     )
     parser.add_argument(
-        "--latents-csv", type=Path,
+        "--latents-csv",
+        type=Path,
         default=processed_dir("tessera_global", "station_list_filtered.csv"),
     )
     parser.add_argument(
-        "--extra-descriptors-npy", type=Path,
+        "--extra-descriptors-npy",
+        type=Path,
         default=processed_dir("extra_descriptors.npy"),
     )
     # Station filters are intentionally NOT applied here: the probe is
@@ -419,9 +447,12 @@ def main():
         logger.warning("Nothing to plot.")
         return
     fig, axes = plt.subplots(
-        1, len(variables), figsize=(7.5 * len(variables), 5.0), squeeze=False,
+        1,
+        len(variables),
+        figsize=(7.5 * len(variables), 5.0),
+        squeeze=False,
     )
-    for ax, variable in zip(axes[0], variables):
+    for ax, variable in zip(axes[0], variables, strict=False):
         regions = list(report[variable])
         names = [n for n in SPACE_ORDER if n in report[variable][regions[0]]]
         xx = np.arange(len(names))
@@ -430,18 +461,23 @@ def main():
             vals = [report[variable][region][n] for n in names]
             off = (k - (len(regions) - 1) / 2) * width
             bars = ax.bar(
-                xx + off, vals, width,
+                xx + off,
+                vals,
+                width,
                 color=[SPACE_COLOUR[n] for n in names],
-                edgecolor="black", linewidth=0.6,
+                edgecolor="black",
+                linewidth=0.6,
                 alpha=1.0 if k == 0 else 0.55,
                 label=f"{region} (n={report[variable][region]['_n_stations']})",
             )
-            for b, v in zip(bars, vals):
+            for b, v in zip(bars, vals, strict=False):
                 ax.text(
                     b.get_x() + b.get_width() / 2,
                     v + (0.012 if v >= 0 else -0.03),
-                    f"{v:.2f}", ha="center",
-                    va="bottom" if v >= 0 else "top", fontsize=7.5,
+                    f"{v:.2f}",
+                    ha="center",
+                    va="bottom" if v >= 0 else "top",
+                    fontsize=7.5,
                 )
         ax.axhline(0.0, color="black", lw=1)
         ax.set_xticks(xx)

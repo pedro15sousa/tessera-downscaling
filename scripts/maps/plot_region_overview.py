@@ -40,6 +40,7 @@ Outputs go to OUTPUTS/overview/ (see regions.py; the paper's copy is
 expensive input (it streams the 81 GB patch array once, ~10 s warm) and is
 cached under ``processed/overview_cache/``.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -113,13 +114,14 @@ OBS_SENTINEL_FLOOR = -100.0
 # Station table
 # ---------------------------------------------------------------------------
 
+
 def _patch_valid_mask(cache: Path) -> np.ndarray:
     """Centre-pixel-nonzero AND coverage >= 0.5, per data/helpers.py."""
     if cache.exists():
         return np.load(cache)["valid"]
     print(f"computing TESSERA patch validity from {PATCHES} (one pass) ...")
     m = np.load(str(PATCHES), mmap_mode="r")
-    n, h, w = m.shape[0], m.shape[1], m.shape[2]
+    n, h = m.shape[0], m.shape[1]
     c = h // 2
     coverage = np.empty(n, np.float32)
     centre = np.empty(n, bool)
@@ -130,8 +132,10 @@ def _patch_valid_mask(cache: Path) -> np.ndarray:
     valid = centre & (coverage >= MIN_PATCH_COVERAGE)
     cache.parent.mkdir(parents=True, exist_ok=True)
     np.savez(cache, valid=valid, coverage=coverage, centre=centre)
-    print(f"  centre {centre.sum()}, coverage {(coverage >= MIN_PATCH_COVERAGE).sum()}, "
-          f"both {valid.sum()} / {n}")
+    print(
+        f"  centre {centre.sum()}, coverage {(coverage >= MIN_PATCH_COVERAGE).sum()}, "
+        f"both {valid.sum()} / {n}"
+    )
     return valid
 
 
@@ -144,8 +148,10 @@ def _test_split_obs_counts(cache: Path) -> dict[str, np.ndarray]:
     files = sorted(f for f in snap_dir.glob("*.npz") if f.stem > VAL_END)
     if not files:
         raise SystemExit(f"no test-split snapshots (stem > {VAL_END}) under {snap_dir}")
-    print(f"scanning {len(files)} test-split snapshots "
-          f"({files[0].stem} .. {files[-1].stem}) for observation counts ...")
+    print(
+        f"scanning {len(files)} test-split snapshots "
+        f"({files[0].stem} .. {files[-1].stem}) for observation counts ..."
+    )
     out: dict[str, np.ndarray] | None = None
     for f in files:
         z = np.load(f)
@@ -206,6 +212,7 @@ def summarise(stations: pd.DataFrame) -> pd.DataFrame:
 # Figure
 # ---------------------------------------------------------------------------
 
+
 def draw(
     stations: pd.DataFrame,
     counts: pd.DataFrame,
@@ -222,12 +229,14 @@ def draw(
     from matplotlib.lines import Line2D
     from matplotlib.patches import Rectangle
 
-    plt.rcParams.update({
-        "font.size": 8,
-        "axes.linewidth": 0.6,
-        "savefig.bbox": "tight",
-        "savefig.pad_inches": 0.02,
-    })
+    plt.rcParams.update(
+        {
+            "font.size": 8,
+            "axes.linewidth": 0.6,
+            "savefig.bbox": "tight",
+            "savefig.pad_inches": 0.02,
+        }
+    )
 
     pc = ccrs.PlateCarree()
     if variable == "both":
@@ -248,37 +257,71 @@ def draw(
     ax = fig.add_axes([0, 0, 1, 1], projection=pc)
     ax.set_extent(list(ext), crs=pc)
 
-    ax.add_feature(cfeature.LAND.with_scale("110m"), facecolor=C_LAND,
-                   edgecolor="none", zorder=0)
+    ax.add_feature(
+        cfeature.LAND.with_scale("110m"), facecolor=C_LAND, edgecolor="none", zorder=0
+    )
     ax.coastlines(resolution="110m", linewidth=0.3, color=C_COAST, zorder=1)
     ax.spines["geo"].set_edgecolor("#BBBBBB")
     ax.spines["geo"].set_linewidth(0.6)
 
-    gl = ax.gridlines(draw_labels=False, linewidth=0.25, color="#D8D8D8",
-                      linestyle="-", zorder=1)
+    gl = ax.gridlines(
+        draw_labels=False, linewidth=0.25, color="#D8D8D8", linestyle="-", zorder=1
+    )
     gl.xlocator = plt.MultipleLocator(60)
     gl.ylocator = plt.MultipleLocator(30)
 
-    ax.scatter(train["longitude"], train["latitude"], s=0.5, c=C_TRAIN,
-               linewidths=0, alpha=0.85, transform=pc, zorder=3, rasterized=True)
-    ax.scatter(test["longitude"], test["latitude"], s=0.7, c=C_TEST,
-               linewidths=0, alpha=0.95, transform=pc, zorder=4, rasterized=True)
+    ax.scatter(
+        train["longitude"],
+        train["latitude"],
+        s=0.5,
+        c=C_TRAIN,
+        linewidths=0,
+        alpha=0.85,
+        transform=pc,
+        zorder=3,
+        rasterized=True,
+    )
+    ax.scatter(
+        test["longitude"],
+        test["latitude"],
+        s=0.7,
+        c=C_TEST,
+        linewidths=0,
+        alpha=0.95,
+        transform=pc,
+        zorder=4,
+        rasterized=True,
+    )
 
     for region, (lat0, lat1, lon0, lon1) in REGIONS.items():
-        ax.add_patch(Rectangle(
-            (lon0, lat0), lon1 - lon0, lat1 - lat0, transform=pc,
-            facecolor="none", edgecolor=C_BOX, linewidth=0.9, zorder=5,
-        ))
+        ax.add_patch(
+            Rectangle(
+                (lon0, lat0),
+                lon1 - lon0,
+                lat1 - lat0,
+                transform=pc,
+                facecolor="none",
+                edgecolor=C_BOX,
+                linewidth=0.9,
+                zorder=5,
+            )
+        )
         p = LABEL_POS[region]
         tx = lon0 if p["x"] == "left" else lon1
         ty = lat1 if p["y"] == "top" else lat0
         n_t2m = counts.loc[region, "t2m_n"]
         n_wind = counts.loc[region, "wind_n"]
         ax.text(
-            tx + p["dx"], ty + p["dy"],
+            tx + p["dx"],
+            ty + p["dy"],
             f"{PRETTY[region]}\n$n$ = {n_t2m:,} / {n_wind:,}",
-            transform=pc, ha=p["ha"], va=p["va"], fontsize=7.2,
-            linespacing=1.25, color="#1A1A1A", zorder=6,
+            transform=pc,
+            ha=p["ha"],
+            va=p["va"],
+            fontsize=7.2,
+            linespacing=1.25,
+            color="#1A1A1A",
+            zorder=6,
         )
 
     # Wrapped so the title stops short of the South American coastline it
@@ -289,18 +332,38 @@ def draw(
         "wind": "10 m wind speed",
     }[variable]
     handles = [
-        Line2D([], [], marker="o", linestyle="none", markersize=3.2,
-               markerfacecolor=C_TRAIN, markeredgecolor="none",
-               label=f"training stations ({len(train):,})"),
-        Line2D([], [], marker="o", linestyle="none", markersize=3.8,
-               markerfacecolor=C_TEST, markeredgecolor="none",
-               label=f"held-out stations ({len(test):,})"),
+        Line2D(
+            [],
+            [],
+            marker="o",
+            linestyle="none",
+            markersize=3.2,
+            markerfacecolor=C_TRAIN,
+            markeredgecolor="none",
+            label=f"training stations ({len(train):,})",
+        ),
+        Line2D(
+            [],
+            [],
+            marker="o",
+            linestyle="none",
+            markersize=3.8,
+            markerfacecolor=C_TEST,
+            markeredgecolor="none",
+            label=f"held-out stations ({len(test):,})",
+        ),
     ]
     ax.legend(
-        handles=handles, loc="lower left", bbox_to_anchor=(0.012, 0.02),
-        frameon=False, fontsize=7, handletextpad=0.35, borderaxespad=0.0,
+        handles=handles,
+        loc="lower left",
+        bbox_to_anchor=(0.012, 0.02),
+        frameon=False,
+        fontsize=7,
+        handletextpad=0.35,
+        borderaxespad=0.0,
         labelspacing=0.35,
-        title=f"Stations shown: {var_label}", title_fontsize=7,
+        title=f"Stations shown: {var_label}",
+        title_fontsize=7,
         alignment="left",
     )
 
@@ -314,9 +377,13 @@ def draw(
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--variable", choices=["both", "t2m", "wind"], default="both",
-                    help="which station set the dots show; 'both' plots the "
-                         "union of the two variables' sets (default)")
+    ap.add_argument(
+        "--variable",
+        choices=["both", "t2m", "wind"],
+        default="both",
+        help="which station set the dots show; 'both' plots the "
+        "union of the two variables' sets (default)",
+    )
     ap.add_argument("--out-stem", default=None)
     ap.add_argument("--formats", nargs="+", default=["pdf", "png"])
     ap.add_argument("--cache-dir", type=Path, default=processed_dir("overview_cache"))
@@ -328,17 +395,26 @@ def main() -> None:
     print(counts.to_string())
     print("\nTable 1 reports n as t2m/wind totals:")
     for region in REGIONS:
-        print(f"  {PRETTY[region]:<16} n = {counts.loc[region, 't2m_n']:>5,}"
-              f" / {counts.loc[region, 'wind_n']:>5,}")
+        print(
+            f"  {PRETTY[region]:<16} n = {counts.loc[region, 't2m_n']:>5,}"
+            f" / {counts.loc[region, 'wind_n']:>5,}"
+        )
 
     OUTPUTS.mkdir(parents=True, exist_ok=True)
     counts.to_csv(OUTPUTS / "region_station_counts.csv")
-    (OUTPUTS / "region_boxes.json").write_text(json.dumps(
-        {k: {"lat_min": v[0], "lat_max": v[1], "lon_min": v[2], "lon_max": v[3]}
-         for k, v in REGIONS.items()}, indent=2))
+    (OUTPUTS / "region_boxes.json").write_text(
+        json.dumps(
+            {
+                k: {"lat_min": v[0], "lat_max": v[1], "lon_min": v[2], "lon_max": v[3]}
+                for k, v in REGIONS.items()
+            },
+            indent=2,
+        )
+    )
 
     stem = args.out_stem or (
-        "region_overview" if args.variable == "both"
+        "region_overview"
+        if args.variable == "both"
         else f"region_overview_{args.variable}"
     )
     draw(

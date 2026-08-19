@@ -83,35 +83,10 @@ src = ["src"]
 line-length = 88
 
 [tool.ruff.lint]
-select = ["ALL"]
-ignore = [
-    "COM812", # Conflicts with formatter.
-    "D100", # Allow public modules without docstrings.
-    "D102", # Allow public methods without docstrings.
-    "D103", # Allow public functions without docstrings.
-    "D105", # Allow magic methods without docstrings.
-    "D107", # Allow `__init__` functions without docstrings.
-    "D203", # one-blank-line-before-class (conflicts with D211).
-    "D213", # multi-line-summary-second-line (conflicts with D212).
-    "FIX002", # Allow use of TODOs.
-    "G004", # Allow f-strings in logging statements for the moment.
-    "LOG015", # Ignore this until we stop using the root logger.
-    "N817", # Allow CamelCase objects to be imported as acronyms.
-    "PLR0913", # Allow unlimited arguments.
-    "PLR0915", # Allow unlimited statements.
-    "T201", # Allow print statements.
-    "TD002", # Allow unassigned TODOs.
-    "TD003", # Allow TODOs without a linked issue.
-]
+# Correctness and consistency rules that pre-commit enforces: pyflakes,
+# pycodestyle, isort, bugbear, pyupgrade. Line length is left to the formatter.
+select = ["E", "W", "F", "I", "B", "UP"]
+ignore = ["E501", "W505"]
 
-[tool.ruff.lint.pycodestyle]
-max-line-length = 88
-max-doc-length = 88
-
-[tool.ruff.lint.flake8-annotations]
-allow-star-arg-any = true
-
-[tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = ["S101", "INP001", "ARG001", "SLF001", "C901", "PLR0912", "PLR2004"]
-"scripts/**/*.py" = ["INP001"]
-"vendored/**/*.py" = ["INP001"]
+[tool.ruff.lint.isort]
+known-first-party = ["tessera_downscaling"]

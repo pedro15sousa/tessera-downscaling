@@ -104,13 +104,16 @@ INPUT_WB2_VARS = list(SURF_AURORA_TO_WB2.values()) + list(ATMOS_AURORA_TO_WB2.va
 def lead_to_step(lead_hours: int) -> int:
     """Rollout step index (1-based) whose valid time is `lead_hours` ahead."""
     if lead_hours % TIME_DELTA_HOURS != 0:
-        raise ValueError(f"Lead {lead_hours}h is not a multiple of {TIME_DELTA_HOURS}h.")
+        raise ValueError(
+            f"Lead {lead_hours}h is not a multiple of {TIME_DELTA_HOURS}h."
+        )
     return lead_hours // TIME_DELTA_HOURS
 
 
 # --------------------------------------------------------------------------- #
 # Metadata / schedule (unit-testable with numpy+pandas only).
 # --------------------------------------------------------------------------- #
+
 
 def parse_ts(s: str) -> pd.Timestamp:
     """Parse a 'YYYY-MM-DD-HH' valid-timestamp string."""
@@ -142,8 +145,12 @@ def load_test_times(global_metadata_path: str | Path) -> list[pd.Timestamp]:
     return test
 
 
-def load_times(global_metadata_path: str | Path, split: str = "test",
-               start_date: str | None = None, end_date: str | None = None) -> list[pd.Timestamp]:
+def load_times(
+    global_metadata_path: str | Path,
+    split: str = "test",
+    start_date: str | None = None,
+    end_date: str | None = None,
+) -> list[pd.Timestamp]:
     """Return the valid-times for a split, replicating the dataset's lexicographic
     rule (episodes_for_split) so the Aurora set matches the ERA5 dataset exactly:
 
@@ -180,10 +187,17 @@ def load_times(global_metadata_path: str | Path, split: str = "test",
         times = [t for t in times if t >= parse_ts_loose(start_date)]
     if end_date is not None:
         times = [t for t in times if t <= parse_ts_loose(end_date)]
-    expected = {"train": ts.get("n_train_timestamps"),
-                "val": ts.get("n_val_timestamps"),
-                "test": ts.get("n_test_timestamps")}.get(split)
-    if start_date is None and end_date is None and expected is not None and len(times) != expected:
+    expected = {
+        "train": ts.get("n_train_timestamps"),
+        "val": ts.get("n_val_timestamps"),
+        "test": ts.get("n_test_timestamps"),
+    }.get(split)
+    if (
+        start_date is None
+        and end_date is None
+        and expected is not None
+        and len(times) != expected
+    ):
         raise ValueError(
             f"Derived {len(times)} {split} times but metadata says {expected}; check the split logic."
         )
@@ -222,7 +236,9 @@ def required_input_frames(inits: list[pd.Timestamp]) -> list[pd.Timestamp]:
     return sorted(frames)
 
 
-def missing_input_frames(era5_staging_root: Path, inits: list[pd.Timestamp]) -> list[tuple[str, pd.Timestamp]]:
+def missing_input_frames(
+    era5_staging_root: Path, inits: list[pd.Timestamp]
+) -> list[tuple[str, pd.Timestamp]]:
     """Return (var, frame) pairs whose staged ERA5 input file is absent.
 
     Cheap pre-flight (1516 frames x 9 vars stat calls). This is what makes
@@ -240,12 +256,15 @@ def missing_input_frames(era5_staging_root: Path, inits: list[pd.Timestamp]) -> 
 # Path helpers (unit-testable).
 # --------------------------------------------------------------------------- #
 
+
 def _file_name(t: pd.Timestamp) -> str:
     return f"{t.year:04d}-{t.month:02d}-{t.day:02d}-{t.hour:02d}.nc"
 
 
 def input_path(era5_staging_root: Path, wb2_var: str, frame: pd.Timestamp) -> Path:
-    return era5_staging_root / f"era5_wb2_quarter_{wb2_var}" / "data" / _file_name(frame)
+    return (
+        era5_staging_root / f"era5_wb2_quarter_{wb2_var}" / "data" / _file_name(frame)
+    )
 
 
 def lead_root(output_root: Path, lead_hours: int, region: str) -> Path:
@@ -253,11 +272,20 @@ def lead_root(output_root: Path, lead_hours: int, region: str) -> Path:
     return output_root / f"lead{lead_hours}h" / region / "processed"
 
 
-def output_path(output_root: Path, lead_hours: int, region: str, wb2_var: str, valid: pd.Timestamp) -> Path:
-    return lead_root(output_root, lead_hours, region) / f"era5_wb2_quarter_{wb2_var}" / "data" / _file_name(valid)
+def output_path(
+    output_root: Path, lead_hours: int, region: str, wb2_var: str, valid: pd.Timestamp
+) -> Path:
+    return (
+        lead_root(output_root, lead_hours, region)
+        / f"era5_wb2_quarter_{wb2_var}"
+        / "data"
+        / _file_name(valid)
+    )
 
 
-def harvest_done(output_root: Path, lead_hours: int, valid: pd.Timestamp, region_names: list[str]) -> bool:
+def harvest_done(
+    output_root: Path, lead_hours: int, valid: pd.Timestamp, region_names: list[str]
+) -> bool:
     """A (lead, valid) is done only once EVERY region's 2m_temperature exists.
 
     Using 'all regions present' as the marker means a run interrupted mid-frame
@@ -272,6 +300,7 @@ def harvest_done(output_root: Path, lead_hours: int, valid: pd.Timestamp, region
 # --------------------------------------------------------------------------- #
 # Region cropping (same crop as the dataset preprocessor).
 # --------------------------------------------------------------------------- #
+
 
 def resolve_region_bboxes(global_metadata_path, region_names):
     """Map region name -> (lat_min, lat_max, lon_min, lon_max) from the global metadata."""
@@ -298,7 +327,9 @@ def region_n_cells(bbox, res_deg: float = 0.25) -> int:
     return n_lat * n_lon
 
 
-def resolve_region_crops(bboxes, aurora_lats, aurora_lons, global_dataset_dir, logger=None):
+def resolve_region_crops(
+    bboxes, aurora_lats, aurora_lons, global_dataset_dir, logger=None
+):
     """Compute per-region crop indices on Aurora's OWN output grid.
 
     For regions that have a reference grid in the global dataset
@@ -321,9 +352,12 @@ def resolve_region_crops(bboxes, aurora_lats, aurora_lons, global_dataset_dir, l
         ref_lat_f, ref_lon_f = ref_dir / "lats.npy", ref_dir / "lons.npy"
         if ref_lat_f.exists() and ref_lon_f.exists():
             ref_lats, ref_lons = np.load(ref_lat_f), np.load(ref_lon_f)
-            if not (lats_c.shape == ref_lats.shape and lons_c.shape == ref_lons.shape
-                    and np.allclose(lats_c, ref_lats, atol=1e-4)
-                    and np.allclose(lons_c, ref_lons, atol=1e-4)):
+            if not (
+                lats_c.shape == ref_lats.shape
+                and lons_c.shape == ref_lons.shape
+                and np.allclose(lats_c, ref_lats, atol=1e-4)
+                and np.allclose(lons_c, ref_lons, atol=1e-4)
+            ):
                 raise AssertionError(
                     f"Region '{name}': Aurora crop {lats_c.shape}x{lons_c.shape} does not match "
                     f"the dataset reference grid {ref_lats.shape}x{ref_lons.shape} -- refusing to mis-crop."
@@ -332,9 +366,19 @@ def resolve_region_crops(bboxes, aurora_lats, aurora_lons, global_dataset_dir, l
         else:
             checked = "NEW region (no reference grid to check against)"
         if logger:
-            logger(f"  region {name:10s}: {len(lat_idx)}x{len(lon_idx)} grid, roll={roll}  [{checked}]")
-        crops.append({"name": name, "lat_idx": lat_idx, "lon_idx": lon_idx,
-                      "roll": roll, "lats": lats_c, "lons": lons_c})
+            logger(
+                f"  region {name:10s}: {len(lat_idx)}x{len(lon_idx)} grid, roll={roll}  [{checked}]"
+            )
+        crops.append(
+            {
+                "name": name,
+                "lat_idx": lat_idx,
+                "lon_idx": lon_idx,
+                "roll": roll,
+                "lats": lats_c,
+                "lons": lons_c,
+            }
+        )
     return crops
 
 
@@ -342,10 +386,19 @@ def resolve_region_crops(bboxes, aurora_lats, aurora_lons, global_dataset_dir, l
 # Accounting / dry run (unit-testable).
 # --------------------------------------------------------------------------- #
 
-def estimate_output_gb(per_init, output_root: Path, leads_hours: list[int], bytes_per_value: int,
-                       region_names: list[str], region_cells: dict) -> float:
+
+def estimate_output_gb(
+    per_init,
+    output_root: Path,
+    leads_hours: list[int],
+    bytes_per_value: int,
+    region_names: list[str],
+    region_cells: dict,
+) -> float:
     n_fields = len(SURF_AURORA_TO_WB2) + len(ATMOS_AURORA_TO_WB2) * len(WB_LEVELS)  # 69
-    cells_per_frame = sum(region_cells[r] for r in region_names)  # summed across regions
+    cells_per_frame = sum(
+        region_cells[r] for r in region_names
+    )  # summed across regions
     n_frames = sum(
         1
         for harvs in per_init.values()
@@ -356,67 +409,108 @@ def estimate_output_gb(per_init, output_root: Path, leads_hours: list[int], byte
 
 
 def dry_run_report(
-    test_times, inits, per_init, leads_hours, era5_staging_root: Path, output_root: Path,
-    dtype_bytes: int, region_bboxes: dict, region_cells: dict, static_file: str | None = None,
+    test_times,
+    inits,
+    per_init,
+    leads_hours,
+    era5_staging_root: Path,
+    output_root: Path,
+    dtype_bytes: int,
+    region_bboxes: dict,
+    region_cells: dict,
+    static_file: str | None = None,
 ) -> None:
     region_names = list(region_bboxes)
     in_frames = required_input_frames(inits)
     n_rollouts = sum(
         1
         for t0 in inits
-        if any(not harvest_done(output_root, lead, valid, region_names) for (lead, _s, valid) in per_init[t0])
+        if any(
+            not harvest_done(output_root, lead, valid, region_names)
+            for (lead, _s, valid) in per_init[t0]
+        )
     )
     total_steps = 0
     for t0 in inits:
-        todo_steps = [s for (lead, s, valid) in per_init[t0] if not harvest_done(output_root, lead, valid, region_names)]
+        todo_steps = [
+            s
+            for (lead, s, valid) in per_init[t0]
+            if not harvest_done(output_root, lead, valid, region_names)
+        ]
         total_steps += max(todo_steps) if todo_steps else 0
     print("=" * 70)
     print("Aurora forecast generation -- DRY RUN")
     print("=" * 70)
-    print(f"Leads (hours)         : {leads_hours}  ->  steps {[lead_to_step(h) for h in leads_hours]}")
-    print(f"Valid-times (split)   : {len(test_times)}  ({test_times[0]} .. {test_times[-1]})")
+    print(
+        f"Leads (hours)         : {leads_hours}  ->  steps {[lead_to_step(h) for h in leads_hours]}"
+    )
+    print(
+        f"Valid-times (split)   : {len(test_times)}  ({test_times[0]} .. {test_times[-1]})"
+    )
     print(f"Init times (union)    : {len(inits)}  ({inits[0]} .. {inits[-1]})")
     print(f"Rollouts to run       : {n_rollouts}  (after skipping completed)")
     print(f"Total rollout steps   : {total_steps}")
     for lead in leads_hours:
-        n = sum(1 for harvs in per_init.values() for (h, _s, valid) in harvs if h == lead)
+        n = sum(
+            1 for harvs in per_init.values() for (h, _s, valid) in harvs if h == lead
+        )
         n_todo = sum(
             1
             for harvs in per_init.values()
             for (h, _s, valid) in harvs
             if h == lead and not harvest_done(output_root, lead, valid, region_names)
         )
-        print(f"  lead {lead:>3}h frames    : {n} total, {n_todo} to write (x {len(region_names)} regions)")
-    print(f"Input frames needed   : {len(in_frames)}  ({in_frames[0]} .. {in_frames[-1]})")
+        print(
+            f"  lead {lead:>3}h frames    : {n} total, {n_todo} to write (x {len(region_names)} regions)"
+        )
+    print(
+        f"Input frames needed   : {len(in_frames)}  ({in_frames[0]} .. {in_frames[-1]})"
+    )
     print("Regions (cropped)     :")
     for r in region_names:
         lat_min, lat_max, lon_min, lon_max = region_bboxes[r]
-        print(f"  {r:10s} bbox=[{lat_min},{lat_max},{lon_min},{lon_max}]  ~{region_cells[r]:,} cells")
+        print(
+            f"  {r:10s} bbox=[{lat_min},{lat_max},{lon_min},{lon_max}]  ~{region_cells[r]:,} cells"
+        )
     pct = 100.0 * sum(region_cells[r] for r in region_names) / (721 * 1440)
     print(f"  -> cropped extent is ~{pct:.1f}% of the global grid")
 
     # --- Pre-flight existence checks (the go/no-go gate) ---
     missing = missing_input_frames(era5_staging_root, inits)
     if missing:
-        print(f"  *** MISSING INPUTS  : {len(missing)} (var, frame) pairs absent under {era5_staging_root}")
+        print(
+            f"  *** MISSING INPUTS  : {len(missing)} (var, frame) pairs absent under {era5_staging_root}"
+        )
         print(f"      e.g. {[(v, str(f)) for v, f in missing[:5]]}")
     else:
-        print(f"  input check         : all {len(in_frames) * len(INPUT_WB2_VARS)} required ERA5 files present  [ok]")
+        print(
+            f"  input check         : all {len(in_frames) * len(INPUT_WB2_VARS)} required ERA5 files present  [ok]"
+        )
     if static_file is not None:
         present = Path(static_file).exists()
-        print(f"Static file           : {'present [ok]' if present else '*** MISSING ***'}  ({static_file})")
+        print(
+            f"Static file           : {'present [ok]' if present else '*** MISSING ***'}  ({static_file})"
+        )
 
-    out_gb = estimate_output_gb(per_init, output_root, leads_hours, dtype_bytes, region_names, region_cells)
-    print(f"Output storage (todo) : ~{out_gb:,.0f} GB  (69 fields x cropped grid x {dtype_bytes}B, summed over regions)")
+    out_gb = estimate_output_gb(
+        per_init, output_root, leads_hours, dtype_bytes, region_names, region_cells
+    )
+    print(
+        f"Output storage (todo) : ~{out_gb:,.0f} GB  (69 fields x cropped grid x {dtype_bytes}B, summed over regions)"
+    )
     go = (not missing) and (static_file is None or Path(static_file).exists())
     print("=" * 70)
-    print("PRE-FLIGHT:", "READY TO RUN" if go else "*** RESOLVE ISSUES ABOVE BEFORE RUNNING ***")
+    print(
+        "PRE-FLIGHT:",
+        "READY TO RUN" if go else "*** RESOLVE ISSUES ABOVE BEFORE RUNNING ***",
+    )
     print("=" * 70)
 
 
 # --------------------------------------------------------------------------- #
 # Heavy lifting (lazy imports of torch / aurora / xarray).
 # --------------------------------------------------------------------------- #
+
 
 def _load_model(kind: str, device):
     """Load the requested Aurora model.
@@ -430,21 +524,27 @@ def _load_model(kind: str, device):
     if kind == "pretrained":
         try:
             from aurora import AuroraPretrained as Cls  # newer API
+
             model = Cls()
             model.load_checkpoint()
         except ImportError:
             from aurora import Aurora as Cls  # older API
+
             model = Cls(use_lora=False)
             model.load_checkpoint("microsoft/aurora", "aurora-0.25-pretrained.ckpt")
     elif kind == "small":
         try:
             from aurora import AuroraSmallPretrained as Cls
+
             model = Cls()
             model.load_checkpoint()
         except ImportError:
             from aurora import AuroraSmall as Cls
+
             model = Cls()
-            model.load_checkpoint("microsoft/aurora", "aurora-0.25-small-pretrained.ckpt")
+            model.load_checkpoint(
+                "microsoft/aurora", "aurora-0.25-small-pretrained.ckpt"
+            )
     else:
         raise ValueError(f"Unknown model kind: {kind}")
 
@@ -459,11 +559,15 @@ def _open_static(static_file: Path):
     ds = xr.open_dataset(static_file)
     for k in STATIC_KEYS:
         if k not in ds:
-            raise KeyError(f"Static file {static_file} is missing '{k}'. Found: {list(ds.data_vars)}")
+            raise KeyError(
+                f"Static file {static_file} is missing '{k}'. Found: {list(ds.data_vars)}"
+            )
     return ds
 
 
-def _read_frame_var(era5_staging_root: Path, wb2_var: str, frame: pd.Timestamp, levels=None):
+def _read_frame_var(
+    era5_staging_root: Path, wb2_var: str, frame: pd.Timestamp, levels=None
+):
     import xarray as xr
 
     p = input_path(era5_staging_root, wb2_var, frame)
@@ -485,17 +589,25 @@ def _build_batch(era5_staging_root: Path, t0: pd.Timestamp, static_ds, device):
 
     surf_vars = {}
     for a_name, wb2 in SURF_AURORA_TO_WB2.items():
-        stk = np.stack([_read_frame_var(era5_staging_root, wb2, f).values for f in frames], axis=0)
+        stk = np.stack(
+            [_read_frame_var(era5_staging_root, wb2, f).values for f in frames], axis=0
+        )
         surf_vars[a_name] = torch.from_numpy(stk).float()[None]  # (1, T=2, H, W)
 
     atmos_vars = {}
     for a_name, wb2 in ATMOS_AURORA_TO_WB2.items():
         stk = np.stack(
-            [_read_frame_var(era5_staging_root, wb2, f, levels=WB_LEVELS).values for f in frames], axis=0
+            [
+                _read_frame_var(era5_staging_root, wb2, f, levels=WB_LEVELS).values
+                for f in frames
+            ],
+            axis=0,
         )  # (T=2, C=13, H, W)
         atmos_vars[a_name] = torch.from_numpy(stk).float()[None]  # (1, T=2, C, H, W)
 
-    static_vars = {k: torch.from_numpy(static_ds[k].squeeze().values).float() for k in STATIC_KEYS}
+    static_vars = {
+        k: torch.from_numpy(static_ds[k].squeeze().values).float() for k in STATIC_KEYS
+    }
 
     # Grid from any surface file.
     ref = _read_frame_var(era5_staging_root, "2m_temperature", t0)
@@ -503,8 +615,12 @@ def _build_batch(era5_staging_root: Path, t0: pd.Timestamp, static_ds, device):
     lon = torch.from_numpy(ref["longitude"].values.copy()).float()
 
     # Sanity: Aurora expects 721x1440, lat descending from +90, lon 0..359.75.
-    assert lat.shape[0] == 721 and lon.shape[0] == 1440, f"Grid is {lat.shape[0]}x{lon.shape[0]}, expected 721x1440"
-    assert abs(float(lat[0]) - 90.0) < 1e-4 and float(lat[0]) > float(lat[-1]), "lat must descend from +90"
+    assert lat.shape[0] == 721 and lon.shape[0] == 1440, (
+        f"Grid is {lat.shape[0]}x{lon.shape[0]}, expected 721x1440"
+    )
+    assert abs(float(lat[0]) - 90.0) < 1e-4 and float(lat[0]) > float(lat[-1]), (
+        "lat must descend from +90"
+    )
     assert abs(float(lon[0]) - 0.0) < 1e-4, "lon must start at 0"
 
     batch = Batch(
@@ -521,8 +637,14 @@ def _build_batch(era5_staging_root: Path, t0: pd.Timestamp, static_ds, device):
     return batch.to(device)
 
 
-def _write_frame(output_root: Path, lead: int, valid: pd.Timestamp, pred, dtype_str: str,
-                 region_crops: list) -> None:
+def _write_frame(
+    output_root: Path,
+    lead: int,
+    valid: pd.Timestamp,
+    pred,
+    dtype_str: str,
+    region_crops: list,
+) -> None:
     """Crop one harvested forecast frame to each region and write per-region staging.
 
     For each region, the global field is rolled (so a 0-deg-crossing box is
@@ -550,19 +672,39 @@ def _write_frame(output_root: Path, lead: int, valid: pd.Timestamp, pred, dtype_
         tmp.replace(out)  # atomic rename
 
     # Pull each global field to host once, then crop it to every region.
-    surf = {wb2: pred.surf_vars[a][0, 0].cpu().numpy().astype(dtype_str)
-            for a, wb2 in SURF_AURORA_TO_WB2.items()}
-    atmos = {wb2: pred.atmos_vars[a][0, 0].cpu().numpy().astype(dtype_str)  # (C, H, W)
-             for a, wb2 in ATMOS_AURORA_TO_WB2.items()}
+    surf = {
+        wb2: pred.surf_vars[a][0, 0].cpu().numpy().astype(dtype_str)
+        for a, wb2 in SURF_AURORA_TO_WB2.items()
+    }
+    atmos = {
+        wb2: pred.atmos_vars[a][0, 0].cpu().numpy().astype(dtype_str)  # (C, H, W)
+        for a, wb2 in ATMOS_AURORA_TO_WB2.items()
+    }
 
     for rc in region_crops:
         coords2d = {"latitude": rc["lats"], "longitude": rc["lons"]}
         for wb2, arr in surf.items():
-            _write(rc, wb2, xr.DataArray(_crop2d(arr, rc), dims=("latitude", "longitude"),
-                                         coords=coords2d, name=wb2))
+            _write(
+                rc,
+                wb2,
+                xr.DataArray(
+                    _crop2d(arr, rc),
+                    dims=("latitude", "longitude"),
+                    coords=coords2d,
+                    name=wb2,
+                ),
+            )
         for wb2, arr in atmos.items():
-            _write(rc, wb2, xr.DataArray(_crop3d(arr, rc), dims=("level", "latitude", "longitude"),
-                                         coords={"level": levels, **coords2d}, name=wb2))
+            _write(
+                rc,
+                wb2,
+                xr.DataArray(
+                    _crop3d(arr, rc),
+                    dims=("level", "latitude", "longitude"),
+                    coords={"level": levels, **coords2d},
+                    name=wb2,
+                ),
+            )
 
 
 def run(args) -> None:
@@ -570,7 +712,9 @@ def run(args) -> None:
     era5_staging_root = Path(args.era5_staging_root)
     global_dataset_dir = Path(args.global_metadata).parent
 
-    test_times = load_times(args.global_metadata, args.split, args.start_date, args.end_date)
+    test_times = load_times(
+        args.global_metadata, args.split, args.start_date, args.end_date
+    )
     inits, per_init = build_schedule(test_times, args.leads)
     dtype_bytes = 2 if args.dtype == "float16" else 4
 
@@ -583,8 +727,18 @@ def run(args) -> None:
         inits = inits[: args.limit]
 
     if args.dry_run:
-        dry_run_report(test_times, inits, per_init, args.leads, era5_staging_root, output_root,
-                       dtype_bytes, region_bboxes, region_cells, static_file=args.static_file)
+        dry_run_report(
+            test_times,
+            inits,
+            per_init,
+            args.leads,
+            era5_staging_root,
+            output_root,
+            dtype_bytes,
+            region_bboxes,
+            region_cells,
+            static_file=args.static_file,
+        )
         return
 
     # Heavy imports only on the real path (keeps --dry-run torch/aurora-free).
@@ -592,7 +746,9 @@ def run(args) -> None:
     from aurora import rollout
     from tqdm import tqdm
 
-    device = torch.device(args.device if args.device else ("cuda" if torch.cuda.is_available() else "cpu"))
+    device = torch.device(
+        args.device if args.device else ("cuda" if torch.cuda.is_available() else "cpu")
+    )
     if device.type == "cpu" and not args.allow_cpu:
         raise SystemExit(
             "Refusing to run global Aurora on CPU -- it will exhaust host RAM and be OOM-killed.\n"
@@ -612,8 +768,11 @@ def run(args) -> None:
 
     for t0 in tqdm(inits, desc=f"Aurora rollouts ({args.model})"):
         harvests = per_init[t0]
-        todo = [(lead, step, valid) for (lead, step, valid) in harvests
-                if not harvest_done(output_root, lead, valid, region_names)]
+        todo = [
+            (lead, step, valid)
+            for (lead, step, valid) in harvests
+            if not harvest_done(output_root, lead, valid, region_names)
+        ]
         if not todo:
             continue
         max_step = max(step for (_l, step, _v) in todo)
@@ -626,8 +785,10 @@ def run(args) -> None:
                     lead, valid = want[i]
                     pred = pred.to("cpu")
                     if region_crops is None:
-                        print(f"Resolving region crops on Aurora's "
-                              f"{len(pred.metadata.lat)}x{len(pred.metadata.lon)} output grid:")
+                        print(
+                            f"Resolving region crops on Aurora's "
+                            f"{len(pred.metadata.lat)}x{len(pred.metadata.lon)} output grid:"
+                        )
                         region_crops = resolve_region_crops(
                             region_bboxes,
                             pred.metadata.lat.cpu().numpy(),
@@ -635,32 +796,85 @@ def run(args) -> None:
                             global_dataset_dir,
                             logger=print,
                         )
-                    _write_frame(output_root, lead, valid, pred, args.dtype, region_crops)
+                    _write_frame(
+                        output_root, lead, valid, pred, args.dtype, region_crops
+                    )
 
 
 def parse_args():
-    p = argparse.ArgumentParser(description="Generate global Aurora forecasts in ERA5-staging layout (Stage 1).")
-    p.add_argument("--global-metadata", required=True, help="Path to dataset_timestamp_global/metadata.json")
-    p.add_argument("--era5-staging-root", required=True, help="Root of 13-level ERA5 staging (era5_wb2_quarter_<var>/data/)")
-    p.add_argument("--static-file", required=True, help="era5_static_0p25_all.nc (provides z/lsm/slt)")
-    p.add_argument("--output-root", required=True, help="Aurora staging root; writes lead{L}h/<region>/processed/... under it")
-    p.add_argument("--regions", nargs="+", default=DEFAULT_REGIONS,
-                   help="Regions to crop to; bboxes are read from --global-metadata "
-                        "(default: all five dataset regions).")
-    p.add_argument("--leads", type=int, nargs="+", default=DEFAULT_LEADS_HOURS, help="Lead times in hours")
-    p.add_argument("--split", choices=["train", "val", "trainval", "test", "all"], default="test",
-                   help="Which split's valid-times to generate forecasts for. Default 'test' "
-                        "(backward compatible). Use 'trainval' for the cross-lead training set.")
-    p.add_argument("--start-date", default=None,
-                   help="Optional lower bound on valid-time (YYYY-MM-DD[-HH]); for chunking a big run, e.g. by year.")
-    p.add_argument("--end-date", default=None,
-                   help="Optional upper bound on valid-time (YYYY-MM-DD[-HH]).")
+    p = argparse.ArgumentParser(
+        description="Generate global Aurora forecasts in ERA5-staging layout (Stage 1)."
+    )
+    p.add_argument(
+        "--global-metadata",
+        required=True,
+        help="Path to dataset_timestamp_global/metadata.json",
+    )
+    p.add_argument(
+        "--era5-staging-root",
+        required=True,
+        help="Root of 13-level ERA5 staging (era5_wb2_quarter_<var>/data/)",
+    )
+    p.add_argument(
+        "--static-file",
+        required=True,
+        help="era5_static_0p25_all.nc (provides z/lsm/slt)",
+    )
+    p.add_argument(
+        "--output-root",
+        required=True,
+        help="Aurora staging root; writes lead{L}h/<region>/processed/... under it",
+    )
+    p.add_argument(
+        "--regions",
+        nargs="+",
+        default=DEFAULT_REGIONS,
+        help="Regions to crop to; bboxes are read from --global-metadata "
+        "(default: all five dataset regions).",
+    )
+    p.add_argument(
+        "--leads",
+        type=int,
+        nargs="+",
+        default=DEFAULT_LEADS_HOURS,
+        help="Lead times in hours",
+    )
+    p.add_argument(
+        "--split",
+        choices=["train", "val", "trainval", "test", "all"],
+        default="test",
+        help="Which split's valid-times to generate forecasts for. Default 'test' "
+        "(backward compatible). Use 'trainval' for the cross-lead training set.",
+    )
+    p.add_argument(
+        "--start-date",
+        default=None,
+        help="Optional lower bound on valid-time (YYYY-MM-DD[-HH]); for chunking a big run, e.g. by year.",
+    )
+    p.add_argument(
+        "--end-date",
+        default=None,
+        help="Optional upper bound on valid-time (YYYY-MM-DD[-HH]).",
+    )
     p.add_argument("--model", choices=["pretrained", "small"], default="pretrained")
     p.add_argument("--dtype", choices=["float32", "float16"], default="float32")
     p.add_argument("--device", default=None, help="e.g. cuda, cpu (default: auto)")
-    p.add_argument("--allow-cpu", action="store_true", help="Permit CPU execution (debug only; global model will OOM)")
-    p.add_argument("--limit", type=int, default=0, help="Process only the first N inits (smoke test)")
-    p.add_argument("--dry-run", action="store_true", help="Print accounting and exit (no model load)")
+    p.add_argument(
+        "--allow-cpu",
+        action="store_true",
+        help="Permit CPU execution (debug only; global model will OOM)",
+    )
+    p.add_argument(
+        "--limit",
+        type=int,
+        default=0,
+        help="Process only the first N inits (smoke test)",
+    )
+    p.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print accounting and exit (no model load)",
+    )
     return p.parse_args()
 
 

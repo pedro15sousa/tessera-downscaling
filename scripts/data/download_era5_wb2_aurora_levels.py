@@ -84,11 +84,15 @@ def process_slice(
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("--start", default="2009-12-28", help="First timestamp (inclusive).")
-    p.add_argument("--end", default="2021-12-26T18:00:00", help="Last timestamp (inclusive).")
     p.add_argument(
-        "--root", type=Path, default=staging_dir("aurora_inputs"),
+        "--end", default="2021-12-26T18:00:00", help="Last timestamp (inclusive)."
+    )
+    p.add_argument(
+        "--root",
+        type=Path,
+        default=staging_dir("aurora_inputs"),
         help="Output root; files go to <root>/era5_wb2_quarter_<var>/data/ "
-             "(default: <data root>/_staging/aurora_inputs).",
+        "(default: <data root>/_staging/aurora_inputs).",
     )
     p.add_argument("--num-processes", type=int, default=16)
     args = p.parse_args()

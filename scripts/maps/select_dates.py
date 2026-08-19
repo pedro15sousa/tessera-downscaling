@@ -13,6 +13,7 @@ to OUTPUTS/selected_dates.json. Use those to set per-region `dates` in regions.p
 
   uv run python scripts/maps/select_dates.py
 """
+
 from __future__ import annotations
 
 import json
@@ -50,10 +51,16 @@ def field(era5, var, pts):
 def main():
     ds = MultiRegionSnapshotDownscalingDataset(
         dataset_dir=dataset_dir("dataset_timestamp_global"),
-        region_specs={"europe": "test"}, split="test", target_variables=["t2m"],
+        region_specs={"europe": "test"},
+        split="test",
+        target_variables=["t2m"],
         vae_latents_path=processed_dir("station_latents_lat16_grad0.5.npy"),
-        vae_latents_station_csv=processed_dir("tessera_global", "station_list_filtered.csv"),
-        vae_latents_zscore=True, include_static_fields=False, normalisation_policy="per_region",
+        vae_latents_station_csv=processed_dir(
+            "tessera_global", "station_list_filtered.csv"
+        ),
+        vae_latents_zscore=True,
+        include_static_fields=False,
+        normalisation_policy="per_region",
     )
     tss = list(ds.timestamps)
     print(f"scanning {len(tss)} europe test snapshots over {list(REGIONS)} ...")
@@ -81,8 +88,12 @@ def main():
             print(f"  -- {var}: top 6 by spatial std (over land cells) --")
             for ts, sd, mn in rows[:6]:
                 print(f"     {ts}  std={sd:6.2f}  mean={mn:7.2f}")
-            print(f"     [ref {REF[var]}: std={ref[1]:.2f} mean={ref[2]:.2f}  rank {ref_rank+1}/{len(rows)}]")
-            picks[name][var] = dict(ts=rows[0][0], std=round(rows[0][1], 3), mean=round(rows[0][2], 3))
+            print(
+                f"     [ref {REF[var]}: std={ref[1]:.2f} mean={ref[2]:.2f}  rank {ref_rank + 1}/{len(rows)}]"
+            )
+            picks[name][var] = dict(
+                ts=rows[0][0], std=round(rows[0][1], 3), mean=round(rows[0][2], 3)
+            )
             print(f"  PICK {var}: {rows[0][0]}")
 
     OUTPUTS.mkdir(parents=True, exist_ok=True)

@@ -47,6 +47,7 @@ Run (CPU is sufficient):
   uv run python scripts/maps/generate_maps.py
   REGION=norway uv run python scripts/maps/generate_maps.py
 """
+
 from __future__ import annotations
 
 import json
@@ -54,7 +55,7 @@ import os
 
 import numpy as np
 import torch
-from regions import G, SEEDS, Z_STATIC_IDX, get_region
+from regions import SEEDS, Z_STATIC_IDX, G, get_region
 
 from tessera_downscaling.data.helpers import build_context_grid
 from tessera_downscaling.evaluate import build_model_from_config, load_state_dict_compat
@@ -82,6 +83,7 @@ DEM_PATH = R.dem_path
 USE_DEM = DEM_PATH.exists() and os.environ.get("MAPS_NO_DEM") != "1"
 SUF = "_dem" if USE_DEM else ""
 
+
 # ---------------------------------------------------------------------------
 # Bilinear grid->points (replicates tessera_downscaling.baselines)
 # ---------------------------------------------------------------------------
@@ -103,10 +105,16 @@ def bilinear_grid_to_points(grid, glats, glons, pts):
     lon0, lon1 = glons[j], glons[j + 1]
     wy = (lats - lat0) / (lat1 - lat0)
     wx = (lons - lon0) / (lon1 - lon0)
-    f00 = grid[i, j]; f01 = grid[i, j + 1]
-    f10 = grid[i + 1, j]; f11 = grid[i + 1, j + 1]
-    out = (f00 * (1 - wy) * (1 - wx) + f01 * (1 - wy) * wx
-           + f10 * wy * (1 - wx) + f11 * wy * wx)
+    f00 = grid[i, j]
+    f01 = grid[i, j + 1]
+    f10 = grid[i + 1, j]
+    f11 = grid[i + 1, j + 1]
+    out = (
+        f00 * (1 - wy) * (1 - wx)
+        + f01 * (1 - wy) * wx
+        + f10 * wy * (1 - wx)
+        + f11 * wy * wx
+    )
     return out.astype(np.float32)
 
 
@@ -146,11 +154,14 @@ def build_ctx(cfg, ts, glats, glons):
     ctx = build_context_grid(
         era5_path=EU / "era5_snapshot" / f"{ts}.npy",
         static_fields=static,
-        grid_lats=glats, grid_lons=glons,
+        grid_lats=glats,
+        grid_lons=glons,
         date_str=ts[:10],
-        era5_mean=stats["era5_mean"], era5_std=stats["era5_std"],
+        era5_mean=stats["era5_mean"],
+        era5_std=stats["era5_std"],
         hour=int(ts[11:13]),
-        drop_dynamic_indices=None, lead_hours=None,
+        drop_dynamic_indices=None,
+        lead_hours=None,
     )
     return ctx.astype(np.float32)
 
@@ -162,8 +173,14 @@ def run_model(model, var, ctx, glats, glons, pts, elev_pts, delta_pts, latents_z
     glon_t = torch.tensor(glons.astype(np.float32))
     tc = torch.tensor(pts[None].astype(np.float32))
     te = torch.tensor(elev_pts[None].astype(np.float32))
-    tde = torch.tensor(delta_pts[None].astype(np.float32))   # 0 for proxy, DEM-ERA5 for DEM
-    tt = torch.tensor(latents_z[None].astype(np.float32)) if latents_z is not None else None
+    tde = torch.tensor(
+        delta_pts[None].astype(np.float32)
+    )  # 0 for proxy, DEM-ERA5 for DEM
+    tt = (
+        torch.tensor(latents_z[None].astype(np.float32))
+        if latents_z is not None
+        else None
+    )
     out = model(ctx_t, glat_t, glon_t, tc, te, tde, None, tt)
     # MAE-consistent point estimate: the head median. For Gaussian t2m this is
     # exactly mu (byte-identical to before); for the truncated-normal wind head it
@@ -191,12 +208,13 @@ DIFF_CMAP = "RdBu_r"
 DIFF_PCT = 99  # symmetric colour limits at this percentile of |delta|
 # Hillshade for the terrain-overlay figure (NW sun, standard cartographic default).
 HILL_AZ, HILL_ALT, HILL_EXAG = 315.0, 45.0, 2.0
-N_CONTOURS = 5   # elevation contours drawn over the draped delta panels
+N_CONTOURS = 5  # elevation contours drawn over the draped delta panels
 
 
 def _make_axes(n, use_cartopy, proj, wspace=None):
     """One row of n map panels, sized so each panel keeps the paper's aspect."""
     import matplotlib.pyplot as plt
+
     kw = {"subplot_kw": {"projection": proj}} if use_cartopy else {}
     if wspace is not None:
         kw["gridspec_kw"] = {"wspace": wspace}
@@ -221,10 +239,11 @@ def _inset_cbar(fig, mappable, ax, label):
 def _hillshade(elev, lats_d, lons_d):
     """Grey-scale relief from the dense DEM (elev in m, NaN over sea -> 0)."""
     from matplotlib.colors import LightSource
+
     dlat = abs(float(lats_d[1] - lats_d[0]))
     dlon = abs(float(lons_d[1] - lons_d[0]))
     coslat = float(np.cos(np.deg2rad(np.mean(lats_d))))
-    dy, dx = dlat * 111_320.0, dlon * 111_320.0 * coslat      # cell size in metres
+    dy, dx = dlat * 111_320.0, dlon * 111_320.0 * coslat  # cell size in metres
     ls = LightSource(azdeg=HILL_AZ, altdeg=HILL_ALT)
     filled = np.where(np.isfinite(elev), elev, 0.0).astype(float)
     return ls, filled, ls.hillshade(filled, vert_exag=HILL_EXAG, dx=dx, dy=dy), dx, dy
@@ -233,9 +252,11 @@ def _hillshade(elev, lats_d, lons_d):
 def _drape(ax, field, cmap, norm, ls, elev_filled, dx, dy, extent, use_cartopy, proj):
     """Field coloured by (cmap, norm) and relief-shaded by the DEM, NaN transparent."""
     import matplotlib.pyplot as plt
+
     rgb = plt.get_cmap(cmap)(norm(np.where(np.isfinite(field), field, 0.0)))[..., :3]
-    shaded = ls.shade_rgb(rgb, elev_filled, blend_mode="overlay",
-                          vert_exag=HILL_EXAG, dx=dx, dy=dy)
+    shaded = ls.shade_rgb(
+        rgb, elev_filled, blend_mode="overlay", vert_exag=HILL_EXAG, dx=dx, dy=dy
+    )
     rgba = np.dstack([shaded, np.isfinite(field).astype(float)])
     kw = {"transform": proj} if use_cartopy else {}
     return ax.imshow(rgba, origin="upper", extent=extent, **kw)
@@ -244,18 +265,33 @@ def _drape(ax, field, cmap, norm, ls, elev_filled, dx, dy, extent, use_cartopy, 
 def _panel(ax, arr, extent, cmap, vmin, vmax, title, use_cartopy, proj, cfeature):
     """Draw one field panel; returns the image handle (for the colorbar)."""
     if use_cartopy:
-        im = ax.imshow(arr, origin="upper", extent=extent, transform=proj,
-                       cmap=cmap, vmin=vmin, vmax=vmax)
+        im = ax.imshow(
+            arr,
+            origin="upper",
+            extent=extent,
+            transform=proj,
+            cmap=cmap,
+            vmin=vmin,
+            vmax=vmax,
+        )
         ax.coastlines(resolution="10m", linewidth=0.6, color="k")
         try:
-            ax.add_feature(cfeature.BORDERS.with_scale("10m"), linewidth=0.4,
-                           edgecolor="0.3")
+            ax.add_feature(
+                cfeature.BORDERS.with_scale("10m"), linewidth=0.4, edgecolor="0.3"
+            )
         except Exception:
             pass
         ax.set_extent(extent, crs=proj)
     else:
-        im = ax.imshow(arr, origin="upper", extent=extent, cmap=cmap,
-                       vmin=vmin, vmax=vmax, aspect="auto")
+        im = ax.imshow(
+            arr,
+            origin="upper",
+            extent=extent,
+            cmap=cmap,
+            vmin=vmin,
+            vmax=vmax,
+            aspect="auto",
+        )
     ax.set_title(title, fontsize=11)
     return im
 
@@ -263,12 +299,14 @@ def _panel(ax, arr, extent, cmap, vmin, vmax, title, use_cartopy, proj, cfeature
 def _setup(arrays):
     """Shared plotting prelude: matplotlib backend, cartopy probe, shared vmin/vmax."""
     import matplotlib
+
     matplotlib.use("Agg")
     stacked = np.concatenate([a[np.isfinite(a)].ravel() for a in arrays])
     vmin, vmax = np.percentile(stacked, [1, 99])
     try:
         import cartopy.crs as ccrs
         import cartopy.feature as cfeature
+
         return ccrs.PlateCarree(), cfeature, True, vmin, vmax
     except Exception:
         return None, None, False, vmin, vmax
@@ -282,7 +320,7 @@ def plot_three(arrays, titles, lons_d, lats_d, cmap, unit, out_png):
     fig, axes = _make_axes(3, use_cartopy, proj)
 
     im = None
-    for ax, arr, t in zip(axes, arrays, titles):
+    for ax, arr, t in zip(axes, arrays, titles, strict=False):
         im = _panel(ax, arr, extent, cmap, vmin, vmax, t, use_cartopy, proj, cfeature)
 
     cbar = fig.colorbar(im, ax=list(axes), shrink=0.8, pad=0.02)
@@ -303,7 +341,7 @@ def diff_field(arrays, demean=False):
     if demean:
         delta = delta - mean
     dmax = float(np.nanpercentile(np.abs(delta), DIFF_PCT))
-    if not np.isfinite(dmax) or dmax == 0.0:      # degenerate (identical fields)
+    if not np.isfinite(dmax) or dmax == 0.0:  # degenerate (identical fields)
         dmax = 1e-6
     return delta, dmax, mean
 
@@ -321,8 +359,19 @@ def _elevation_panel(fig, ax, dem_land, lats_d, lons_d, extent, use_cartopy, pro
 
     ls, elev_filled, _, dx, dy = _hillshade(dem_land, lats_d, lons_d)
     e_norm = Normalize(0.0, float(np.nanpercentile(dem_land, 99.5)))
-    _drape(ax, dem_land, "terrain", e_norm, ls, elev_filled, dx, dy, extent,
-           use_cartopy, proj)
+    _drape(
+        ax,
+        dem_land,
+        "terrain",
+        e_norm,
+        ls,
+        elev_filled,
+        dx,
+        dy,
+        extent,
+        use_cartopy,
+        proj,
+    )
     if use_cartopy:
         ax.coastlines(resolution="10m", linewidth=0.6, color="k")
         ax.set_extent(extent, crs=proj)
@@ -330,8 +379,9 @@ def _elevation_panel(fig, ax, dem_land, lats_d, lons_d, extent, use_cartopy, pro
     _inset_cbar(fig, ScalarMappable(norm=e_norm, cmap="terrain"), ax, "m")
 
 
-def plot_three_plus_diff(arrays, titles, lons_d, lats_d, cmap, unit, out_png,
-                         demean=False, dem_grid=None):
+def plot_three_plus_diff(
+    arrays, titles, lons_d, lats_d, cmap, unit, out_png, demean=False, dem_grid=None
+):
     """plot_three + a 4th panel with the TESSERA-minus-baseline difference map.
 
     `arrays` is [era5_interp, convcnp_baseline, tessera_concat]; the difference
@@ -354,18 +404,36 @@ def plot_three_plus_diff(arrays, titles, lons_d, lats_d, cmap, unit, out_png,
     n = 5 if dem_grid is not None else 4
     fig, axes = _make_axes(n, use_cartopy, proj, wspace=0.30)
     im = None
-    for ax, arr, t in zip(axes, arrays, titles):
+    for ax, arr, t in zip(axes, arrays, titles, strict=False):
         im = _panel(ax, arr, extent, cmap, vmin, vmax, t, use_cartopy, proj, cfeature)
-    im_d = _panel(axes[3], delta, extent, DIFF_CMAP, -dmax, dmax,
-                  diff_title(demean, mean, unit), use_cartopy, proj, cfeature)
+    im_d = _panel(
+        axes[3],
+        delta,
+        extent,
+        DIFF_CMAP,
+        -dmax,
+        dmax,
+        diff_title(demean, mean, unit),
+        use_cartopy,
+        proj,
+        cfeature,
+    )
 
     # Field colorbar sits on the last field panel; the difference gets its own.
     _inset_cbar(fig, im, axes[2], unit)
     _inset_cbar(fig, im_d, axes[3], rf"$\Delta$ {unit}")
     if dem_grid is not None:
         # Sea masked with the model-valid mask so the panel matches the others.
-        _elevation_panel(fig, axes[4], np.where(np.isfinite(arrays[2]), dem_grid, np.nan),
-                         lats_d, lons_d, extent, use_cartopy, proj)
+        _elevation_panel(
+            fig,
+            axes[4],
+            np.where(np.isfinite(arrays[2]), dem_grid, np.nan),
+            lats_d,
+            lons_d,
+            extent,
+            use_cartopy,
+            proj,
+        )
     fig.savefig(out_png, dpi=160, bbox_inches="tight")
     plt.close(fig)
     return dmax, mean
@@ -387,7 +455,7 @@ def plot_diff_over_terrain(arrays, lons_d, lats_d, unit, dem_grid, out_png):
     extent = [lons_d[0], lons_d[-1], lats_d[-1], lats_d[0]]  # W,E,S,N
     proj, cfeature, use_cartopy, _, _ = _setup(arrays)
     ls, elev_filled, _, dx, dy = _hillshade(dem_grid, lats_d, lons_d)
-    land = np.isfinite(arrays[2])                       # model-valid cells (no sea)
+    land = np.isfinite(arrays[2])  # model-valid cells (no sea)
     dem_land = np.where(land, dem_grid, np.nan)
 
     raw, dmax, mean = diff_field(arrays)
@@ -395,8 +463,9 @@ def plot_diff_over_terrain(arrays, lons_d, lats_d, unit, dem_grid, out_png):
 
     e_top = float(np.nanpercentile(dem_land, 99.5))
     # Contour interval rounded to a readable step (~N_CONTOURS lines over the range).
-    step = min([s for s in (100, 200, 250, 500, 1000) if s * N_CONTOURS >= e_top]
-               or [1000])
+    step = min(
+        [s for s in (100, 200, 250, 500, 1000) if s * N_CONTOURS >= e_top] or [1000]
+    )
     levels = np.arange(step, e_top, step)
 
     d_norm = Normalize(-dmax, dmax)
@@ -406,26 +475,53 @@ def plot_diff_over_terrain(arrays, lons_d, lats_d, unit, dem_grid, out_png):
     ]
     fig, axes = _make_axes(3, use_cartopy, proj, wspace=0.30)
     _elevation_panel(fig, axes[0], dem_land, lats_d, lons_d, extent, use_cartopy, proj)
-    for ax, (title, fld) in zip(axes[1:], panels):
-        _drape(ax, fld, DIFF_CMAP, d_norm, ls, elev_filled, dx, dy, extent,
-               use_cartopy, proj)
+    for ax, (title, fld) in zip(axes[1:], panels, strict=False):
+        _drape(
+            ax,
+            fld,
+            DIFF_CMAP,
+            d_norm,
+            ls,
+            elev_filled,
+            dx,
+            dy,
+            extent,
+            use_cartopy,
+            proj,
+        )
         if len(levels):
             # Relief alone washes out under the pale mid-scale colours; contours give
             # an unambiguous topographic reference to read the delta pattern against.
-            ax.contour(lons_d, lats_d, dem_land, levels=levels, colors="k",
-                       linewidths=0.25, alpha=0.45,
-                       **({"transform": proj} if use_cartopy else {}))
+            ax.contour(
+                lons_d,
+                lats_d,
+                dem_land,
+                levels=levels,
+                colors="k",
+                linewidths=0.25,
+                alpha=0.45,
+                **({"transform": proj} if use_cartopy else {}),
+            )
         if use_cartopy:
             ax.coastlines(resolution="10m", linewidth=0.6, color="k")
             ax.set_extent(extent, crs=proj)
         ax.set_title(title, fontsize=11)
-        _inset_cbar(fig, ScalarMappable(norm=d_norm, cmap=DIFF_CMAP), ax,
-                    rf"$\Delta$ {unit}")
+        _inset_cbar(
+            fig, ScalarMappable(norm=d_norm, cmap=DIFF_CMAP), ax, rf"$\Delta$ {unit}"
+        )
     # Anchored to the middle panel, not the figure: for wide regions (Iberia) the
     # panels occupy only the top of the canvas, and a figure-level caption would sit
     # in dead space that bbox_inches="tight" then has to keep.
-    axes[1].text(0.5, -0.06, f"contours every {step:.0f} m", transform=axes[1].transAxes,
-                 ha="center", va="top", fontsize=8, color="0.35")
+    axes[1].text(
+        0.5,
+        -0.06,
+        f"contours every {step:.0f} m",
+        transform=axes[1].transAxes,
+        ha="center",
+        va="top",
+        fontsize=8,
+        color="0.35",
+    )
     fig.savefig(out_png, dpi=160, bbox_inches="tight")
     plt.close(fig)
     return dmax, mean
@@ -447,22 +543,28 @@ def main():
     gidx = coords["grid_idx"]
     lat = coords["lat"].astype(np.float32)
     lon = coords["lon"].astype(np.float32)
-    assert np.array_equal(gidx, np.arange(len(gidx))), "grid_idx must be 0..N-1 row-major"
+    assert np.array_equal(gidx, np.arange(len(gidx))), (
+        "grid_idx must be 0..N-1 row-major"
+    )
     # Grid dims derived from the npz (region-agnostic): rows=lat (desc), cols=lon (asc).
     n_lat, n_lon = len(np.unique(lat)), len(np.unique(lon))
     assert n_lat * n_lon == len(gidx), f"grid {n_lat}x{n_lon} != {len(gidx)} cells"
     lats_d = lat.reshape(n_lat, n_lon)[:, 0]
     lons_d = lon.reshape(n_lat, n_lon)[0, :]
 
-    pts = np.stack([lat[vm], lon[vm]], axis=1).astype(np.float32)   # (Nv, 2)
-    era5_orog_pts = bilinear_grid_to_points(elev_grid, glats, glons, pts)  # smooth ERA5 orography
+    pts = np.stack([lat[vm], lon[vm]], axis=1).astype(np.float32)  # (Nv, 2)
+    era5_orog_pts = bilinear_grid_to_points(
+        elev_grid, glats, glons, pts
+    )  # smooth ERA5 orography
     if USE_DEM:
         dem = np.load(DEM_PATH)[vm].astype(np.float32)
-        dem = np.where(np.isfinite(dem), dem, era5_orog_pts)          # fill rare DEM gaps
+        dem = np.where(np.isfinite(dem), dem, era5_orog_pts)  # fill rare DEM gaps
         elev_pts = dem
-        delta_pts = (dem - era5_orog_pts).astype(np.float32)          # true sub-grid anomaly
-        print(f"DEM elevation: elev[{elev_pts.min():.0f},{elev_pts.max():.0f}] m  "
-              f"delta[{delta_pts.min():.0f},{delta_pts.max():.0f}] m")
+        delta_pts = (dem - era5_orog_pts).astype(np.float32)  # true sub-grid anomaly
+        print(
+            f"DEM elevation: elev[{elev_pts.min():.0f},{elev_pts.max():.0f}] m  "
+            f"delta[{delta_pts.min():.0f},{delta_pts.max():.0f}] m"
+        )
     else:
         elev_pts = era5_orog_pts
         delta_pts = np.zeros_like(elev_pts)
@@ -474,7 +576,9 @@ def main():
         full[vm] = vals
         return full.reshape(n_lat, n_lon)
 
-    only_vars = os.environ.get("MAPS_VARS")  # e.g. MAPS_VARS=wind to regenerate wind only
+    only_vars = os.environ.get(
+        "MAPS_VARS"
+    )  # e.g. MAPS_VARS=wind to regenerate wind only
     for var, job in JOBS.items():
         if only_vars and var not in only_vars.split(","):
             continue
@@ -492,7 +596,7 @@ def main():
         m_era5 = scatter(base1)
 
         # (2)/(3) trained models, ensembled over seeds
-        def ensemble(stem, with_latents):
+        def ensemble(stem, with_latents, var=var, ts=ts):  # bind loop vars
             preds, seed_arrs = [], {}
             for s in SEEDS:
                 run = RUNS / f"{stem}_seed{s}"
@@ -503,35 +607,76 @@ def main():
                 # then the model.
                 cfg = json.load(open(run / "config.json"))
                 ctx = build_ctx(cfg, ts, glats, glons)
-                model, _, mvar = build_model(run, n_ctx=ctx.shape[0], latent_dim=Z.shape[1])
-                mu = run_model(model, var, ctx, glats, glons, pts, elev_pts, delta_pts,
-                               latents_z if with_latents else None)
-                preds.append(mu); seed_arrs[s] = scatter(mu)
-                print(f"   {run.name}: mu[min/mean/max]={mu.min():.2f}/{mu.mean():.2f}/{mu.max():.2f}")
+                model, _, mvar = build_model(
+                    run, n_ctx=ctx.shape[0], latent_dim=Z.shape[1]
+                )
+                mu = run_model(
+                    model,
+                    var,
+                    ctx,
+                    glats,
+                    glons,
+                    pts,
+                    elev_pts,
+                    delta_pts,
+                    latents_z if with_latents else None,
+                )
+                preds.append(mu)
+                seed_arrs[s] = scatter(mu)
+                print(
+                    f"   {run.name}: mu[min/mean/max]={mu.min():.2f}/{mu.mean():.2f}/{mu.max():.2f}"
+                )
             return scatter(np.mean(preds, axis=0)), seed_arrs
 
         m_base, base_seeds = ensemble(job["baseline"], with_latents=False)
         m_tess, tess_seeds = ensemble(job["tessera"], with_latents=True)
 
         out_png = R.fig(var, ts, f"{SUF}.png")
-        plot_three([m_era5, m_base, m_tess], PANEL_TITLES, lons_d, lats_d,
-                   job["cmap"], job["unit"], out_png)
+        plot_three(
+            [m_era5, m_base, m_tess],
+            PANEL_TITLES,
+            lons_d,
+            lats_d,
+            job["cmap"],
+            job["unit"],
+            out_png,
+        )
         # Same figure + a 4th Delta panel (TESSERA - baseline), raw and mean-removed;
         # the mean-removed one also gets a 5th elevation column when a DEM exists.
         dem_grid = np.load(DEM_PATH).reshape(n_lat, n_lon) if USE_DEM else None
         for dm, tail in [(False, "_diff"), (True, "_diff_anom")]:
-            plot_three_plus_diff([m_era5, m_base, m_tess], PANEL_TITLES, lons_d, lats_d,
-                                 job["cmap"], job["unit"], R.fig(var, ts, f"{SUF}{tail}.png"),
-                                 demean=dm, dem_grid=dem_grid if dm else None)
-        if dem_grid is not None:   # Delta draped over the region's relief
-            plot_diff_over_terrain([m_era5, m_base, m_tess], lons_d, lats_d, job["unit"],
-                                   dem_grid, R.fig(var, ts, f"{SUF}_diff_terrain.png"))
+            plot_three_plus_diff(
+                [m_era5, m_base, m_tess],
+                PANEL_TITLES,
+                lons_d,
+                lats_d,
+                job["cmap"],
+                job["unit"],
+                R.fig(var, ts, f"{SUF}{tail}.png"),
+                demean=dm,
+                dem_grid=dem_grid if dm else None,
+            )
+        if dem_grid is not None:  # Delta draped over the region's relief
+            plot_diff_over_terrain(
+                [m_era5, m_base, m_tess],
+                lons_d,
+                lats_d,
+                job["unit"],
+                dem_grid,
+                R.fig(var, ts, f"{SUF}_diff_terrain.png"),
+            )
 
         np.savez(
             R.fig(var, ts, f"{SUF}.npz"),
-            era5_interp=m_era5, convcnp_baseline=m_base, tessera_concat=m_tess,
-            lats=lats_d, lons=lons_d, valid_mask=vm.reshape(n_lat, n_lon),
-            variable=var, timestamp=ts, unit=job["unit"],
+            era5_interp=m_era5,
+            convcnp_baseline=m_base,
+            tessera_concat=m_tess,
+            lats=lats_d,
+            lons=lons_d,
+            valid_mask=vm.reshape(n_lat, n_lon),
+            variable=var,
+            timestamp=ts,
+            unit=job["unit"],
             **{f"baseline_seed{s}": a for s, a in base_seeds.items()},
             **{f"tessera_seed{s}": a for s, a in tess_seeds.items()},
         )

@@ -40,6 +40,7 @@ Example: build the Norway rollout schedule of the paper
         --probe-ids-json scripts/experiments/snapshot_14y_eu_temporal_rollout_norway_lat16_mtpi/probe_station_ids.json \\
         --out scripts/experiments/snapshot_14y_eu_temporal_rollout_norway_lat16_mtpi/rollout_schedule.json
 """
+
 from __future__ import annotations
 
 import argparse
@@ -61,7 +62,9 @@ except ImportError as e:
 
 # Default sweep grid — the paper's Norway rollout (10 points; r0 = the
 # pre-rollout anchor with no probes deployed, r3y = rollout complete).
-DEFAULT_SWEEP_POINTS = "r0:0,r1mo:1,r3mo:3,r6mo:6,r1y:12,r2y:24,r3y:36,r4y:48,r5y:60,r6y:72"
+DEFAULT_SWEEP_POINTS = (
+    "r0:0,r1mo:1,r3mo:3,r6mo:6,r1y:12,r2y:24,r3y:36,r4y:48,r5y:60,r6y:72"
+)
 
 # Future-sentinel string used to mark a probe as "not yet deployed at this
 # sweep point". Lexicographically greater than every real timestamp in
@@ -73,6 +76,7 @@ FUTURE_SENTINEL = "9999-12-31-23"
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
+
 
 def _parse_sweep_points(spec: str) -> dict[str, int]:
     """Parse "label:months,label:months,..." into a dict.
@@ -99,9 +103,7 @@ def _parse_sweep_points(spec: str) -> dict[str, int]:
         try:
             months = int(months_str)
         except ValueError:
-            sys.exit(
-                f"ERROR: months value in {chunk!r} is not an integer."
-            )
+            sys.exit(f"ERROR: months value in {chunk!r} is not an integer.")
         if months < 0:
             sys.exit(
                 f"ERROR: sweep months in {chunk!r} must be >= 0 "
@@ -119,44 +121,59 @@ def _parse_args() -> argparse.Namespace:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     p.add_argument(
-        "--dataset-dir", type=Path, required=True,
+        "--dataset-dir",
+        type=Path,
+        required=True,
         help="Path to the dataset directory (must contain metadata.json with "
-             "train_start in valid_timestamps and temporal_split.train_end).",
+        "train_start in valid_timestamps and temporal_split.train_end).",
     )
     p.add_argument(
-        "--probe-ids-json", type=Path, required=True,
+        "--probe-ids-json",
+        type=Path,
+        required=True,
         help="Path to the probe_station_ids.json produced by pick_probe_set.py.",
     )
     p.add_argument(
-        "--t-rollout-months", type=int, default=36,
+        "--t-rollout-months",
+        type=int,
+        default=36,
         help="Rollout duration in months; default 36 (the paper's value). "
-             "Must be ≤ max(sweep months).",
+        "Must be ≤ max(sweep months).",
     )
     p.add_argument(
-        "--activation-seed", type=int, default=0,
+        "--activation-seed",
+        type=int,
+        default=0,
         help="numpy.random.default_rng seed for the per-probe-station "
-             "deployment order. Same value across model-init seeds; the "
-             "order is part of the experiment design, not noise. Ignored when "
-             "--order-ids-json is given.",
+        "deployment order. Same value across model-init seeds; the "
+        "order is part of the experiment design, not noise. Ignored when "
+        "--order-ids-json is given.",
     )
     p.add_argument(
-        "--order-ids-json", type=Path, default=None,
+        "--order-ids-json",
+        type=Path,
+        default=None,
         help="Optional JSON with an 'ordered_station_ids' list giving the probe "
-             "DEPLOYMENT ORDER, earliest-deployed first. When set, it REPLACES "
-             "the random --activation-seed permutation; the ids must be a "
-             "permutation of the probe set. (The paper uses the random order.)",
+        "DEPLOYMENT ORDER, earliest-deployed first. When set, it REPLACES "
+        "the random --activation-seed permutation; the ids must be a "
+        "permutation of the probe set. (The paper uses the random order.)",
     )
     p.add_argument(
-        "--sweep-points", type=str, default=DEFAULT_SWEEP_POINTS,
+        "--sweep-points",
+        type=str,
+        default=DEFAULT_SWEEP_POINTS,
         help=f"Comma-separated 'label:months' pairs. Default (the paper's "
-             f"Norway grid): {DEFAULT_SWEEP_POINTS}",
+        f"Norway grid): {DEFAULT_SWEEP_POINTS}",
     )
     p.add_argument(
-        "--out", type=Path, required=True,
+        "--out",
+        type=Path,
+        required=True,
         help="Output path for rollout_schedule.json.",
     )
     p.add_argument(
-        "--force", action="store_true",
+        "--force",
+        action="store_true",
         help="Overwrite the output file if it exists. Default: refuse.",
     )
     return p.parse_args()
@@ -165,6 +182,7 @@ def _parse_args() -> argparse.Namespace:
 # ---------------------------------------------------------------------------
 # Date handling
 # ---------------------------------------------------------------------------
+
 
 def _parse_ts(s: str) -> datetime:
     """Parse 'YYYY-MM-DD' (day-end ⇒ hour 23) or 'YYYY-MM-DD-HH'.
@@ -185,6 +203,7 @@ def _fmt_ts(dt: datetime) -> str:
 # ---------------------------------------------------------------------------
 # Schedule construction
 # ---------------------------------------------------------------------------
+
 
 def _load_dataset_window(dataset_dir: Path) -> tuple[str, str, datetime, datetime]:
     metadata_path = dataset_dir / "metadata.json"
@@ -259,10 +278,7 @@ def _build_schedule(
         rng = np.random.default_rng(activation_seed)
         deployment = [probe_ids[i] for i in rng.permutation(n)]
     t_rollout = rollout_completion - t_0
-    t_open = {
-        deployment[i]: t_0 + (i / n) * t_rollout
-        for i in range(n)
-    }
+    t_open = {deployment[i]: t_0 + (i / n) * t_rollout for i in range(n)}
 
     # Per-sweep maps. Iterate sweep_points in the user's input order.
     sweep_out: dict[str, dict] = {}
@@ -285,9 +301,9 @@ def _build_schedule(
         }
         n_online = sum(1 for v in paf.values() if v != FUTURE_SENTINEL)
         sweep_out[label] = {
-            "elapsed_months":     months,
+            "elapsed_months": months,
             "train_end_override": _fmt_ts(snapshot_time),
-            "probe_active_from":  paf,
+            "probe_active_from": paf,
         }
         print(
             f"  {label:6s} elapsed={months:>3} mo  "
@@ -307,15 +323,19 @@ def _build_schedule(
         )
     return {
         "schedule_metadata": {
-            "t_rollout_months":       t_rollout_months,
-            "rollout_anchor_t_0":     _fmt_ts(t_0),
-            "rollout_completion_t":   _fmt_ts(rollout_completion),
-            "cadence_shape":          "linear",
-            "activation_order_seed":  None if deployment_order is not None else activation_seed,
-            "activation_order_source": order_source if deployment_order is not None else f"random_seed_{activation_seed}",
-            "n_stations":             n,
-            "dataset_train_start":    train_start_str,
-            "dataset_train_end":      train_end_str,
+            "t_rollout_months": t_rollout_months,
+            "rollout_anchor_t_0": _fmt_ts(t_0),
+            "rollout_completion_t": _fmt_ts(rollout_completion),
+            "cadence_shape": "linear",
+            "activation_order_seed": None
+            if deployment_order is not None
+            else activation_seed,
+            "activation_order_source": order_source
+            if deployment_order is not None
+            else f"random_seed_{activation_seed}",
+            "n_stations": n,
+            "dataset_train_start": train_start_str,
+            "dataset_train_end": train_end_str,
             "description": (
                 f"Linear rollout of {n} probe stations over "
                 f"{t_rollout_months} months. Station {order_desc}"
@@ -329,13 +349,12 @@ def _build_schedule(
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
     args = _parse_args()
     out_path: Path = args.out
     if out_path.exists() and not args.force:
-        sys.exit(
-            f"ERROR: {out_path} already exists. Pass --force to overwrite."
-        )
+        sys.exit(f"ERROR: {out_path} already exists. Pass --force to overwrite.")
 
     if not args.probe_ids_json.exists():
         sys.exit(f"ERROR: --probe-ids-json not found at {args.probe_ids_json}.")
@@ -365,17 +384,18 @@ def main() -> None:
 
     sweep_points = _parse_sweep_points(args.sweep_points)
 
-    train_start_str, train_end_str, train_start, train_end = (
-        _load_dataset_window(args.dataset_dir)
+    train_start_str, train_end_str, train_start, train_end = _load_dataset_window(
+        args.dataset_dir
     )
     print(f"Dataset train_start = {train_start_str}")
     print(f"Dataset train_end   = {train_end_str}")
-    print(f"Probe set size      = {len(probe_ids)} "
-          f"(from {args.probe_ids_json.name})")
+    print(f"Probe set size      = {len(probe_ids)} (from {args.probe_ids_json.name})")
     print(f"T_rollout (months)  = {args.t_rollout_months}")
     if deployment_order is not None:
-        print(f"Activation order    = {order_source} "
-              f"({args.order_ids_json.name}, {len(deployment_order)} ids)")
+        print(
+            f"Activation order    = {order_source} "
+            f"({args.order_ids_json.name}, {len(deployment_order)} ids)"
+        )
     else:
         print(f"Activation seed     = {args.activation_seed}")
     print(f"Sweep grid          = {sweep_points}")

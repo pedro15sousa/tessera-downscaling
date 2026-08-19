@@ -21,6 +21,7 @@ Adding a region: drop its dense npz under processed/dense/<region>/ and add an
 entry to REGIONS below (only the snapshot `dates` are really region-specific;
 grid dims are derived from the npz at run time).
 """
+
 from __future__ import annotations
 
 import os
@@ -40,9 +41,9 @@ OUTPUTS = Path(os.environ.get("TESSERA_MAPS_OUT") or paper_figure_inputs_dir())
 EUROPE = dataset_dir("dataset_timestamp_global") / "regions" / "europe"
 EU_RUNS = training_runs_dir("snapshot_14y_eu")
 
-G = 9.80665            # standard gravity, geopotential z -> metres
-Z_STATIC_IDX = 7       # 'z' channel in europe static_fields.npy
-SDFOR_IDX = 10         # 'sdfor' = std dev of sub-grid orography (ruggedness)
+G = 9.80665  # standard gravity, geopotential z -> metres
+Z_STATIC_IDX = 7  # 'z' channel in europe static_fields.npy
+SDFOR_IDX = 10  # 'sdfor' = std dev of sub-grid orography (ruggedness)
 SEEDS = [42, 123, 456]
 
 # variable -> snapshot timestamp + run stems + plot styling. Shared across regions
@@ -52,7 +53,10 @@ DEFAULT_JOBS = {
         ts="2022-07-18-12",
         tessera="t2m_snap_vae_lat16_concat_with_elev_no_static_wd",
         baseline="t2m_snap_bilinear_baseline_wd",
-        cmap="turbo", unit="°C", unit_plain="C", title="2 m temperature",
+        cmap="turbo",
+        unit="°C",
+        unit_plain="C",
+        title="2 m temperature",
     ),
     "wind": dict(
         ts="2022-12-12-12",
@@ -61,7 +65,10 @@ DEFAULT_JOBS = {
         # scale. Point estimate is the head median (MAE@median), see run_model.
         tessera="wind_truncnormal_snap_vae_lat16_concat_with_elev_no_static_wd",
         baseline="wind_truncnormal_snap_bilinear_baseline_wd",
-        cmap="viridis", unit="m s$^{-1}$", unit_plain="m/s", title="10 m wind speed",
+        cmap="viridis",
+        unit="m s$^{-1}$",
+        unit_plain="m/s",
+        title="10 m wind speed",
     ),
 }
 
@@ -69,7 +76,10 @@ DEFAULT_JOBS = {
 # only behaviour that can't be derived lives here.
 REGIONS = {
     "iberia": dict(
-        region_data=EUROPE, runs=EU_RUNS, grid="0.05deg", year=2024,
+        region_data=EUROPE,
+        runs=EU_RUNS,
+        grid="0.05deg",
+        year=2024,
         # Per-variable snapshot picked by select_dates.py (max spatial std on test).
         # NB the paper's Iberia panels use the DEFAULT_JOBS dates (2022-07-18-12 /
         # 2022-12-12-12; regenerate with MAPS_DATES="t2m=2022-07-18-12,wind=2022-12-12-12");
@@ -77,7 +87,10 @@ REGIONS = {
         dates={"t2m": "2022-07-22-18", "wind": "2022-12-13-18"},
     ),
     "norway": dict(
-        region_data=EUROPE, runs=EU_RUNS, grid="0.05deg", year=2024,
+        region_data=EUROPE,
+        runs=EU_RUNS,
+        grid="0.05deg",
+        year=2024,
         dates={"t2m": "2023-01-02-00", "wind": "2022-01-30-00"},
     ),
 }
@@ -99,8 +112,10 @@ class Region:
             self.jobs = c["jobs"]
         else:
             dates = c.get("dates", {})
-            self.jobs = {v: {**spec, "ts": dates.get(v, spec["ts"])}
-                         for v, spec in DEFAULT_JOBS.items()}
+            self.jobs = {
+                v: {**spec, "ts": dates.get(v, spec["ts"])}
+                for v, spec in DEFAULT_JOBS.items()
+            }
         # Optional ad-hoc date override, e.g. MAPS_DATES="t2m=2022-07-18-12,wind=2022-12-12-12"
         # — lets one build figures for any snapshot without editing REGIONS.
         env_dates = os.environ.get("MAPS_DATES")

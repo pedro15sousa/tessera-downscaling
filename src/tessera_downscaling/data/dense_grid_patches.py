@@ -33,6 +33,7 @@ Crash recovery: the output ``.npy`` is memory-mapped, and a sibling
 ``progress.json`` records which grid-point indices have been completed.
 Re-running picks up where it left off.
 """
+
 from __future__ import annotations
 
 import json
@@ -49,6 +50,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Grid construction
 # ---------------------------------------------------------------------------
+
 
 def compute_grid_points(
     lat_min: float,
@@ -76,16 +78,19 @@ def compute_grid_points(
     lats = np.linspace(lat_max, lat_min, n_lat)  # north-to-south
     lons = np.linspace(lon_min, lon_max, n_lon)
     LON, LAT = np.meshgrid(lons, lats)
-    return pd.DataFrame({
-        "grid_idx": np.arange(LAT.size),
-        "lat": LAT.ravel(),
-        "lon": LON.ravel(),
-    })
+    return pd.DataFrame(
+        {
+            "grid_idx": np.arange(LAT.size),
+            "lat": LAT.ravel(),
+            "lon": LON.ravel(),
+        }
+    )
 
 
 # ---------------------------------------------------------------------------
 # Sub-bbox iteration
 # ---------------------------------------------------------------------------
+
 
 def _sub_bboxes(
     lat_min: float,
@@ -115,6 +120,7 @@ def _sub_bboxes(
 # ---------------------------------------------------------------------------
 # Patch extraction from an in-memory mosaic
 # ---------------------------------------------------------------------------
+
 
 def _extract_patches_from_mosaic(
     mosaic: np.ndarray,
@@ -171,7 +177,7 @@ def _extract_patches_from_mosaic(
         pc = c_src_end - c_src_start
         # Zero out the patch first (in case of partial coverage), then fill.
         output_array[idx, :, :, :] = 0.0
-        output_array[idx, dr:dr + pr, dc:dc + pc, :] = mosaic[
+        output_array[idx, dr : dr + pr, dc : dc + pc, :] = mosaic[
             r_src_start:r_src_end, c_src_start:c_src_end, :
         ]
         n_written += 1
@@ -182,6 +188,7 @@ def _extract_patches_from_mosaic(
 # ---------------------------------------------------------------------------
 # Main extraction pipeline
 # ---------------------------------------------------------------------------
+
 
 def extract_dense_grid_patches(
     grid_points: pd.DataFrame,
@@ -248,9 +255,12 @@ def extract_dense_grid_patches(
     else:
         # Pre-allocate via lib.format header + zero fill.
         from numpy.lib.format import open_memmap
+
         open_memmap(
-            output_path, mode="w+",
-            dtype=np.float32, shape=shape,
+            output_path,
+            mode="w+",
+            dtype=np.float32,
+            shape=shape,
         ).flush()
         size_gb = n_points * patch_size * patch_size * embed_dim * 4 / 1e9
         logger.info(f"Pre-allocating {size_gb:.1f} GB output at {output_path}")
@@ -343,9 +353,7 @@ def extract_dense_grid_patches(
         pixel_res_m = 10.0
         half_patch_m = (patch_size / 2) * pixel_res_m * 1.5
         worst_lat = max(abs(sub_lat_min), abs(sub_lat_max))
-        m_per_deg_lon = max(
-            111_320.0 * math.cos(math.radians(worst_lat)), 1_000.0
-        )
+        m_per_deg_lon = max(111_320.0 * math.cos(math.radians(worst_lat)), 1_000.0)
         patch_radius_lat_deg = half_patch_m / 111_320.0
         patch_radius_lon_deg = half_patch_m / m_per_deg_lon
         fetch_bbox = (
@@ -357,17 +365,23 @@ def extract_dense_grid_patches(
 
         try:
             mosaic, transform, _crs = gt.fetch_mosaic_for_region(
-                fetch_bbox, year=year, target_crs="EPSG:4326",
+                fetch_bbox,
+                year=year,
+                target_crs="EPSG:4326",
             )
         except Exception as e:
             logger.warning(
-                f"Sub-bbox {k+1}/{n_sub} {sub_bbox}: "
+                f"Sub-bbox {k + 1}/{n_sub} {sub_bbox}: "
                 f"fetch failed ({type(e).__name__}: {e}); skipping"
             )
             continue
 
         n_written = _extract_patches_from_mosaic(
-            mosaic, transform, sub_grid, patch_size, patches,
+            mosaic,
+            transform,
+            sub_grid,
+            patch_size,
+            patches,
         )
         # Free mosaic before moving to the next bbox.
         del mosaic
@@ -375,7 +389,7 @@ def extract_dense_grid_patches(
         completed_count += n_written
         completed_bboxes.add(tuple(sub_bbox))
         logger.info(
-            f"  sub-bbox {k+1}/{n_sub} {sub_bbox} → "
+            f"  sub-bbox {k + 1}/{n_sub} {sub_bbox} → "
             f"wrote {n_written}/{len(sub_grid)} patches "
             f"(total: {completed_count}/{n_points})"
         )
@@ -384,22 +398,30 @@ def extract_dense_grid_patches(
         # only loses one sub-bbox of work.
         patches.flush()
         with open(progress_path, "w") as f:
-            json.dump({
-                "completed_bboxes": [list(b) for b in completed_bboxes],
-                "n_patches_written": completed_count,
-                "n_sub_bboxes_done": len(completed_bboxes),
-                "n_sub_bboxes_total": n_sub,
-            }, f, indent=2)
+            json.dump(
+                {
+                    "completed_bboxes": [list(b) for b in completed_bboxes],
+                    "n_patches_written": completed_count,
+                    "n_sub_bboxes_done": len(completed_bboxes),
+                    "n_sub_bboxes_total": n_sub,
+                },
+                f,
+                indent=2,
+            )
 
     # Final flush and progress write.
     patches.flush()
     with open(progress_path, "w") as f:
-        json.dump({
-            "completed_bboxes": [list(b) for b in completed_bboxes],
-            "n_patches_written": completed_count,
-            "n_sub_bboxes_done": len(completed_bboxes),
-            "n_sub_bboxes_total": n_sub,
-        }, f, indent=2)
+        json.dump(
+            {
+                "completed_bboxes": [list(b) for b in completed_bboxes],
+                "n_patches_written": completed_count,
+                "n_sub_bboxes_done": len(completed_bboxes),
+                "n_sub_bboxes_total": n_sub,
+            },
+            f,
+            indent=2,
+        )
 
     logger.info(
         f"Done: {completed_count}/{n_points} patches written, "

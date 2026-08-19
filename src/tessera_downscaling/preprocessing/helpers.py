@@ -90,7 +90,7 @@ SPLIT_SEED = 42
 #
 # Bounds chosen to mirror what the VAE pre-training applies, so the
 # dataset and the latents agree on which stations are "elevation-valid":
-ELEV_SENTINEL_LOW = -900.0   # rejects -999.9 (raw GHCN missing) and below
+ELEV_SENTINEL_LOW = -900.0  # rejects -999.9 (raw GHCN missing) and below
 ELEV_SENTINEL_HIGH = 8848.0  # rejects 9999 and other high garbage; Mt Everest
 
 
@@ -110,19 +110,20 @@ def filter_valid_elevation(stations_df, logger=None):
 
     """
     import numpy as np
+
     elev = stations_df["elevation"].values
     elev_valid = (
-        np.isfinite(elev)
-        & (elev > ELEV_SENTINEL_LOW)
-        & (elev <= ELEV_SENTINEL_HIGH)
+        np.isfinite(elev) & (elev > ELEV_SENTINEL_LOW) & (elev <= ELEV_SENTINEL_HIGH)
     )
     if logger is not None:
         n_before = len(stations_df)
         n_kept = int(elev_valid.sum())
         n_nan = int((~np.isfinite(elev)).sum())
         n_sentinel = int(
-            (np.isfinite(elev)
-             & ~((elev > ELEV_SENTINEL_LOW) & (elev <= ELEV_SENTINEL_HIGH))).sum()
+            (
+                np.isfinite(elev)
+                & ~((elev > ELEV_SENTINEL_LOW) & (elev <= ELEV_SENTINEL_HIGH))
+            ).sum()
         )
         logger.info(
             f"Elevation filter: kept {n_kept}/{n_before} stations "
@@ -131,11 +132,12 @@ def filter_valid_elevation(stations_df, logger=None):
         )
     return stations_df.loc[elev_valid].reset_index(drop=True)
 
+
 # GHCNh target variable -> raw field. The single observation at the episode's
 # timestamp is taken verbatim; there is no temporal aggregation.
 GHCNH_SNAPSHOT_VARS: dict[str, str] = {
-    "t2m":    "temperature",
-    "wind":   "wind_speed",
+    "t2m": "temperature",
+    "wind": "wind_speed",
     "precip": "precipitation_6_hour",
 }
 
@@ -154,6 +156,7 @@ _SNAPSHOT_VARS_REQUIRING_SYNOPTIC_TIME: frozenset[str] = frozenset({"precip"})
 # ---------------------------------------------------------------------------
 # ERA5 grid cropping
 # ---------------------------------------------------------------------------
+
 
 def compute_grid_crop_indices(
     lats: np.ndarray,
@@ -243,7 +246,9 @@ def aggregate_era5_snapshot(
 
     # Process surface variables.
     for var in SURFACE_VARS:
-        path = era5_dir / f"era5_wb2_quarter_{var}" / "data" / f"{date_str}-{hour:02d}.nc"
+        path = (
+            era5_dir / f"era5_wb2_quarter_{var}" / "data" / f"{date_str}-{hour:02d}.nc"
+        )
         if not path.exists():
             return None
         ds = xr.open_dataset(path)
@@ -262,7 +267,9 @@ def aggregate_era5_snapshot(
 
     # Process atmospheric variables (pressure-level data).
     for var in ATMOS_VARS:
-        path = era5_dir / f"era5_wb2_quarter_{var}" / "data" / f"{date_str}-{hour:02d}.nc"
+        path = (
+            era5_dir / f"era5_wb2_quarter_{var}" / "data" / f"{date_str}-{hour:02d}.nc"
+        )
         if not path.exists():
             return None
         ds = xr.open_dataset(path)
@@ -308,6 +315,7 @@ def era5_snapshot_channel_names() -> list[str]:
 # Static fields
 # ---------------------------------------------------------------------------
 
+
 def load_static_fields(
     static_path: Path,
     lat_indices: np.ndarray,
@@ -334,6 +342,7 @@ def load_static_fields(
 # ---------------------------------------------------------------------------
 # GHCNh snapshot
 # ---------------------------------------------------------------------------
+
 
 def aggregate_ghcnh_snapshot(
     ghcnh_dir: Path,
@@ -375,8 +384,7 @@ def aggregate_ghcnh_snapshot(
     # Prepare output arrays up front — they all share the same station
     # order, and we'll fill them in a single pass over the file.
     results: dict[str, np.ndarray] = {
-        tv: np.full(n_stations, np.nan, dtype=np.float32)
-        for tv in target_variables
+        tv: np.full(n_stations, np.nan, dtype=np.float32) for tv in target_variables
     }
     obs_count = np.zeros(n_stations, dtype=np.int32)
 
@@ -430,12 +438,12 @@ def aggregate_ghcnh_snapshot(
 
     for j in range(len(file_stations)):
         sid = file_stations[j]
-        if isinstance(sid, (bytes, np.bytes_)):
+        if isinstance(sid, bytes | np.bytes_):
             sid = sid.decode("utf-8").strip()
         row = station_to_row.get(sid)
         if row is None:
             continue
-        is_synoptic_row = (file_times[j] == synoptic_time)
+        is_synoptic_row = file_times[j] == synoptic_time
         had_any = False
         for raw_field, tv in raw_fields_present.items():
             val = field_arrays[raw_field][j]
@@ -458,6 +466,7 @@ def aggregate_ghcnh_snapshot(
 # ---------------------------------------------------------------------------
 # Delta-elevation
 # ---------------------------------------------------------------------------
+
 
 def compute_delta_elevation(
     stations: pd.DataFrame,
@@ -483,10 +492,12 @@ def compute_delta_elevation(
     points = np.column_stack([lon_grid.ravel(), lat_grid.ravel()])
     values = orog.ravel()
 
-    station_coords = np.column_stack([
-        stations["longitude"].values,
-        stations["latitude"].values,
-    ])
+    station_coords = np.column_stack(
+        [
+            stations["longitude"].values,
+            stations["latitude"].values,
+        ]
+    )
     orog_at_stations = griddata(points, values, station_coords, method="linear")
 
     delta_elev = stations["elevation"].values - orog_at_stations
@@ -528,7 +539,11 @@ def lookup_station_mtpi(
         )
 
     lookup = dict(
-        zip(mtpi_df["station_id"].astype(str), mtpi_df["mtpi"].astype(float), strict=False)
+        zip(
+            mtpi_df["station_id"].astype(str),
+            mtpi_df["mtpi"].astype(float),
+            strict=False,
+        )
     )
     raw = np.array(
         [lookup.get(str(sid), np.nan) for sid in stations["station_id"].values],
@@ -557,8 +572,10 @@ def lookup_station_mtpi(
 # Splits
 # ---------------------------------------------------------------------------
 
+
 def random_spatial_split(
-    n_stations: int, seed: int = SPLIT_SEED,
+    n_stations: int,
+    seed: int = SPLIT_SEED,
     train_fraction: float = TRAIN_STATION_FRACTION,
 ) -> np.ndarray:
     """Assign each station 'train' or 'test' by random permutation.
@@ -589,6 +606,6 @@ def partition_timestamps_by_temporal_split(
     """
     return {
         "train_timestamps": [t for t in timestamps if t <= train_end],
-        "val_timestamps":   [t for t in timestamps if train_end < t <= val_end],
-        "test_timestamps":  [t for t in timestamps if t > val_end],
+        "val_timestamps": [t for t in timestamps if train_end < t <= val_end],
+        "test_timestamps": [t for t in timestamps if t > val_end],
     }

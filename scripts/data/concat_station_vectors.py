@@ -45,12 +45,20 @@ def main() -> int:
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    p.add_argument("--inputs", type=Path, nargs="+", required=True,
-                   help="Two or more (n_stations, d_i) .npy files, all "
-                        "row-aligned to the same station list.")
-    p.add_argument("--output", type=Path, required=True,
-                   help="Output .npy; a _global_stats.npz sibling is "
-                        "pre-warmed next to it.")
+    p.add_argument(
+        "--inputs",
+        type=Path,
+        nargs="+",
+        required=True,
+        help="Two or more (n_stations, d_i) .npy files, all "
+        "row-aligned to the same station list.",
+    )
+    p.add_argument(
+        "--output",
+        type=Path,
+        required=True,
+        help="Output .npy; a _global_stats.npz sibling is pre-warmed next to it.",
+    )
     args = p.parse_args()
 
     arrays = []
@@ -59,8 +67,13 @@ def main() -> int:
         if arr.ndim != 2:
             raise ValueError(f"{path}: expected 2-D, got shape {arr.shape}")
         n_valid = int((~np.isnan(arr).any(axis=1)).sum())
-        logger.info("%s: shape=%s, %d/%d valid rows",
-                    path.name, arr.shape, n_valid, arr.shape[0])
+        logger.info(
+            "%s: shape=%s, %d/%d valid rows",
+            path.name,
+            arr.shape,
+            n_valid,
+            arr.shape[0],
+        )
         arrays.append(arr)
     n_rows = {a.shape[0] for a in arrays}
     if len(n_rows) != 1:
@@ -71,9 +84,12 @@ def main() -> int:
 
     combined = np.hstack(arrays)
     valid = ~np.isnan(combined).any(axis=1)
-    logger.info("Combined: shape=%s, %d/%d valid rows (intersection of "
-                "all sources)", combined.shape, int(valid.sum()),
-                combined.shape[0])
+    logger.info(
+        "Combined: shape=%s, %d/%d valid rows (intersection of all sources)",
+        combined.shape,
+        int(valid.sum()),
+        combined.shape[0],
+    )
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     np.save(args.output, combined)
@@ -82,6 +98,7 @@ def main() -> int:
     from tessera_downscaling.data.vae_latents import (
         compute_or_load_global_vae_stats,
     )
+
     mean, std = compute_or_load_global_vae_stats(args.output)
     logger.info("z-score stats pre-warmed (%d dims)", len(mean))
     return 0

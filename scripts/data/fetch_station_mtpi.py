@@ -65,27 +65,50 @@ MTPI_NATIVE_SCALE_M = 270.0
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--stations-csv", type=Path, required=True,
-                   help="Input CSV of stations (needs id/lat/lon columns).")
-    p.add_argument("--output-csv", type=Path, required=True,
-                   help="Where to write the station_id,mtpi lookup CSV.")
-    p.add_argument("--gee-project", type=str, default=None,
-                   help="Google Cloud project with the Earth Engine API "
-                        "enabled. Falls back to the EARTHENGINE_PROJECT env "
-                        "var / your default EE project if omitted.")
+    p.add_argument(
+        "--stations-csv",
+        type=Path,
+        required=True,
+        help="Input CSV of stations (needs id/lat/lon columns).",
+    )
+    p.add_argument(
+        "--output-csv",
+        type=Path,
+        required=True,
+        help="Where to write the station_id,mtpi lookup CSV.",
+    )
+    p.add_argument(
+        "--gee-project",
+        type=str,
+        default=None,
+        help="Google Cloud project with the Earth Engine API "
+        "enabled. Falls back to the EARTHENGINE_PROJECT env "
+        "var / your default EE project if omitted.",
+    )
     p.add_argument("--id-col", type=str, default="station_id")
     p.add_argument("--lat-col", type=str, default="latitude")
     p.add_argument("--lon-col", type=str, default="longitude")
-    p.add_argument("--batch-size", type=int, default=2000,
-                   help="Stations per Earth Engine reduceRegions request. "
-                        "Smaller is safer against payload/compute limits.")
-    p.add_argument("--scale", type=float, default=MTPI_NATIVE_SCALE_M,
-                   help="Sampling scale in metres (default: native 270 m).")
+    p.add_argument(
+        "--batch-size",
+        type=int,
+        default=2000,
+        help="Stations per Earth Engine reduceRegions request. "
+        "Smaller is safer against payload/compute limits.",
+    )
+    p.add_argument(
+        "--scale",
+        type=float,
+        default=MTPI_NATIVE_SCALE_M,
+        help="Sampling scale in metres (default: native 270 m).",
+    )
     return p.parse_args()
 
 
-def _resolve_columns(df: pd.DataFrame, args: argparse.Namespace) -> tuple[str, str, str]:
+def _resolve_columns(
+    df: pd.DataFrame, args: argparse.Namespace
+) -> tuple[str, str, str]:
     """Resolve id/lat/lon column names, tolerating common upper-case variants."""
+
     def pick(requested: str, *fallbacks: str) -> str:
         for cand in (requested, *fallbacks):
             if cand in df.columns:
@@ -94,6 +117,7 @@ def _resolve_columns(df: pd.DataFrame, args: argparse.Namespace) -> tuple[str, s
             f"None of {[requested, *fallbacks]} found in stations CSV columns "
             f"{list(df.columns)}."
         )
+
     id_col = pick(args.id_col, "station_id", "STATION", "STATION_ID", "id")
     lat_col = pick(args.lat_col, "latitude", "LATITUDE", "lat")
     lon_col = pick(args.lon_col, "longitude", "LONGITUDE", "lon")
@@ -150,7 +174,11 @@ def fetch_mtpi(
                 got += 1
         logger.info(
             "batch %d/%d: sampled %d/%d stations (cumulative %d)",
-            bi, n_batches, got, len(batch), len(out),
+            bi,
+            n_batches,
+            got,
+            len(batch),
+            len(out),
         )
     return out
 
@@ -163,14 +191,19 @@ def main() -> int:
     id_col, lat_col, lon_col = _resolve_columns(df, args)
     logger.info(
         "Loaded %d stations from %s (id=%s, lat=%s, lon=%s)",
-        len(df), args.stations_csv, id_col, lat_col, lon_col,
+        len(df),
+        args.stations_csv,
+        id_col,
+        lat_col,
+        lon_col,
     )
 
     # Drop rows with missing coordinates — they can't be sampled.
     coords_ok = df[lat_col].notna() & df[lon_col].notna()
     if not coords_ok.all():
-        logger.warning("Dropping %d stations with missing lat/lon",
-                       int((~coords_ok).sum()))
+        logger.warning(
+            "Dropping %d stations with missing lat/lon", int((~coords_ok).sum())
+        )
     df = df[coords_ok]
 
     records = [
@@ -189,17 +222,20 @@ def main() -> int:
     logger.info("Earth Engine initialised (project=%s)", args.gee_project)
 
     mtpi_by_id = fetch_mtpi(
-        records, scale=args.scale, batch_size=args.batch_size,
+        records,
+        scale=args.scale,
+        batch_size=args.batch_size,
     )
 
     all_ids = [r[0] for r in records]
-    mtpi = np.array([mtpi_by_id.get(sid, np.nan) for sid in all_ids],
-                    dtype=np.float64)
+    mtpi = np.array([mtpi_by_id.get(sid, np.nan) for sid in all_ids], dtype=np.float64)
     n_missing = int(np.isnan(mtpi).sum())
     logger.info(
         "Sampled mTPI for %d/%d stations (%d masked/missing). "
         "mean=%.1fm, range=[%.0f, %.0f]m",
-        len(all_ids) - n_missing, len(all_ids), n_missing,
+        len(all_ids) - n_missing,
+        len(all_ids),
+        n_missing,
         np.nanmean(mtpi) if n_missing < len(mtpi) else float("nan"),
         np.nanmin(mtpi) if n_missing < len(mtpi) else float("nan"),
         np.nanmax(mtpi) if n_missing < len(mtpi) else float("nan"),

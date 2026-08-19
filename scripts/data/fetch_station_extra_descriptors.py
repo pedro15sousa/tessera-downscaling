@@ -77,11 +77,11 @@ LOG_FORMAT = "%(asctime)s | %(levelname)s | %(message)s"
 logger = logging.getLogger("fetch_station_extra_descriptors")
 
 # --- Source datasets --------------------------------------------------------
-WORLDCOVER_ID = "ESA/WorldCover/v200"          # 10 m, single 2021 image
+WORLDCOVER_ID = "ESA/WorldCover/v200"  # 10 m, single 2021 image
 CANOPY_ID = "users/nlang/ETH_GlobalCanopyHeight_2020_10m_v1"  # 10 m
-SOILGRIDS_CLAY_ID = "projects/soilgrids-isric/clay_mean"      # 250 m, g/kg
-SOILGRIDS_SAND_ID = "projects/soilgrids-isric/sand_mean"      # 250 m, g/kg
-GLO30_ID = "COPERNICUS/DEM/GLO30"              # 30 m ImageCollection
+SOILGRIDS_CLAY_ID = "projects/soilgrids-isric/clay_mean"  # 250 m, g/kg
+SOILGRIDS_SAND_ID = "projects/soilgrids-isric/sand_mean"  # 250 m, g/kg
+GLO30_ID = "COPERNICUS/DEM/GLO30"  # 30 m ImageCollection
 
 # --- Neighbourhood scales ---------------------------------------------------
 # SFX group: 320 m radius = 640 m footprint = the 64x64 x 10 m TESSERA patch,
@@ -94,13 +94,27 @@ TOPO_BUFFER_M = 6250.0
 TOPO_SCALE_M = 250.0
 
 SFX_COLUMNS = [
-    "forest_frac", "lowveg_frac", "crop_frac", "built_frac", "bare_frac",
-    "snowice_frac", "water_frac", "tree_height", "clay_frac", "sand_frac",
-    "wc_masked_frac", "dem_elev_320m",
+    "forest_frac",
+    "lowveg_frac",
+    "crop_frac",
+    "built_frac",
+    "bare_frac",
+    "snowice_frac",
+    "water_frac",
+    "tree_height",
+    "clay_frac",
+    "sand_frac",
+    "wc_masked_frac",
+    "dem_elev_320m",
 ]
 TOPO_COLUMNS = [
-    "elev_mean", "elev_std", "elev_min", "elev_max",
-    "slope", "dz_dn", "dz_de",
+    "elev_mean",
+    "elev_std",
+    "elev_min",
+    "elev_max",
+    "slope",
+    "dz_dn",
+    "dz_de",
 ]
 ALL_COLUMNS = ["station_id", *SFX_COLUMNS, *TOPO_COLUMNS]
 
@@ -109,32 +123,61 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    p.add_argument("--stations-csv", type=Path, required=True,
-                   help="Input CSV of stations (needs id/lat/lon columns).")
-    p.add_argument("--output-csv", type=Path, required=True,
-                   help="Where to write the station_id-keyed descriptor CSV.")
-    p.add_argument("--gee-project", type=str, default=None,
-                   help="Google Cloud project with the Earth Engine API "
-                        "enabled. Falls back to EARTHENGINE_PROJECT / the "
-                        "project stored in your EE credentials if omitted.")
+    p.add_argument(
+        "--stations-csv",
+        type=Path,
+        required=True,
+        help="Input CSV of stations (needs id/lat/lon columns).",
+    )
+    p.add_argument(
+        "--output-csv",
+        type=Path,
+        required=True,
+        help="Where to write the station_id-keyed descriptor CSV.",
+    )
+    p.add_argument(
+        "--gee-project",
+        type=str,
+        default=None,
+        help="Google Cloud project with the Earth Engine API "
+        "enabled. Falls back to EARTHENGINE_PROJECT / the "
+        "project stored in your EE credentials if omitted.",
+    )
     p.add_argument("--id-col", type=str, default="station_id")
     p.add_argument("--lat-col", type=str, default="latitude")
     p.add_argument("--lon-col", type=str, default="longitude")
-    p.add_argument("--batch-size", type=int, default=500,
-                   help="Stations per reduceRegions request. Heavier per "
-                        "station than the mTPI fetch, so smaller default.")
-    p.add_argument("--resume", action="store_true",
-                   help="Skip stations already present in --output-csv.")
-    p.add_argument("--limit", type=int, default=None,
-                   help="Only fetch the first N (remaining) stations. For "
-                        "smoke tests.")
-    p.add_argument("--max-retries", type=int, default=3,
-                   help="Retries per batch on transient EE errors.")
+    p.add_argument(
+        "--batch-size",
+        type=int,
+        default=500,
+        help="Stations per reduceRegions request. Heavier per "
+        "station than the mTPI fetch, so smaller default.",
+    )
+    p.add_argument(
+        "--resume",
+        action="store_true",
+        help="Skip stations already present in --output-csv.",
+    )
+    p.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Only fetch the first N (remaining) stations. For smoke tests.",
+    )
+    p.add_argument(
+        "--max-retries",
+        type=int,
+        default=3,
+        help="Retries per batch on transient EE errors.",
+    )
     return p.parse_args()
 
 
-def _resolve_columns(df: pd.DataFrame, args: argparse.Namespace) -> tuple[str, str, str]:
+def _resolve_columns(
+    df: pd.DataFrame, args: argparse.Namespace
+) -> tuple[str, str, str]:
     """Resolve id/lat/lon column names, tolerating common upper-case variants."""
+
     def pick(requested: str, *fallbacks: str) -> str:
         for cand in (requested, *fallbacks):
             if cand in df.columns:
@@ -143,6 +186,7 @@ def _resolve_columns(df: pd.DataFrame, args: argparse.Namespace) -> tuple[str, s
             f"None of {[requested, *fallbacks]} found in stations CSV columns "
             f"{list(df.columns)}."
         )
+
     id_col = pick(args.id_col, "station_id", "STATION", "STATION_ID", "id")
     lat_col = pick(args.lat_col, "latitude", "LATITUDE", "lat")
     lon_col = pick(args.lon_col, "longitude", "LONGITUDE", "lon")
@@ -179,7 +223,8 @@ def build_sfx_image():
     dem = ee.ImageCollection(GLO30_ID).select("DEM").mosaic()
 
     return (
-        frac([10, 95], 0).rename("forest_frac")
+        frac([10, 95], 0)
+        .rename("forest_frac")
         .addBands(frac([20, 30, 90, 100], 0).rename("lowveg_frac"))
         .addBands(frac([40], 0).rename("crop_frac"))
         .addBands(frac([50], 0).rename("built_frac"))
@@ -208,7 +253,9 @@ def build_topo_image():
     # scale) — without an explicit projection, slopes come out ~100x too
     # small and masked near coasts. Pin 90 m before any gradient op.
     dem = (
-        ee.ImageCollection(GLO30_ID).select("DEM").mosaic()
+        ee.ImageCollection(GLO30_ID)
+        .select("DEM")
+        .mosaic()
         .setDefaultProjection("EPSG:4326", None, 90)
     )
     slope_deg = ee.Terrain.slope(dem)
@@ -229,7 +276,10 @@ def _reduce_batch(image, feats, reducer, scale: float) -> dict[str, dict]:
 
     fc = ee.FeatureCollection(feats)
     reduced = image.reduceRegions(
-        collection=fc, reducer=reducer, scale=scale, tileScale=4,
+        collection=fc,
+        reducer=reducer,
+        scale=scale,
+        tileScale=4,
     )
     out: dict[str, dict] = {}
     for feat in reduced.getInfo().get("features", []):
@@ -240,8 +290,9 @@ def _reduce_batch(image, feats, reducer, scale: float) -> dict[str, dict]:
     return out
 
 
-def fetch_batch(records: list[tuple[str, float, float]],
-                sfx_image, topo_image) -> pd.DataFrame:
+def fetch_batch(
+    records: list[tuple[str, float, float]], sfx_image, topo_image
+) -> pd.DataFrame:
     """Fetch both descriptor groups for one batch of (id, lat, lon)."""
     import ee
 
@@ -255,7 +306,10 @@ def fetch_batch(records: list[tuple[str, float, float]],
         ]
 
     sfx = _reduce_batch(
-        sfx_image, points(SFX_BUFFER_M), ee.Reducer.mean(), SFX_SCALE_M,
+        sfx_image,
+        points(SFX_BUFFER_M),
+        ee.Reducer.mean(),
+        SFX_SCALE_M,
     )
     # Combined reducer outputs '<band>_<stat>' per band; unused combinations
     # (e.g. slope_min) are computed server-side but simply not read out.
@@ -265,30 +319,36 @@ def fetch_batch(records: list[tuple[str, float, float]],
         .combine(ee.Reducer.minMax(), sharedInputs=True)
     )
     topo = _reduce_batch(
-        topo_image, points(TOPO_BUFFER_M), topo_reducer, TOPO_SCALE_M,
+        topo_image,
+        points(TOPO_BUFFER_M),
+        topo_reducer,
+        TOPO_SCALE_M,
     )
 
     rows = []
     for sid, _, _ in records:
         sid = str(sid)
         s, t = sfx.get(sid, {}), topo.get(sid, {})
-        rows.append({
-            "station_id": sid,
-            **{c: s.get(c) for c in SFX_COLUMNS},
-            "elev_mean": t.get("elev_mean"),
-            "elev_std": t.get("elev_stdDev"),
-            "elev_min": t.get("elev_min"),
-            "elev_max": t.get("elev_max"),
-            "slope": t.get("slope_mean"),
-            "dz_dn": t.get("dz_dn_mean"),
-            "dz_de": t.get("dz_de_mean"),
-        })
+        rows.append(
+            {
+                "station_id": sid,
+                **{c: s.get(c) for c in SFX_COLUMNS},
+                "elev_mean": t.get("elev_mean"),
+                "elev_std": t.get("elev_stdDev"),
+                "elev_min": t.get("elev_min"),
+                "elev_max": t.get("elev_max"),
+                "slope": t.get("slope_mean"),
+                "dz_dn": t.get("dz_dn_mean"),
+                "dz_de": t.get("dz_de_mean"),
+            }
+        )
     return pd.DataFrame(rows, columns=ALL_COLUMNS)
 
 
 def fetch_with_retries(
     records: list[tuple[str, float, float]],
-    sfx_image, topo_image,
+    sfx_image,
+    topo_image,
     max_retries: int,
 ) -> tuple[pd.DataFrame, list[str]]:
     """Fetch a batch, retrying and recursively halving on persistent failure.
@@ -309,25 +369,35 @@ def fetch_with_retries(
                 wait = 30 * attempt
                 logger.warning(
                     "sub-batch of %d: attempt %d failed (%s); retrying in %ds",
-                    len(records), attempt, exc, wait,
+                    len(records),
+                    attempt,
+                    exc,
+                    wait,
                 )
                 time.sleep(wait)
             elif len(records) >= 8:
                 logger.warning(
                     "sub-batch of %d: %d attempts failed (%s); splitting",
-                    len(records), max_retries, exc,
+                    len(records),
+                    max_retries,
+                    exc,
                 )
                 mid = len(records) // 2
                 df1, f1 = fetch_with_retries(
-                    records[:mid], sfx_image, topo_image, max_retries)
+                    records[:mid], sfx_image, topo_image, max_retries
+                )
                 df2, f2 = fetch_with_retries(
-                    records[mid:], sfx_image, topo_image, max_retries)
+                    records[mid:], sfx_image, topo_image, max_retries
+                )
                 return pd.concat([df1, df2], ignore_index=True), f1 + f2
             else:
                 failed = [sid for sid, _, _ in records]
                 logger.error(
                     "giving up on %d stations after exhausting retries and "
-                    "splits (%s): %s", len(records), exc, failed,
+                    "splits (%s): %s",
+                    len(records),
+                    exc,
+                    failed,
                 )
                 return pd.DataFrame(columns=ALL_COLUMNS), failed
     raise AssertionError("unreachable")
@@ -341,13 +411,18 @@ def main() -> int:
     id_col, lat_col, lon_col = _resolve_columns(df, args)
     logger.info(
         "Loaded %d stations from %s (id=%s, lat=%s, lon=%s)",
-        len(df), args.stations_csv, id_col, lat_col, lon_col,
+        len(df),
+        args.stations_csv,
+        id_col,
+        lat_col,
+        lon_col,
     )
 
     coords_ok = df[lat_col].notna() & df[lon_col].notna()
     if not coords_ok.all():
-        logger.warning("Dropping %d stations with missing lat/lon",
-                       int((~coords_ok).sum()))
+        logger.warning(
+            "Dropping %d stations with missing lat/lon", int((~coords_ok).sum())
+        )
     df = df[coords_ok]
 
     records = [
@@ -359,14 +434,16 @@ def main() -> int:
     if args.output_csv.exists():
         if args.resume:
             done_ids = set(
-                pd.read_csv(args.output_csv, usecols=["station_id"],
-                            dtype=str)["station_id"]
+                pd.read_csv(args.output_csv, usecols=["station_id"], dtype=str)[
+                    "station_id"
+                ]
             )
             logger.info("Resuming: %d stations already fetched", len(done_ids))
         else:
             logger.error(
                 "%s already exists. Pass --resume to continue it, or remove "
-                "it to start over.", args.output_csv,
+                "it to start over.",
+                args.output_csv,
             )
             return 1
     records = [r for r in records if r[0] not in done_ids]
@@ -395,12 +472,14 @@ def main() -> int:
     all_failed: list[str] = []
     for bi, batch in enumerate(_chunks(records, args.batch_size), start=1):
         batch_df, failed = fetch_with_retries(
-            batch, sfx_image, topo_image, args.max_retries,
+            batch,
+            sfx_image,
+            topo_image,
+            args.max_retries,
         )
         all_failed.extend(failed)
         if len(batch_df):
-            batch_df.to_csv(args.output_csv, mode="a", header=write_header,
-                            index=False)
+            batch_df.to_csv(args.output_csv, mode="a", header=write_header, index=False)
             write_header = False
         n_written += len(batch_df)
         n_missing_sfx = int(batch_df["forest_frac"].isna().sum())
@@ -408,8 +487,13 @@ def main() -> int:
         logger.info(
             "batch %d/%d: wrote %d stations (%d missing SFX values, "
             "%d failed) — %.0fs elapsed, ~%.0fs remaining",
-            bi, n_batches, len(batch_df), n_missing_sfx, len(failed),
-            elapsed, elapsed / bi * (n_batches - bi),
+            bi,
+            n_batches,
+            len(batch_df),
+            n_missing_sfx,
+            len(failed),
+            elapsed,
+            elapsed / bi * (n_batches - bi),
         )
 
     if all_failed:
@@ -418,10 +502,16 @@ def main() -> int:
         logger.warning(
             "%d stations could not be fetched (ids in %s); they will be "
             "NaN rows in the descriptor npy and dropped at load time. "
-            "Retry them later with --resume.", len(all_failed), failed_path,
+            "Retry them later with --resume.",
+            len(all_failed),
+            failed_path,
         )
-    logger.info("Done: %d stations appended to %s (total on disk: %d)",
-                n_written, args.output_csv, len(done_ids) + n_written)
+    logger.info(
+        "Done: %d stations appended to %s (total on disk: %d)",
+        n_written,
+        args.output_csv,
+        len(done_ids) + n_written,
+    )
     return 0
 
 

@@ -117,7 +117,9 @@ def download_arco_atmos_file(
     try:
         # Download one file per pressure level
         for level in levels:
-            blob = client.bucket(ARCO_BUCKET).blob(arco_atmos_path(date, variable, level))
+            blob = client.bucket(ARCO_BUCKET).blob(
+                arco_atmos_path(date, variable, level)
+            )
             tmp_path = (
                 tmp_dir
                 / f"{variable}-{level}-{date.year}-{date.month:02d}-{date.day:02d}.nc"
@@ -150,26 +152,43 @@ def main() -> None:
     p = argparse.ArgumentParser(
         description="Fetch ERA5 surface variables from the ARCO bucket"
     )
-    p.add_argument("--variables", nargs="+", default=[],
-                   help="Surface variables (e.g. 100m_u_component_of_wind).")
+    p.add_argument(
+        "--variables",
+        nargs="+",
+        default=[],
+        help="Surface variables (e.g. 100m_u_component_of_wind).",
+    )
     p.add_argument("--start", required=True, help="Start date YYYY-MM-DD (inclusive).")
     p.add_argument("--end", required=True, help="End date YYYY-MM-DD (inclusive).")
     p.add_argument(
-        "--root", type=Path, default=staging_dir("processed"),
+        "--root",
+        type=Path,
+        default=staging_dir("processed"),
         help="Output root. Files are written to "
-             "{root}/era5_wb2_quarter_{var}/data/{timestamp}.nc "
-             "(default: <data root>/_staging/processed).",
+        "{root}/era5_wb2_quarter_{var}/data/{timestamp}.nc "
+        "(default: <data root>/_staging/processed).",
     )
     p.add_argument("--num-processes", type=int, default=4)
     p.add_argument(
-        "--tmp-dir", type=Path, default=staging_dir("tmp", "arco_tmp"),
+        "--tmp-dir",
+        type=Path,
+        default=staging_dir("tmp", "arco_tmp"),
         help="Temporary directory for daily NetCDFs before splitting "
-             "(default: <data root>/_staging/tmp/arco_tmp).",
+        "(default: <data root>/_staging/tmp/arco_tmp).",
     )
-    p.add_argument("--atmos-vars", nargs="+", default=[],
-                   help="Atmospheric variables (e.g. temperature u_component_of_wind).")
-    p.add_argument("--pressure-levels", type=int, nargs="+", default=[500, 700, 850],
-                   help="Pressure levels (hPa) for atmos vars (default 500 700 850).")
+    p.add_argument(
+        "--atmos-vars",
+        nargs="+",
+        default=[],
+        help="Atmospheric variables (e.g. temperature u_component_of_wind).",
+    )
+    p.add_argument(
+        "--pressure-levels",
+        type=int,
+        nargs="+",
+        default=[500, 700, 850],
+        help="Pressure levels (hPa) for atmos vars (default 500 700 850).",
+    )
     args = p.parse_args()
 
     if not args.variables and not args.atmos_vars:
@@ -201,7 +220,9 @@ def main() -> None:
         print(f"\n=== Atmos phase ({len(args.atmos_vars) * len(dates)} items) ===")
         levels = tuple(args.pressure_levels)
         parallel_foreach(
-            f=partial(download_arco_atmos_file, tmp_dir=args.tmp_dir, dest_dir=args.root),
+            f=partial(
+                download_arco_atmos_file, tmp_dir=args.tmp_dir, dest_dir=args.root
+            ),
             init=lambda _: storage.Client.create_anonymous_client(),
             items=[(v, levels, d) for v in args.atmos_vars for d in dates],
             num_processes=args.num_processes,

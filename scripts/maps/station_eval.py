@@ -13,6 +13,7 @@ Saves: OUTPUTS/<region>/<var>_<ts>/<region>_<var>_<ts>_stations.npz
 
   REGION=norway uv run python scripts/maps/station_eval.py
 """
+
 import json
 import os
 
@@ -51,16 +52,23 @@ def predict(model, var, ctx, tc, te, tde, tt, obs):
     (proper score) -- matches cross_folder_analysis (gaussian median==mean; the
     truncated-normal wind head differs, so median/mean/crps are all reported)."""
     out = model(
-        torch.tensor(ctx[None]), torch.tensor(glats), torch.tensor(glons),
-        torch.tensor(tc[None].astype(np.float32)), torch.tensor(te[None].astype(np.float32)),
-        torch.tensor(tde[None].astype(np.float32)), None, tt,
+        torch.tensor(ctx[None]),
+        torch.tensor(glats),
+        torch.tensor(glons),
+        torch.tensor(tc[None].astype(np.float32)),
+        torch.tensor(te[None].astype(np.float32)),
+        torch.tensor(tde[None].astype(np.float32)),
+        None,
+        tt,
     )
     head = model.heads.heads[var]
     p = out[var]
     obs_t = torch.tensor(obs[None].astype(np.float32))
-    return (head.median(p)[0].numpy().astype(np.float32),
-            head.mean(p)[0].numpy().astype(np.float32),
-            head.crps(p, obs_t)[0].numpy().astype(np.float32))
+    return (
+        head.median(p)[0].numpy().astype(np.float32),
+        head.mean(p)[0].numpy().astype(np.float32),
+        head.crps(p, obs_t)[0].numpy().astype(np.float32),
+    )
 
 
 def main():
@@ -71,10 +79,14 @@ def main():
         ts = job["ts"]
         ds = MultiRegionSnapshotDownscalingDataset(
             dataset_dir=dataset_dir("dataset_timestamp_global"),
-            region_specs={"europe": "test"}, split="test",
+            region_specs={"europe": "test"},
+            split="test",
             target_variables=[var],
-            vae_latents_path=VAE_LAT, vae_latents_station_csv=VAE_CSV, vae_latents_zscore=True,
-            include_static_fields=False, normalisation_policy="per_region",
+            vae_latents_path=VAE_LAT,
+            vae_latents_station_csv=VAE_CSV,
+            vae_latents_zscore=True,
+            include_static_fields=False,
+            normalisation_policy="per_region",
         )
         idx = ds.timestamps.index(ts)
         ep = ds[idx]
@@ -88,18 +100,36 @@ def main():
         slon = np.asarray(ds.station_lons)[sidx].astype(np.float32)
         N = len(obs)
 
-        tcfg = json.load(open(RUNS / f"{job['tessera']}_seed{SEEDS[0]}" / "config.json"))
-        bcfg = json.load(open(RUNS / f"{job['baseline']}_seed{SEEDS[0]}" / "config.json"))
+        tcfg = json.load(
+            open(RUNS / f"{job['tessera']}_seed{SEEDS[0]}" / "config.json")
+        )
+        bcfg = json.load(
+            open(RUNS / f"{job['baseline']}_seed{SEEDS[0]}" / "config.json")
+        )
         ctx_t = build_ctx(tcfg, ts, glats, glons)
         ctx_b = build_ctx(bcfg, ts, glats, glons)
         tt = torch.tensor(tt_np[None])
 
         tmed, tmean, tcrps, bmed, bmean, bcrps = [], [], [], [], [], []
         for s in SEEDS:
-            mt, _, _ = build_model(RUNS / f"{job['tessera']}_seed{s}", n_ctx=ctx_t.shape[0], latent_dim=tt_np.shape[1])
-            md, mn, cr = predict(mt, var, ctx_t, tc, te, tde, tt, obs); tmed.append(md); tmean.append(mn); tcrps.append(cr)
-            mb, _, _ = build_model(RUNS / f"{job['baseline']}_seed{s}", n_ctx=ctx_b.shape[0], latent_dim=tt_np.shape[1])
-            md, mn, cr = predict(mb, var, ctx_b, tc, te, tde, None, obs); bmed.append(md); bmean.append(mn); bcrps.append(cr)
+            mt, _, _ = build_model(
+                RUNS / f"{job['tessera']}_seed{s}",
+                n_ctx=ctx_t.shape[0],
+                latent_dim=tt_np.shape[1],
+            )
+            md, mn, cr = predict(mt, var, ctx_t, tc, te, tde, tt, obs)
+            tmed.append(md)
+            tmean.append(mn)
+            tcrps.append(cr)
+            mb, _, _ = build_model(
+                RUNS / f"{job['baseline']}_seed{s}",
+                n_ctx=ctx_b.shape[0],
+                latent_dim=tt_np.shape[1],
+            )
+            md, mn, cr = predict(mb, var, ctx_b, tc, te, tde, None, obs)
+            bmed.append(md)
+            bmean.append(mn)
+            bcrps.append(cr)
         # Point estimate for MAE / win-rate / residual-alignment = seed-mean median.
         tp, bp = np.mean(tmed, 0), np.mean(bmed, 0)
         # Seed-mean mean (RMSE@mean) and seed-mean per-station CRPS (proper score).
@@ -122,18 +152,34 @@ def main():
 
         np.savez(
             R.fig(var, ts, "_stations.npz"),
-            lat=slat, lon=slon, obs=obs, base_pred=bp, tess_pred=tp, era5_pred=era5_pred,
-            base_err=be, tess_err=tee, era5_err=era5_err, improved=improved, station_idx=sidx,
+            lat=slat,
+            lon=slon,
+            obs=obs,
+            base_pred=bp,
+            tess_pred=tp,
+            era5_pred=era5_pred,
+            base_err=be,
+            tess_err=tee,
+            era5_err=era5_err,
+            improved=improved,
+            station_idx=sidx,
             # Mean-based point estimate + errors for RMSE@mean (== median for gaussian t2m).
-            base_pred_mean=bp_mean, tess_pred_mean=tp_mean, base_err_mean=be_mean, tess_err_mean=tee_mean,
+            base_pred_mean=bp_mean,
+            tess_pred_mean=tp_mean,
+            base_err_mean=be_mean,
+            tess_err_mean=tee_mean,
             # Per-station seed-mean CRPS (proper score; era5 is deterministic so CRPS==MAE).
-            base_crps=bp_crps, tess_crps=tp_crps, era5_crps=era5_err,
+            base_crps=bp_crps,
+            tess_crps=tp_crps,
+            era5_crps=era5_err,
         )
-        nib = ((slon >= RLON0) & (slon <= RLON1) & (slat >= RLAT0) & (slat <= RLAT1))
-        print(f"{var} {ts}: N={N} europe test stns | baseline MAE={be.mean():.3f} TESSERA MAE={tee.mean():.3f} "
-              f"| improved {100*improved.mean():.0f}% | in-{R.name} {nib.sum()} "
-              f"MAE {be[nib].mean():.2f}->{tee[nib].mean():.2f}  CRPS {bp_crps[nib].mean():.2f}->{tp_crps[nib].mean():.2f} "
-              f"(improved {100*improved[nib].mean():.0f}%)")
+        nib = (slon >= RLON0) & (slon <= RLON1) & (slat >= RLAT0) & (slat <= RLAT1)
+        print(
+            f"{var} {ts}: N={N} europe test stns | baseline MAE={be.mean():.3f} TESSERA MAE={tee.mean():.3f} "
+            f"| improved {100 * improved.mean():.0f}% | in-{R.name} {nib.sum()} "
+            f"MAE {be[nib].mean():.2f}->{tee[nib].mean():.2f}  CRPS {bp_crps[nib].mean():.2f}->{tp_crps[nib].mean():.2f} "
+            f"(improved {100 * improved[nib].mean():.0f}%)"
+        )
 
 
 if __name__ == "__main__":

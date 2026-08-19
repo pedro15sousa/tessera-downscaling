@@ -49,23 +49,43 @@ logger = logging.getLogger("backfill_station_mtpi")
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__)
     src = p.add_mutually_exclusive_group(required=True)
-    src.add_argument("--dataset-dir", type=Path, default=None,
-                     help="Dataset directory containing stations.csv.")
-    src.add_argument("--stations-csv", type=Path, default=None,
-                     help="Path to a stations.csv directly.")
-    p.add_argument("--mtpi-csv", type=Path, required=True,
-                   help="station_id,mtpi lookup CSV (from fetch_station_mtpi.py).")
-    p.add_argument("--output", type=Path, default=None,
-                   help="Write here instead of overwriting the input.")
-    p.add_argument("--no-backup", action="store_true",
-                   help="Do not write a .bak copy before overwriting in place.")
+    src.add_argument(
+        "--dataset-dir",
+        type=Path,
+        default=None,
+        help="Dataset directory containing stations.csv.",
+    )
+    src.add_argument(
+        "--stations-csv",
+        type=Path,
+        default=None,
+        help="Path to a stations.csv directly.",
+    )
+    p.add_argument(
+        "--mtpi-csv",
+        type=Path,
+        required=True,
+        help="station_id,mtpi lookup CSV (from fetch_station_mtpi.py).",
+    )
+    p.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Write here instead of overwriting the input.",
+    )
+    p.add_argument(
+        "--no-backup",
+        action="store_true",
+        help="Do not write a .bak copy before overwriting in place.",
+    )
     return p.parse_args()
 
 
 def main() -> int:
     args = parse_args()
     stations_csv = (
-        args.stations_csv if args.stations_csv is not None
+        args.stations_csv
+        if args.stations_csv is not None
         else args.dataset_dir / "stations.csv"
     )
     if not stations_csv.exists():
@@ -76,7 +96,8 @@ def main() -> int:
     if "mtpi" in stations.columns:
         logger.warning(
             "stations.csv already has an `mtpi` column; it will be recomputed "
-            "and overwritten from %s.", args.mtpi_csv,
+            "and overwritten from %s.",
+            args.mtpi_csv,
         )
 
     # Same array-aligned join the preprocessors use (fills masked/missing with
@@ -91,8 +112,7 @@ def main() -> int:
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     stations.to_csv(out_path, index=False)
-    logger.info("Wrote %d stations with mtpi column to %s",
-                len(stations), out_path)
+    logger.info("Wrote %d stations with mtpi column to %s", len(stations), out_path)
     return 0
 
 

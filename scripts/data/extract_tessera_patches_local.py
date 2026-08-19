@@ -84,7 +84,9 @@ LOGGER = logging.getLogger("extract_tessera_local")
 MOUNT_DIR = Path(
     os.environ.get("TESSERA_V2_MOUNT", "/tessera/v2/global_0.1_degree_representation")
 )
-DEFAULT_LANDMASK_CACHE = data_root() / "_cache" / "geotessera" / "global_0.1_degree_tiff_all"
+DEFAULT_LANDMASK_CACHE = (
+    data_root() / "_cache" / "geotessera" / "global_0.1_degree_tiff_all"
+)
 DEFAULT_STATION_CSV = staging_dir("raw", "ghcnh", "station_list.csv")
 LANDMASK_V1_URL = "https://dl2.geotessera.org/v1/global_0.1_degree_tiff_all/{name}.tiff"
 TARGET_CRS = "EPSG:4326"
@@ -112,12 +114,14 @@ def load_stations(csv_path: Path) -> pd.DataFrame:
     patch filtering is applied here.
     """
     df = pd.read_csv(csv_path)
-    df = df.rename(columns={
-        "GHCN_ID": "station_id",
-        "LATITUDE": "latitude",
-        "LONGITUDE": "longitude",
-        "ELEVATION": "elevation",
-    })
+    df = df.rename(
+        columns={
+            "GHCN_ID": "station_id",
+            "LATITUDE": "latitude",
+            "LONGITUDE": "longitude",
+            "ELEVATION": "elevation",
+        }
+    )
     for col in ("latitude", "longitude"):
         if col not in df.columns:
             raise SystemExit(
@@ -128,7 +132,9 @@ def load_stations(csv_path: Path) -> pd.DataFrame:
 
 
 # --- geometry / tile helpers ---------------------------------------------
-def compute_bbox(lon: float, lat: float, patch_size: int) -> tuple[float, float, float, float]:
+def compute_bbox(
+    lon: float, lat: float, patch_size: int
+) -> tuple[float, float, float, float]:
     """WGS84 bbox around (lon, lat) for a patch_size-pixel patch at 10 m.
 
     A half-patch spans (patch_size / 2) * 10 m, inflated by BBOX_MARGIN and
@@ -153,12 +159,14 @@ def covering_tiles(bbox: tuple[float, float, float, float]) -> set[tuple[float, 
     the world edge, which the downstream health check handles.
     """
     min_lon, min_lat, max_lon, max_lat = bbox
+
     # Clamp BOTH bounds into the valid tile-centre range, so a station hard
     # against +-90 / +-180 still resolves to its edge tile (partial patch)
     # rather than an empty set. Clamping preserves min <= max and is a no-op
     # for the vast majority of stations well inside the world.
     def _clamp(v, lim):
         return min(max(v, -lim), lim)
+
     min_lat, max_lat = _clamp(min_lat, _LAT_LIM), _clamp(max_lat, _LAT_LIM)
     min_lon, max_lon = _clamp(min_lon, _LON_LIM), _clamp(max_lon, _LON_LIM)
     tiles: set[tuple[float, float]] = set()
@@ -207,7 +215,9 @@ def provision_landmasks(tile_names: set[str], cache_dir: Path) -> dict[str, Path
     if missing:
         from concurrent.futures import ThreadPoolExecutor
 
-        LOGGER.info("Downloading up to %d missing landmasks to %s", len(missing), cache_dir)
+        LOGGER.info(
+            "Downloading up to %d missing landmasks to %s", len(missing), cache_dir
+        )
 
         def _fetch(name):
             dst = cache_dir / f"{name}.tiff"
@@ -228,10 +238,17 @@ def provision_landmasks(tile_names: set[str], cache_dir: Path) -> dict[str, Path
                 else:
                     failed += 1
                 if done % 1000 == 0 or done == len(missing):
-                    LOGGER.info("  landmasks fetched %d/%d (%d unavailable)", done, len(missing), failed)
+                    LOGGER.info(
+                        "  landmasks fetched %d/%d (%d unavailable)",
+                        done,
+                        len(missing),
+                        failed,
+                    )
     LOGGER.info(
         "Landmasks resolved: %d/%d (%d unavailable -> those tiles skipped)",
-        len(resolved), len(tile_names), len(tile_names) - len(resolved),
+        len(resolved),
+        len(tile_names),
+        len(tile_names) - len(resolved),
     )
     return resolved
 
@@ -264,7 +281,9 @@ def _reprojected_dataset(name: str, year: int, target_crs: str = TARGET_CRS):
     emb, src_crs, src_transform = _load_tile(name, year)
     h, w = emb.shape[:2]
     src_bounds = array_bounds(h, w, src_transform)
-    dst_t, dst_w, dst_h = calculate_default_transform(src_crs, target_crs, w, h, *src_bounds)
+    dst_t, dst_w, dst_h = calculate_default_transform(
+        src_crs, target_crs, w, h, *src_bounds
+    )
     dst_w, dst_h = int(dst_w), int(dst_h)
     if dst_w > _MAX_TILE_DIM or dst_h > _MAX_TILE_DIM:
         # Antimeridian globe-wrap: skip (the station gets a partial/zero patch).
@@ -272,15 +291,23 @@ def _reprojected_dataset(name: str, year: int, target_crs: str = TARGET_CRS):
     rep = np.empty((emb.shape[2], dst_h, dst_w), dtype=emb.dtype)
     for b in range(emb.shape[2]):
         reproject(
-            source=emb[:, :, b], destination=rep[b],
-            src_transform=src_transform, src_crs=src_crs,
-            dst_transform=dst_t, dst_crs=target_crs,
+            source=emb[:, :, b],
+            destination=rep[b],
+            src_transform=src_transform,
+            src_crs=src_crs,
+            dst_transform=dst_t,
+            dst_crs=target_crs,
             resampling=Resampling.bilinear,
         )
     mf = MemoryFile()
     ds = mf.open(
-        driver="GTiff", height=dst_h, width=dst_w, count=emb.shape[2],
-        dtype=emb.dtype, crs=target_crs, transform=dst_t,
+        driver="GTiff",
+        height=dst_h,
+        width=dst_w,
+        count=emb.shape[2],
+        dtype=emb.dtype,
+        crs=target_crs,
+        transform=dst_t,
     )
     ds.write(rep)
     cache[key] = (mf, ds)
@@ -311,11 +338,10 @@ def build_mosaic(bbox, year, target_crs=TARGET_CRS):
     Iterates covering_tiles(bbox) in the same order as the reference, so the
     merge order (which sets the mosaic grid) matches.
     """
+    names = [tile_to_grid_name(tl, tt) for tl, tt in covering_tiles(bbox)]
     names = [
-        tile_to_grid_name(tl, tt) for tl, tt in covering_tiles(bbox)
-    ]
-    names = [
-        n for n in names
+        n
+        for n in names
         if n in _W["landmasks"] and tile_embedding_path(MOUNT_DIR, n, year).exists()
     ]
     if not names:
@@ -349,14 +375,17 @@ def slice_patch(mosaic, mt, lon, lat, patch_size) -> np.ndarray:
     rs, re, cs, ce = row - half, row + half, col - half, col + half
     rss, ree, css, cee = max(0, rs), min(h, re), max(0, cs), min(w, ce)
     if ree > rss and cee > css:
-        out[rss - rs: rss - rs + (ree - rss), css - cs: css - cs + (cee - css), :] = \
+        out[rss - rs : rss - rs + (ree - rss), css - cs : css - cs + (cee - css), :] = (
             mosaic[rss:ree, css:cee, :]
+        )
     return out
 
 
 # --- worker ---------------------------------------------------------------
 def _worker_init(out_path, shape, landmasks, year, patch_size, cache_cap):
-    _W["patches"] = np.lib.format.open_memmap(str(out_path), mode="r+", dtype=np.float32, shape=shape)
+    _W["patches"] = np.lib.format.open_memmap(
+        str(out_path), mode="r+", dtype=np.float32, shape=shape
+    )
     _W["landmasks"] = landmasks
     _W["year"] = year
     _W["patch_size"] = patch_size
@@ -375,8 +404,16 @@ def _worker(task) -> tuple[int, bool, float]:
             return i, False, 0.0
         patch = slice_patch(mosaic, mt, lon, lat, ps)
     except Exception as e:  # noqa: BLE001
-        LOGGER.warning("station %d (%.4f,%.4f) year=%d p=%d: %s: %s",
-                       i, lat, lon, year, ps, type(e).__name__, e)
+        LOGGER.warning(
+            "station %d (%.4f,%.4f) year=%d p=%d: %s: %s",
+            i,
+            lat,
+            lon,
+            year,
+            ps,
+            type(e).__name__,
+            e,
+        )
         return i, False, 0.0
     _W["patches"][i] = patch
     c = ps // 2
@@ -387,8 +424,14 @@ def _worker(task) -> tuple[int, bool, float]:
 
 # --- driver ---------------------------------------------------------------
 def extract_one_file(
-    stations: pd.DataFrame, year: int, patch_size: int, out_path: Path,
-    landmasks: dict[str, Path], workers: int, cache_cap: int, resume: bool,
+    stations: pd.DataFrame,
+    year: int,
+    patch_size: int,
+    out_path: Path,
+    landmasks: dict[str, Path],
+    workers: int,
+    cache_cap: int,
+    resume: bool,
 ) -> dict:
     from multiprocessing import Pool
 
@@ -397,14 +440,21 @@ def extract_one_file(
     progress_path = out_path.with_suffix(".progress.json")
 
     if out_path.exists() and resume:
-        np.lib.format.open_memmap(str(out_path), mode="r+", dtype=np.float32, shape=shape)
-        completed = set(json.loads(progress_path.read_text()).get("completed", [])) \
-            if progress_path.exists() else set()
+        np.lib.format.open_memmap(
+            str(out_path), mode="r+", dtype=np.float32, shape=shape
+        )
+        completed = (
+            set(json.loads(progress_path.read_text()).get("completed", []))
+            if progress_path.exists()
+            else set()
+        )
         LOGGER.info("Resuming %s: %d/%d already done", out_path.name, len(completed), n)
     else:
         gb = float(np.prod(shape)) * 4 / 1e9
         LOGGER.info("Allocating %.1f GB mmap at %s", gb, out_path)
-        np.lib.format.open_memmap(str(out_path), mode="w+", dtype=np.float32, shape=shape)
+        np.lib.format.open_memmap(
+            str(out_path), mode="w+", dtype=np.float32, shape=shape
+        )
         completed = set()
         progress_path.write_text(json.dumps({"completed": []}))
 
@@ -418,12 +468,18 @@ def extract_one_file(
         LOGGER.info("%s already complete.", out_path.name)
         return _file_stats(out_path, shape)
 
-    LOGGER.info("Extracting %s: %d stations, %d workers, cache_cap=%d",
-                out_path.name, len(tasks), workers, cache_cap)
+    LOGGER.info(
+        "Extracting %s: %d stations, %d workers, cache_cap=%d",
+        out_path.name,
+        len(tasks),
+        workers,
+        cache_cap,
+    )
     t0 = time.time()
     done = 0
     with Pool(
-        processes=workers, initializer=_worker_init,
+        processes=workers,
+        initializer=_worker_init,
         initargs=(out_path, shape, landmasks, year, patch_size, cache_cap),
         maxtasksperchild=2000,
     ) as pool:
@@ -434,7 +490,9 @@ def extract_one_file(
                 progress_path.write_text(json.dumps({"completed": sorted(completed)}))
                 rate = done / max(time.time() - t0, 1e-6)
                 eta = (len(tasks) - done) / max(rate, 1e-6) / 3600
-                LOGGER.info("  %d/%d (%.1f station/s, ETA %.1f h)", done, len(tasks), rate, eta)
+                LOGGER.info(
+                    "  %d/%d (%.1f station/s, ETA %.1f h)", done, len(tasks), rate, eta
+                )
     progress_path.write_text(json.dumps({"completed": sorted(completed)}))
     LOGGER.info("Finished %s in %.1f min", out_path.name, (time.time() - t0) / 60)
     return _file_stats(out_path, shape)
@@ -448,29 +506,61 @@ def _file_stats(out_path: Path, shape) -> dict:
     patches = np.load(str(out_path), mmap_mode="r")
     centre = shape[1] // 2
     centre_nz = int(np.sum(np.any(patches[:, centre, centre, :] != 0, axis=1)))
-    return {"shape": list(shape), "n_stations": int(shape[0]), "n_centre_nonzero": centre_nz}
+    return {
+        "shape": list(shape),
+        "n_stations": int(shape[0]),
+        "n_centre_nonzero": centre_nz,
+    }
 
 
 def _parse_args(argv=None):
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    p.add_argument("--station-csv", type=Path, default=DEFAULT_STATION_CSV,
-                   help="CSV with station lat/lon (GHCNh columns accepted); defines row "
-                        "order (default: the GHCNh station list under the data root).")
+    p.add_argument(
+        "--station-csv",
+        type=Path,
+        default=DEFAULT_STATION_CSV,
+        help="CSV with station lat/lon (GHCNh columns accepted); defines row "
+        "order (default: the GHCNh station list under the data root).",
+    )
     p.add_argument("--out-dir", type=Path, required=True)
     p.add_argument("--years", type=int, nargs="+", default=[2024, 2017])
-    p.add_argument("--patch-sizes", type=int, nargs="+", default=[128],
-                   help="Patch side length(s) in pixels (default: 128; crop 64 downstream).")
-    p.add_argument("--mount-dir", type=Path, default=MOUNT_DIR,
-                   help="TESSERA v2 mount (default: $TESSERA_V2_MOUNT or "
-                        "/tessera/v2/global_0.1_degree_representation).")
-    p.add_argument("--landmask-cache", type=Path, default=DEFAULT_LANDMASK_CACHE,
-                   help="Directory of landmask GeoTIFFs; missing ones are downloaded here "
-                        "(default: <data root>/_cache/geotessera/global_0.1_degree_tiff_all).")
+    p.add_argument(
+        "--patch-sizes",
+        type=int,
+        nargs="+",
+        default=[128],
+        help="Patch side length(s) in pixels (default: 128; crop 64 downstream).",
+    )
+    p.add_argument(
+        "--mount-dir",
+        type=Path,
+        default=MOUNT_DIR,
+        help="TESSERA v2 mount (default: $TESSERA_V2_MOUNT or "
+        "/tessera/v2/global_0.1_degree_representation).",
+    )
+    p.add_argument(
+        "--landmask-cache",
+        type=Path,
+        default=DEFAULT_LANDMASK_CACHE,
+        help="Directory of landmask GeoTIFFs; missing ones are downloaded here "
+        "(default: <data root>/_cache/geotessera/global_0.1_degree_tiff_all).",
+    )
     p.add_argument("--workers", type=int, default=8)
-    p.add_argument("--cache-cap", type=int, default=6,
-                   help="Max reprojected tiles cached per worker (memory vs re-read tradeoff).")
-    p.add_argument("--limit", type=int, default=None, help="Only process the first N stations (trial).")
-    p.add_argument("--force", action="store_true", help="Re-extract even if outputs exist.")
+    p.add_argument(
+        "--cache-cap",
+        type=int,
+        default=6,
+        help="Max reprojected tiles cached per worker (memory vs re-read tradeoff).",
+    )
+    p.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Only process the first N stations (trial).",
+    )
+    p.add_argument(
+        "--force", action="store_true", help="Re-extract even if outputs exist."
+    )
     p.add_argument("--log-level", default="INFO")
     return p.parse_args(argv)
 
@@ -495,7 +585,11 @@ def main(argv=None) -> int:
     # Provision landmasks for every tile any station could need (largest patch).
     max_ps = max(args.patch_sizes)
     needed_tiles: set[str] = set()
-    for lon, lat in zip(stations.longitude.to_numpy(float), stations.latitude.to_numpy(float), strict=False):
+    for lon, lat in zip(
+        stations.longitude.to_numpy(float),
+        stations.latitude.to_numpy(float),
+        strict=False,
+    ):
         for tl, tt in covering_tiles(compute_bbox(lon, lat, max_ps)):
             needed_tiles.add(tile_to_grid_name(tl, tt))
     landmasks = provision_landmasks(needed_tiles, args.landmask_cache)
@@ -515,13 +609,25 @@ def main(argv=None) -> int:
         for ps in args.patch_sizes:
             out_path = args.out_dir / f"patch_embeddings_{year}_p{ps}.npy"
             stats = extract_one_file(
-                stations, year, ps, out_path, landmasks, args.workers,
-                args.cache_cap, resume=not args.force,
+                stations,
+                year,
+                ps,
+                out_path,
+                landmasks,
+                args.workers,
+                args.cache_cap,
+                resume=not args.force,
             )
             metadata["files"][out_path.name] = stats
-            LOGGER.info("%s: centre_nonzero=%d/%d",
-                        out_path.name, stats["n_centre_nonzero"], stats["n_stations"])
-            (args.out_dir / "extraction_metadata.json").write_text(json.dumps(metadata, indent=2))
+            LOGGER.info(
+                "%s: centre_nonzero=%d/%d",
+                out_path.name,
+                stats["n_centre_nonzero"],
+                stats["n_stations"],
+            )
+            (args.out_dir / "extraction_metadata.json").write_text(
+                json.dumps(metadata, indent=2)
+            )
 
     LOGGER.info("Wrote metadata to %s", args.out_dir / "extraction_metadata.json")
     LOGGER.info("Done.")
