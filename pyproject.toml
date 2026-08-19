@@ -29,6 +29,11 @@ dependencies = [
     "urllib3>=2",
 ]
 
+[project.scripts]
+tessera-train = "tessera_downscaling.train:main"
+tessera-evaluate = "tessera_downscaling.evaluate:main"
+tessera-baselines = "tessera_downscaling.baselines:main"
+
 [project.optional-dependencies]
 # Data ingestion (WeatherBench2 / ARCO-ERA5 on GCS, GHCNh, Earth Engine, CDS).
 ingest = [

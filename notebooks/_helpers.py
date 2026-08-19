@@ -408,10 +408,9 @@ def _load_run_record(
         "tessera_method": config.get("tessera_method"),
         "include_elevation": config.get("include_elevation", True),
         "tessera_drop_prob": float(config.get("tessera_drop_prob", 0)),
-        # Training-loss objective. Newer trained runs write
-        # ``loss_function`` to config.json (default ``"nll"`` when the
-        # ``--loss-function`` CLI flag is absent — matches legacy
-        # behaviour). Simple baselines never ran train.py so there's no
+        # Training-loss objective recorded by older runs (``"nll"`` or the
+        # since-removed CRPS-loss option; current runs always train with
+        # NLL, so the key may be absent). Simple baselines never ran train.py so there's no
         # config: ``None`` is the right semantic value for "no training
         # objective applies".
         "loss_function": (

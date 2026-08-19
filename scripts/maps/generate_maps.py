@@ -57,7 +57,7 @@ import torch
 from regions import G, SEEDS, Z_STATIC_IDX, get_region
 
 from tessera_downscaling.data.helpers import build_context_grid
-from tessera_downscaling.model.convcnp import ConvCNPDownscaler
+from tessera_downscaling.evaluate import build_model_from_config, load_state_dict_compat
 from tessera_downscaling.paths import processed_dir
 
 # ---------------------------------------------------------------------------
@@ -116,35 +116,22 @@ def bilinear_grid_to_points(grid, glats, glons, pts):
 def build_model(run_dir, n_ctx, latent_dim):
     """Rebuild a run's ConvCNP from its config.json and load best_model.pt.
 
-    Only the configuration keys the model still understands are read; the map
-    runs (see the module docstring) use bilinear interpolation, concat injection
-    of precomputed 16-d latents (TESSERA arm) or no latents (baseline).
+    Delegates to :func:`tessera_downscaling.evaluate.build_model_from_config`
+    so the map scripts and the evaluator interpret a run's config identically.
+    The map runs (see the module docstring) use bilinear interpolation and, for
+    the TESSERA arm, concat injection of precomputed 16-d latents.
     """
     cfg = json.load(open(run_dir / "config.json"))
     ck = torch.load(run_dir / "best_model.pt", map_location="cpu", weights_only=False)
-    sd = ck["model_state_dict"]
-    uses_vae = cfg.get("vae_latents_path") is not None
-    tvars = cfg.get("target_variables") or [cfg.get("target_variable")]
-    model = ConvCNPDownscaler(
-        n_context_channels=n_ctx,
-        cnn_hidden=cfg.get("cnn_hidden", 128),
-        cnn_layers=cfg.get("cnn_layers", 7),
-        cnn_kernel=cfg.get("cnn_kernel", 3),
-        setconv_length_scale=cfg.get("setconv_length_scale", 0.5),
-        interpolation=cfg.get("interpolation", "setconv"),
-        mlp_hidden=cfg.get("mlp_hidden", 128),
-        mlp_n_hidden=cfg.get("mlp_n_hidden", 3),
-        include_elevation=cfg.get("include_elevation", True),
-        target_variables=tvars,
-        likelihood_per_variable=cfg.get("likelihood_per_variable"),
-        tessera_injection=cfg.get("tessera_injection", "concat"),
-        tessera_features_precomputed=uses_vae,
-        precomputed_tessera_dim=latent_dim if uses_vae else 0,
-    )
-    migrated = {(k.replace("setconv.", "interp.", 1) if k.startswith("setconv.") else k): v
-                for k, v in sd.items()}
-    model.load_state_dict(migrated)
+    model = build_model_from_config(cfg, n_ctx)
+    if model.precomputed_tessera_dim not in (0, latent_dim):
+        raise ValueError(
+            f"{run_dir.name}: config latent dim {model.precomputed_tessera_dim} "
+            f"!= dense-grid latent dim {latent_dim}"
+        )
+    load_state_dict_compat(model, ck["model_state_dict"])
     model.eval()
+    tvars = cfg.get("target_variables") or [cfg.get("target_variable")]
     return model, cfg, tvars[0]
 
 

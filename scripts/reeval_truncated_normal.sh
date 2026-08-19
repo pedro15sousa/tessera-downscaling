@@ -11,7 +11,7 @@
 # reported on the median (minimises expected |error|) and RMSE on the mean,
 # matching the Weibull head. The old evaluator reported both on the mean.
 # This is purely a metric-reporting change — NO retraining, the model
-# weights are untouched. evaluate.py reloads best_model.pt and rewrites
+# weights are untouched. tessera-evaluate reloads best_model.pt and rewrites
 # test_summary.json / test_results.json / test_predictions.npz /
 # test_station_errors.npz in place.
 #
@@ -28,9 +28,9 @@
 # region_specs_test.json (the EU efficiency / rollout folders do), it is
 # passed through with --region-specs-test-file so the same station set is
 # scored as in the original eval. Folders without one (the standard
-# regional folders: australia, east_asia, southern_africa, eu, us,
-# aurora_zeroshot, ...) called evaluate.py with --checkpoint only, which
-# this script reproduces exactly.
+# regional folders: australia, east_asia, southern_africa, eu, us, ...)
+# called tessera-evaluate with --checkpoint only, which this script
+# reproduces exactly.
 #
 # IDEMPOTENT: skips runs whose test_summary.json already contains a
 # *_mae_at_median key (i.e. already re-evaluated under the new code). Pass
@@ -44,28 +44,31 @@
 # script prints a warning listing any nested eval subdirs it detects with
 # stale truncated-normal metrics.
 #
-# Usage (from repo root):
-#   bash projects/tessera_downscaling/scripts/reeval_truncated_normal.sh
+# Usage (from anywhere; data root from $TESSERA_DATA_ROOT):
+#   bash scripts/reeval_truncated_normal.sh
 #
 # Dry run (print the commands, submit nothing):
-#   DRY_RUN=1 bash .../reeval_truncated_normal.sh
+#   DRY_RUN=1 bash scripts/reeval_truncated_normal.sh
 #
 # Run locally instead of via Slurm (no sbatch; runs each eval in-process):
-#   LOCAL=1 bash .../reeval_truncated_normal.sh
+#   LOCAL=1 bash scripts/reeval_truncated_normal.sh
 #
 # Force re-eval of already-done runs:
-#   FORCE=1 bash .../reeval_truncated_normal.sh
+#   FORCE=1 bash scripts/reeval_truncated_normal.sh
 #
 # Restrict to specific output roots:
 #   ROOTS="training_runs_snapshot_14y_australia training_runs_snapshot_14y_eu" \
-#       bash .../reeval_truncated_normal.sh
+#       bash scripts/reeval_truncated_normal.sh
 set -euo pipefail
 
-# ---- Paths (env-overridable, same defaults as the per-folder submit.sh) ----
-REPO_ROOT="${REPO_ROOT:-/projects/u6do/pmms2/end-to-end-forecasting}"
-BASE_DIR="${BASE_DIR:-${REPO_ROOT}/projects/tessera_downscaling/.tmp_output}"
-EXPERIMENTS_DIR="${REPO_ROOT}/projects/tessera_downscaling/scripts/experiments"
-EVAL_SCRIPT="projects/tessera_downscaling/scripts/evaluate.py"
+# ---- Paths (same conventions as scripts/experiments/_lib.sh) ----
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+DATA_ROOT="${TESSERA_DATA_ROOT:-/data/weather-downscaling}"
+export TESSERA_DATA_ROOT="${DATA_ROOT}"
+EXPERIMENTS_DIR="${SCRIPT_DIR}/experiments"
+EVAL_CMD_BASE="uv run tessera-evaluate"
+LOG_DIR="${REPO_ROOT}/logs"
 
 # ---- Slurm settings (eval is cheap vs training) ----
 TIME="${TIME:-02:00:00}"
@@ -77,10 +80,10 @@ FORCE="${FORCE:-0}"
 DRY_RUN="${DRY_RUN:-0}"
 LOCAL="${LOCAL:-0}"
 
-mkdir -p "${REPO_ROOT}/logs"
+mkdir -p "${LOG_DIR}"
 
 # Resolve the set of output roots to scan. Default: every training_runs_*
-# directory under BASE_DIR. Override with ROOTS (space-separated basenames
+# directory under DATA_ROOT. Override with ROOTS (space-separated basenames
 # or absolute paths).
 if [ -n "${ROOTS:-}" ]; then
     SCAN_ROOTS=()
@@ -88,18 +91,18 @@ if [ -n "${ROOTS:-}" ]; then
         if [[ "${r}" = /* ]]; then
             SCAN_ROOTS+=("${r}")
         else
-            SCAN_ROOTS+=("${BASE_DIR}/${r}")
+            SCAN_ROOTS+=("${DATA_ROOT}/${r}")
         fi
     done
 else
     SCAN_ROOTS=()
-    for d in "${BASE_DIR}"/training_runs_*/; do
+    for d in "${DATA_ROOT}"/training_runs_*/; do
         [ -d "${d}" ] && SCAN_ROOTS+=("${d%/}")
     done
 fi
 
 if [ "${#SCAN_ROOTS[@]}" -eq 0 ]; then
-    echo "ERROR: no training_runs_* roots found under ${BASE_DIR}" >&2
+    echo "ERROR: no training_runs_* roots found under ${DATA_ROOT}" >&2
     exit 1
 fi
 
@@ -129,7 +132,7 @@ for OUTPUT_ROOT in "${SCAN_ROOTS[@]}"; do
         run_name="$(basename "${run_dir}")"
 
         # Simple-baseline run dirs hold interpolation results, not a torch
-        # checkpoint — nothing for evaluate.py to load.
+        # checkpoint — nothing for tessera-evaluate to load.
         if [[ "${run_name}" == *era5_interp_baseline* ]] \
            || [[ "${run_name}" == *bilinear_baseline* && ! -f "${run_dir}best_model.pt" ]]; then
             continue
@@ -179,7 +182,7 @@ for OUTPUT_ROOT in "${SCAN_ROOTS[@]}"; do
         # Build the eval command. Auto-attach region-specs if the folder
         # has one (efficiency / rollout folders); otherwise --checkpoint
         # only, matching the standard regional submit.sh.
-        EVAL_CMD="${REPO_ROOT}/.venv/bin/python ${EVAL_SCRIPT} \
+        EVAL_CMD="${EVAL_CMD_BASE} \
             --checkpoint ${ckpt} \
             --batch-size ${BATCH_SIZE} \
             --num-workers ${NUM_WORKERS}"
@@ -210,8 +213,8 @@ for OUTPUT_ROOT in "${SCAN_ROOTS[@]}"; do
         fi
 
         SBATCH_CMD="sbatch --job-name=${job_name} \
-            --output=${REPO_ROOT}/logs/${job_name}_%j.out \
-            --error=${REPO_ROOT}/logs/${job_name}_%j.err \
+            --output=${LOG_DIR}/${job_name}_%j.out \
+            --error=${LOG_DIR}/${job_name}_%j.err \
             --gpus=1 --time=${TIME} \
             ${PARTITION:+--partition=${PARTITION}} \
             --wrap=\"cd ${REPO_ROOT} && ${EVAL_CMD}\""

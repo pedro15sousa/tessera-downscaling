@@ -136,16 +136,13 @@ def per_station_residuals(
     Accumulated as running sums so the pass is O(1) in memory regardless of how
     many snapshots a station reports.
     """
-    _, is_multi_region = detect_layout(Path(args.dataset_dir))
+    detect_layout(Path(args.dataset_dir))  # raises unless multi_region_snapshot_v1
     ns = argparse.Namespace(**vars(args))
     ns.train_regions = [region]
     ns.target_variables = [variable]
 
-    dataset = build_dataset(
-        ns, [variable], is_multi_region,
-        split="test", station_split=args.station_split,
-    )
-    era5_dirs = Era5DirResolver(dataset, is_multi_region)
+    dataset = build_dataset(ns, [variable], split="test", station_split=args.station_split)
+    era5_dirs = Era5DirResolver(dataset)
 
     n_stations = len(dataset.station_ids)
     err_sum = np.zeros(n_stations, dtype=np.float64)
@@ -153,10 +150,7 @@ def per_station_residuals(
 
     # Episodes report global flat indices under the multi-region layout; map
     # them back to this dataset's dense station ordering.
-    if is_multi_region:
-        offset = dataset.per_region[region].flat_offset
-    else:
-        offset = 0
+    offset = dataset.per_region[region].flat_offset
 
     for idx in range(len(dataset)):
         episode = dataset[idx]
@@ -358,7 +352,6 @@ def main():
              "per-station CV is not dominated by a handful of noisy stations.",
     )
     parser.add_argument("--target-variables", nargs="+", default=["t2m", "wind"])
-    parser.add_argument("--normalisation-policy", default="per_region")
     parser.add_argument("--station-split", default="test",
                         choices=["train", "test", "all"])
     parser.add_argument("--min-snapshots", type=int, default=DEFAULT_MIN_SNAPSHOTS)

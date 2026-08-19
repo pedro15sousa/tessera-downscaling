@@ -4,33 +4,20 @@ The sign convention here is the one thing in this baseline that can be wrong
 *silently*: flipping it still produces finite, plausible-looking temperatures,
 just systematically worse ones. These tests pin it down against the definition
 of ``delta_elevation`` used upstream in
-``scripts/preprocessing/helpers.py:compute_delta_elevation``, namely
+``tessera_downscaling.preprocessing.helpers.compute_delta_elevation``, namely
 
     delta_elevation = station_elevation - ERA5_orography
 
 so a station *above* its ERA5 cell must be *cooled*.
 """
 
-import importlib.util
-import sys
-from pathlib import Path
-
 import numpy as np
 import pytest
 
-# The baselines live under scripts/, which is not an importable package, so
-# load the module by path rather than restructuring the tree for one test.
-_SCRIPT = (
-    Path(__file__).resolve().parents[1]
-    / "scripts" / "baselines" / "evaluate_simple_baselines.py"
+from tessera_downscaling.baselines import (
+    DEFAULT_LAPSE_RATE_K_PER_M as DEFAULT_LAPSE_RATE,
+    apply_lapse_rate_correction,
 )
-_spec = importlib.util.spec_from_file_location("_simple_baselines", _SCRIPT)
-_mod = importlib.util.module_from_spec(_spec)
-sys.modules["_simple_baselines"] = _mod
-_spec.loader.exec_module(_mod)
-
-apply_lapse_rate_correction = _mod.apply_lapse_rate_correction
-DEFAULT_LAPSE_RATE = _mod.DEFAULT_LAPSE_RATE_K_PER_M
 
 
 def test_station_above_era5_cell_is_cooled():
@@ -88,15 +75,17 @@ def test_non_finite_delta_elev_leaves_prediction_uncorrected():
     out = apply_lapse_rate_correction(interp, delta_elev, DEFAULT_LAPSE_RATE)
 
     assert np.isfinite(out).all(), "no prediction may become non-finite"
-    assert out[0] == pytest.approx(5.0)   # NaN Δelev -> untouched
-    assert out[1] == pytest.approx(0.5)   # 7.0 - 6.5
-    assert out[2] == pytest.approx(9.0)   # inf Δelev -> untouched
+    assert out[0] == pytest.approx(5.0)  # NaN Δelev -> untouched
+    assert out[1] == pytest.approx(0.5)  # 7.0 - 6.5
+    assert out[2] == pytest.approx(9.0)  # inf Δelev -> untouched
 
 
 def test_dtype_is_float32():
     """Predictions feed a float32 npz alongside the other baselines."""
     out = apply_lapse_rate_correction(
-        np.array([1.0]), np.array([100.0]), DEFAULT_LAPSE_RATE,
+        np.array([1.0]),
+        np.array([100.0]),
+        DEFAULT_LAPSE_RATE,
     )
     assert out.dtype == np.float32
 
