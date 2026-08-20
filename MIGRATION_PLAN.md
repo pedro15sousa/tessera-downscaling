@@ -32,9 +32,9 @@ Done (all in the new repo `/home/pmms2/tessera-downscaling`; the monorepo checko
 Verification on the final tree: `uv run pytest` 65 passed; `make_paper_figures.py` 21/21 PDFs, 23 `[ok]`, 0 `[warn]`; `make_paper_tables.py` identical to the committed tables; `pre-commit run --all-files` clean; no legacy path literal left in code (`paths.py` holds the two Isambard prefixes for remapping). Repository size 27 MB (was 83 MB imported, 194 MB in the monorepo).
 
 Still to do:
-1. **Data rescue** (in progress): `dsg_top` and `dsg_ghcnh` landed; the five regional ERA5 pulls and `pe_repo` were interrupted by an Isambard outage on 2026-08-19 ~19:00 UTC, requeued, and resume automatically (`bash /data/weather-downscaling/_migration/status.sh`). When done: verify shapes, relink `dataset_timestamp_aurora_lead*h/ghcnh_snapshot → ../dataset_timestamp_global/ghcnh_snapshot`, run `tessera-evaluate` on one stored checkpoint and diff `test_summary.json` against the on-disk original (Phase 5.4), smoke-train one epoch on `southern_africa` (5.5).
+1. ~~Data rescue~~ — **complete 2026-08-20**: all 133 migration jobs done, zero failures; `dataset_timestamp_global` has 19,032 snapshots in every region + GHCNh, `metadata.json`, `valid_station_indices.npy`; the three Aurora-lead `ghcnh_snapshot` symlinks are relinked (relative, resolving); the patch-encoder source tree is archived at `tessera_patch_encoder/repo/`. Phase 5.4 passed: `tessera-evaluate` on the stored Southern Africa Tessera t2m seed-42 checkpoint reproduces all 23 stored metrics to ≤4e-4 relative (float32 reduction noise; identical at paper precision). Phase 5.5 (one-epoch smoke-train) running.
 2. ~~Fold the VAE patch encoder in~~ — done 2026-08-20: `src/tessera_downscaling/patch_encoder/` + `scripts/patch_encoder/` (JEPA / AlphaEarth / OlmoEarth dropped); the paper checkpoint loads strict=True and its published latents reproduce to 1.8e-6; 81 tests green.
-3. Push to a new remote (`cambridge-mlg/tessera-downscaling` or personal), enable the two GitHub workflows, then retire the monorepo copy (Phase 6).
+3. Push to a new remote (personal GitHub account), enable the two GitHub workflows. **The monorepo copy is kept** (author's decision 2026-08-20) — Phase 6 is dropped; `projects/tessera_downscaling` in `end-to-end-forecasting` remains as the historical tree (and still hosts the untracked `wind_energy/` code until its own migration).
 4. Manuscript items §0.1–0.4 (bilinear vs SetConv wording; dense-map provenance; VAE aux heads; the two AMS Table 1 typos).
 
 Answer to "is anything still missing from the mount?" — two things, both Isambard-only:
@@ -287,7 +287,7 @@ Order: (a) `wind_energy/`, daily/, dead scripts, dead experiment folders, dead n
 5. Smoke-train 1 epoch on `southern_africa` (smallest grid, 81×81) once `dataset_timestamp_global` is back; run `tessera-baselines --lapse-rate-mode fitted` on it.
 6. `ruff`/`pre-commit` clean; CI green on GitHub.
 
-### Phase 6 — Retire the monorepo copy
+### Phase 6 — Retire the monorepo copy  ❌ dropped (monorepo copy is kept)
 
 After Phase 5 passes: PR on `end-to-end-forecasting` that `git rm -r projects/tessera_downscaling`, removes it from `pyproject.toml` (workspace members/sources, pytest/mypy/ruff paths — 7 places) and `Makefile:9`, moves/deletes `download_era5.sh`/`download_ghcnh.sh`, and leaves a one-paragraph `projects/tessera_downscaling/README.md` pointer to the new repo. Delete the untracked strays (`runs/`, `global_0.1_degree_tiff_all/`, `station_list.csv`, `tessera_tiles_shortlist.*`) from the local checkout.
 
