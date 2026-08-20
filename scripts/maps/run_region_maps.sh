@@ -13,8 +13,8 @@
 # Prerequisite: the dense TESSERA latent grid
 #   $DATA_ROOT/processed/dense/<region>/<region>_0.05deg_2024.npz
 # If it is missing, the raw patches are extracted here (extract_dense_grid_patches.py)
-# and the script stops: encoding them with the VAE (tessera-patch-encoder,
-# encode_dense_grid.py) into that npz is a separate step. See generate_maps.py for
+# and the script stops: encoding them into that npz is a separate step
+# (uv run python scripts/patch_encoder/encode_dense_grid.py). See generate_maps.py for
 # the provenance of the paper's grids and runs.
 set -euo pipefail
 

@@ -53,6 +53,7 @@ src/tessera_downscaling/
   train.py       tessera-train      -- train one configuration
   evaluate.py    tessera-evaluate   -- score a checkpoint on held-out stations
   baselines.py   tessera-baselines  -- persistence, ERA5 interpolation, fitted lapse rate
+  patch_encoder/ the TESSERA patch VAE that produces the 16-d surface descriptor
   preprocessing/ shared preprocessing helpers (crops, Δelevation, mTPI lookup)
   paths.py       the data root and legacy-path resolution
   io_utils.py    atomic NetCDF writes, filename convention, parallel map
@@ -64,6 +65,7 @@ scripts/
   aurora/        generate the Aurora forecasts used as forecast-driven context
   experiments/   one folder per experiment: experiments.yaml (the runs) + submit.sh (shared _lib.sh:
                  DRY_RUN / LOCAL / sbatch); Norway rollout schedules; see experiments/README.md
+  patch_encoder/ train / evaluate the VAE, encode stations and dense grids (vae.yaml = the paper's run)
   maps/          dense 0.05° map inference over Iberia and Norway (Figs 3–4, 9)
   analysis/      descriptor-space analyses (residual probe; Norway reachability / separability)
   paper/         make_paper_figures.py, make_paper_tables.py -- regenerate every figure and table
@@ -99,6 +101,14 @@ and the no-Tessera baseline drops the latent flags and keeps the ERA5 static
 fields. See `scripts/experiments/README.md` for the run-name grammar and
 `DATA.md` for the end-to-end data pipeline (download → preprocess →
 descriptors → latents → train → evaluate → figures).
+
+The surface descriptor itself is reproducible in-repo: the VAE in
+`src/tessera_downscaling/patch_encoder/` compresses each station's 64 × 64
+TESSERA patch to the 16-d latent (recon + gradient + KL loss, plus auxiliary
+elevation/lat/lon heads), trained and applied via
+`scripts/patch_encoder/{prebuild_cache,train_vae,eval_vae,encode_dense_grid}.py`;
+the paper's checkpoint loads into this code strict=True and reproduces its
+published latents to ~2e-6.
 
 ## Provenance
 

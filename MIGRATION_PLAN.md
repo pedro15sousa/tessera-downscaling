@@ -33,7 +33,7 @@ Verification on the final tree: `uv run pytest` 65 passed; `make_paper_figures.p
 
 Still to do:
 1. **Data rescue** (in progress): `dsg_top` and `dsg_ghcnh` landed; the five regional ERA5 pulls and `pe_repo` were interrupted by an Isambard outage on 2026-08-19 ~19:00 UTC, requeued, and resume automatically (`bash /data/weather-downscaling/_migration/status.sh`). When done: verify shapes, relink `dataset_timestamp_aurora_lead*h/ghcnh_snapshot → ../dataset_timestamp_global/ghcnh_snapshot`, run `tessera-evaluate` on one stored checkpoint and diff `test_summary.json` against the on-disk original (Phase 5.4), smoke-train one epoch on `southern_africa` (5.5).
-2. **Fold the VAE patch encoder in** once `tessera_patch_encoder/repo/` has arrived: `src/tessera_downscaling/patch_encoder/` (VAE model/losses/dataset/blocks) + `scripts/patch_encoder/` (train, eval, encode_stations, encode_dense_grid); drop JEPA / AlphaEarth / OlmoEarth.
+2. ~~Fold the VAE patch encoder in~~ — done 2026-08-20: `src/tessera_downscaling/patch_encoder/` + `scripts/patch_encoder/` (JEPA / AlphaEarth / OlmoEarth dropped); the paper checkpoint loads strict=True and its published latents reproduce to 1.8e-6; 81 tests green.
 3. Push to a new remote (`cambridge-mlg/tessera-downscaling` or personal), enable the two GitHub workflows, then retire the monorepo copy (Phase 6).
 4. Manuscript items §0.1–0.4 (bilinear vs SetConv wording; dense-map provenance; VAE aux heads; the two AMS Table 1 typos).
 

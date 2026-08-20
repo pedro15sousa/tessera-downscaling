@@ -1,8 +1,8 @@
 """Pre-computed per-station vector loading (TESSERA VAE latents and friends).
 
 The model consumes one *frozen* vector per station rather than raw TESSERA
-patches. In the paper that vector is the latent of a VAE trained (in the
-``tessera_patch_encoder`` repository) on the global 64x64 TESSERA patch set;
+patches. In the paper that vector is the latent of a VAE trained by
+``tessera_downscaling.patch_encoder`` on the global 64x64 TESSERA patch set;
 the same loader also serves the control inputs built with the same
 ``(n_stations, d)`` + station-CSV convention — shuffled latents, patch summary
 statistics and the extra terrain/land-cover descriptors.

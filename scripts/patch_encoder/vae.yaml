@@ -1,0 +1,50 @@
+# Patch-encoder VAE -- the configuration behind the paper's descriptors.
+#
+# These are the settings of the run `p128_2017_crop64_lat16_grad0.5_auxon`
+# whose `eval/station_latents.npy` became
+# `processed/vae_tessera_1B-M/station_latents_1B-M_p128_2017_crop64_lat16_grad0.5_auxon.npy`.
+# Data paths are relative to the data root ($TESSERA_DATA_ROOT, default
+# /data/weather-downscaling); every entry can be overridden on the command line
+# (`train_vae.py --help`).
+
+data:
+  patches_path: processed/tessera_station_patches/patch_embeddings_2017_p128.npy
+  stations_path: processed/tessera_station_patches/station_list_filtered.csv
+  # Centred window taken out of each stored 128x128 patch at read time:
+  # 64 px = 640 m at TESSERA's 10 m resolution. null keeps the whole patch.
+  crop_size: 64
+
+model:
+  latent_dim: 16
+  encoder_channels: [128, 256, 256, 512]   # four stride-2 stages
+  decoder_channels: [512, 256, 256, 128]   # mirrored
+  dropout: 0.1
+  # `input_size` and `in_channels` are written by train_vae.py from the data
+  # the run actually sees (the crop size and the patch file's channel count).
+
+auxiliary:
+  enable: true
+  targets: [elevation, latitude, longitude]
+  hidden_dim: 64
+  weights:
+    elevation: 1.0
+    latitude: 0.5
+    longitude: 0.5
+
+loss:
+  reconstruction: mse        # "mse" or "l1"
+  gradient_weight: 0.5       # spatial-gradient term; 0 disables it
+  beta_end: 0.0005           # final KL weight
+  beta_warmup_steps: 5000    # linear ramp of the KL weight, in optimiser steps
+
+training:
+  epochs: 200
+  batch_size: 64
+  lr: 1.0e-3
+  weight_decay: 1.0e-5
+  scheduler: cosine          # "cosine" or none
+  grad_clip: 1.0
+  val_split: 0.1
+  seed: 42
+  num_workers: 4
+  pin_memory: true

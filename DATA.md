@@ -182,8 +182,9 @@ previews for Figs 3-4) and `<region>_summary.csv`. Written by
 
 ## 6. `tessera_patch_encoder/`
 
-Outputs of the VAE patch encoder (a separate small repository, to be kept at
-`tessera_patch_encoder/repo/`): `outputs/vae/<run>/` with `best.pt`,
+Outputs of the VAE patch encoder, whose code now lives in this repository
+(`src/tessera_downscaling/patch_encoder/` + `scripts/patch_encoder/`; `repo/`
+here is the archived original research tree): `outputs/vae/<run>/` with `best.pt`,
 `checkpoint_epoch*.pt`, `eval/{station_latents.npy, latents.npz,
 reconstruction_metrics.npz, probe_*}` and per-run Slurm logs. The runs named in
 `processed/vae_tessera_1B-M/provenance.txt` (`p128_2017_*`, `p128_2024_*`) and
@@ -209,7 +210,8 @@ matter; `data/` holds the station lists the encoder was pointed at.
    processed/tessera_station_patches` from the TESSERA v2 mount ->
    `patch_embeddings_2017_p128.npy`. The v1 2024 p64 file behind
    `processed/tessera_global` is only the station-validity filter (trap 1).
-5. **Latents**: train / encode the VAE in `tessera_patch_encoder/` (crop 64,
+5. **Latents**: `scripts/patch_encoder/{prebuild_cache,train_vae,eval_vae}.py`
+   (config `scripts/patch_encoder/vae.yaml` = the paper's run: crop 64,
    latent 16, gradient loss 0.5, aux heads on) and copy
    `eval/station_latents.npy` to `processed/vae_tessera_1B-M/...` (record it
    in `provenance.txt`). Controls: `scripts/data/shuffle_latents.py --seed 0`,
@@ -228,8 +230,8 @@ matter; `data/` holds the station lists the encoder was pointed at.
    `build_rollout_schedule.py`. Then `scripts/reeval_train_stations.sh` and
    `scripts/reeval_truncated_normal.sh`.
 8. **Maps and figures**: `scripts/maps/extract_dense_grid_patches.py` ->
-   `processed/tessera_dense_grid/`, encode with the VAE
-   (`encode_dense_grid.py` of the patch encoder) -> `processed/dense/<region>/`,
+   `processed/tessera_dense_grid/`, encode with
+   `scripts/patch_encoder/encode_dense_grid.py` -> `processed/dense/<region>/`,
    then `REGION=<region> bash scripts/maps/run_region_maps.sh` (DEM via
    `fetch_dem.py` -> `processed/dem_cache/`; map inference, station evaluation
    and overview -> `paper_figure_outputs/maps_outputs/`) and finally

@@ -72,6 +72,11 @@ def staging_dir(*parts: str) -> Path:
     return data_root().joinpath("_staging", *parts)
 
 
+def patch_encoder_dir(*parts: str) -> Path:
+    """``<root>/tessera_patch_encoder/...`` -- patch-encoder runs and caches."""
+    return data_root().joinpath("tessera_patch_encoder", *parts)
+
+
 def paper_figure_inputs_dir() -> Path:
     """``<root>/paper_figure_outputs/maps_outputs`` -- cached inputs of the map figures."""
     return data_root() / "paper_figure_outputs" / "maps_outputs"
