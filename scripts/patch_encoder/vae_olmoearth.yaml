@@ -1,0 +1,54 @@
+# Patch encoder on OlmoEarth patches -- the second foundation-model ablation.
+#
+# OlmoEarth patches are 16x16 *token* grids (the v1 Base encoder run over 64 px
+# @ 10 m Sentinel-2 mosaics with ViT patch size 4, so one token is 40 m) with
+# 768 channels -- not 10 m pixel rasters. The window is the same 640 m as the
+# other arms, so the encoder takes the grid whole (no crop) and uses three
+# stride-2 stages instead of four: 16 -> 8 -> 4 -> 2. `in_channels` (768) and
+# `input_size` (16) are written by train_vae.py from the patch file.
+#
+# The 16 runs of the benchmark sweep come from this file plus command-line
+# overrides (`scripts/patch_encoder/slurm/submit_fm_sweep.sh`): `--patches-path`
+# picks the year, `--latent-dim` the latent width, `--aux on|off` the auxiliary
+# heads. Data paths are relative to the data root ($TESSERA_DATA_ROOT, default
+# /data/weather-downscaling).
+
+data:
+  patches_path: processed/olmoearth_station_patches/patch_embeddings_olmoearth_2017_g16.npy
+  # OlmoEarth patches are aligned with the same station list as the TESSERA
+  # ones -- that alignment is what makes the arms comparable downstream.
+  stations_path: processed/tessera_station_patches/station_list_filtered.csv
+  crop_size: null            # the 16x16 token grid is already the 640 m window
+
+model:
+  latent_dim: 16             # held constant across the arms for a fair interface
+  encoder_channels: [256, 256, 512]   # three stride-2 stages: 16 -> 8 -> 4 -> 2
+  decoder_channels: [512, 256, 256]   # mirrored
+  dropout: 0.1
+
+auxiliary:
+  enable: true
+  targets: [elevation, latitude, longitude]
+  hidden_dim: 64
+  weights:
+    elevation: 1.0
+    latitude: 0.5
+    longitude: 0.5
+
+loss:
+  reconstruction: mse
+  gradient_weight: 0.5
+  beta_end: 0.0005
+  beta_warmup_steps: 5000
+
+training:
+  epochs: 200
+  batch_size: 64
+  lr: 1.0e-3
+  weight_decay: 1.0e-5
+  scheduler: cosine
+  grad_clip: 1.0
+  val_split: 0.1
+  seed: 42
+  num_workers: 4
+  pin_memory: true

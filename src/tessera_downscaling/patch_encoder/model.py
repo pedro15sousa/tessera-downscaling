@@ -1,8 +1,8 @@
 """The patch-encoder VAE: encoder, decoder, auxiliary heads.
 
-The encoder takes a ``(B, C, S, S)`` patch of TESSERA embeddings (``C = 128``
+The encoder takes a ``(B, C, S, S)`` patch of surface embeddings (``C = 128``
 channels; ``S = 64`` pixels, i.e. a 640 m window at 10 m resolution, for the
-paper's run), pushes it through four stride-2 convolution blocks
+paper's TESSERA run), pushes it through four stride-2 convolution blocks
 (128 -> 256 -> 256 -> 512), flattens the resulting ``512 x (S/16) x (S/16)``
 feature map and projects it to the mean and log-variance of a diagonal Gaussian
 over a ``latent_dim``-dimensional latent. The decoder mirrors that path back to
@@ -13,6 +13,13 @@ regress auxiliary targets -- elevation, latitude, longitude -- off the latent.
 Flattening rather than pooling the final feature map is deliberate: the latent
 keeps *where* in the patch a feature sits, which a global average pool would
 discard.
+
+Neither the channel count nor the number of stages is baked in, which is what
+lets the foundation-model benchmark reuse this model unchanged: ``in_channels``
+follows the patch file (128 TESSERA, 64 AlphaEarth, 768 OlmoEarth) and the
+number of stride-2 stages is the length of ``encoder_channels``, so the 16x16
+OlmoEarth token grid is encoded by a three-stage configuration (16 -> 8 -> 4 ->
+2) while the 10 m rasters use four.
 
 The posterior mean of the trained encoder (:meth:`TesseraVAE.encode`) is the
 per-station surface descriptor the downscaler consumes.
@@ -25,7 +32,9 @@ from torch import nn
 
 from .blocks import ConvBlock, DeconvBlock
 
-# Four stride-2 stages, hence patches must be divisible by 2**4.
+# The TESSERA geometry: four stride-2 stages, hence patches must be divisible
+# by 2**4. A config's own encoder_channels / decoder_channels override these,
+# and their length sets the number of stages (three for OlmoEarth's 16x16 grid).
 DEFAULT_ENCODER_CHANNELS = (128, 256, 256, 512)
 DEFAULT_DECODER_CHANNELS = (512, 256, 256, 128)
 
@@ -34,7 +43,8 @@ class Encoder(nn.Module):
     """``(B, in_channels, S, S)`` patch -> posterior ``(mu, logvar)``.
 
     Args:
-        in_channels: Channels of the input patch (128 for TESSERA).
+        in_channels: Channels of the input patch (128 TESSERA, 64 AlphaEarth,
+            768 OlmoEarth).
         layer_channels: Output channels of the successive stride-2 blocks.
         latent_dim: Dimension of the latent.
         dropout: Dropout2d probability inside each conv block.
@@ -136,7 +146,8 @@ class TesseraVAE(nn.Module):
     """Encoder + decoder + auxiliary heads.
 
     Args:
-        in_channels: Channels of the input patch (128 for TESSERA).
+        in_channels: Channels of the input patch (128 TESSERA, 64 AlphaEarth,
+            768 OlmoEarth).
         latent_dim: Dimension of the latent (16 in the paper).
         encoder_channels, decoder_channels: Per-stage channel counts.
         dropout: Dropout2d probability inside the encoder blocks.
@@ -207,10 +218,11 @@ class TesseraVAE(nn.Module):
 def build_model(cfg: dict) -> TesseraVAE:
     """Construct a :class:`TesseraVAE` from a run config.
 
-    ``cfg`` is the dict parsed from ``scripts/patch_encoder/vae.yaml`` or the
-    copy stored inside a checkpoint (``ckpt["config"]``); rebuilding from the
-    latter reproduces the trained model exactly, so ``load_state_dict(...,
-    strict=True)`` succeeds.
+    ``cfg`` is the dict parsed from one of the ``scripts/patch_encoder/vae*.yaml``
+    configs (``vae.yaml`` for TESSERA, ``vae_alphaearth.yaml`` and
+    ``vae_olmoearth.yaml`` for the benchmark arms) or the copy stored inside a
+    checkpoint (``ckpt["config"]``); rebuilding from the latter reproduces the
+    trained model exactly, so ``load_state_dict(..., strict=True)`` succeeds.
 
     ``model.input_size`` and ``model.in_channels`` are written by
     ``train_vae.py`` from the data the run actually saw (the crop size and the

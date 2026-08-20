@@ -45,6 +45,19 @@ ingest = [
 # Aurora forecast generation (scripts/aurora); heavy, keep out of the default env.
 aurora = ["microsoft-aurora==1.8.0"]
 notebooks = ["ipykernel", "nbformat", "jupyter"]
+# Foundation-model benchmark extraction (scripts/patch_encoder/extract):
+# AlphaEarth COGs are read over HTTPS through GDAL (rasterio is core); the
+# OlmoEarth imagery step needs the Planetary Computer STAC clients. The
+# OlmoEarth *encoder* (olmoearth-pretrain) pins torch<2.8 and cannot share
+# this environment -- run extract_olmoearth_embed.py from its own venv:
+#   uv venv .venv-olmoearth && uv pip install -p .venv-olmoearth olmoearth-pretrain
+fm = [
+    "pyarrow>=17",
+    "shapely>=2.0",
+    "pyproj>=3.6",
+    "pystac-client>=0.8",
+    "planetary-computer>=1.0",
+]
 
 [dependency-groups]
 dev = [

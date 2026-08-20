@@ -94,9 +94,20 @@ the dataset loader drops those stations.
 | `dem_cache/*.hgt` | 198 SRTM 1-arcsec tiles (5 GB) for the map figures | `scripts/maps/fetch_dem.py` |
 | `overview_cache/{obs_counts_2022,obs_counts_test_split,patch_valid_2024}.npz` | per-station observation counts and the TESSERA validity mask (`valid, coverage, centre` over the 38,870 rows) | `scripts/maps/plot_region_overview.py` |
 
-`alphaearth_station_patches/`, `olmoearth_*`, `station_latents_jepa_*` and
-`tessera_patch_encoder/outputs/{jepa,vae/alphaearth,...}` are benchmark
-experiments outside this paper.
+Foundation-model benchmark arms (follow-up ablations; code in
+`scripts/patch_encoder/extract/`, same 38,870-station list as TESSERA):
+
+| path | what | producer |
+|---|---|---|
+| `alphaearth_station_patches/patch_embeddings_alphaearth_{2017,2024}_p128.npy` (+ `index/`, `extraction_metadata.json`) | (38870, 128, 128, 64) f32 AlphaEarth patches, 152 GB each; 38,430 / 38,656 centre-nonzero | `extract_alphaearth.py` |
+| `olmoearth_imagery/s2_{2017,2024}_p64.npy` (+ `_months.npy` valid-month mask) | (38870, 64, 64, 12, 12) uint16 Sentinel-2 L2A monthly mosaics, 43 GB each | `extract_olmoearth_imagery.py` |
+| `olmoearth_station_patches/patch_embeddings_olmoearth_{2017,2024}_g16.npy` | (38870, 16, 16, 768) f32 OlmoEarth-v1-Base token grids | `extract_olmoearth_embed.py` |
+
+Usable stations after the encoder's two-stage filter: AlphaEarth 36,909 (2017) /
+37,127 (2024), OlmoEarth 37,074 / 37,299; the all-FM intersection is 36,902 for
+2017 and 35,390 once TESSERA 2024 is included (TESSERA is the binding
+constraint). `station_latents_jepa_*` and `tessera_patch_encoder/outputs/jepa/`
+belong to an abandoned encoder line and are not used.
 
 ## 3. Datasets
 
@@ -188,8 +199,11 @@ here is the archived original research tree): `outputs/vae/<run>/` with `best.pt
 `checkpoint_epoch*.pt`, `eval/{station_latents.npy, latents.npz,
 reconstruction_metrics.npz, probe_*}` and per-run Slurm logs. The runs named in
 `processed/vae_tessera_1B-M/provenance.txt` (`p128_2017_*`, `p128_2024_*`) and
-the v1 `lat16_beta0.0005_grad0.5_e200/` (dense-map latents) are the ones that
-matter; `data/` holds the station lists the encoder was pointed at.
+the v1 `lat16_beta0.0005_grad0.5_e200/` (dense-map latents) are the paper's;
+`outputs/vae/{alphaearth,olmoearth}/<year>/crop64_lat<16,32>_aux<on,off>/` are
+the 16 benchmark runs (`slurm/submit_fm_sweep.sh`); `outputs/dataset_cache/` holds
+the per-patch-file validity/normalisation caches; `data/` the station lists the
+encoder was pointed at.
 
 ## 7. Rebuilding everything from scratch
 

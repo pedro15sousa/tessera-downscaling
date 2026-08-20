@@ -1,0 +1,54 @@
+# Patch encoder on AlphaEarth patches -- the first foundation-model ablation.
+#
+# Same recipe as the paper's TESSERA run (`vae.yaml`); only the data source
+# changes. AlphaEarth (Satellite Embedding v1) patches are 64-channel 10 m
+# rasters stored at 128x128 px, so the geometry is identical to TESSERA's apart
+# from the channel count, which train_vae.py reads off the patch file.
+#
+# The 16 runs of the benchmark sweep come from this file plus command-line
+# overrides (`scripts/patch_encoder/slurm/submit_fm_sweep.sh`): `--patches-path`
+# picks the year, `--latent-dim` the latent width, `--aux on|off` the auxiliary
+# heads. Data paths are relative to the data root ($TESSERA_DATA_ROOT, default
+# /data/weather-downscaling).
+
+data:
+  patches_path: processed/alphaearth_station_patches/patch_embeddings_alphaearth_2017_p128.npy
+  # AlphaEarth patches are aligned with the same station list as the TESSERA
+  # ones -- that alignment is what makes the arms comparable downstream.
+  stations_path: processed/tessera_station_patches/station_list_filtered.csv
+  crop_size: 64              # 64 px = the same 640 m window as the TESSERA run
+
+model:
+  latent_dim: 16             # held constant across the arms for a fair interface
+  encoder_channels: [128, 256, 256, 512]   # four stride-2 stages
+  decoder_channels: [512, 256, 256, 128]   # mirrored
+  dropout: 0.1
+  # `input_size` (64) and `in_channels` (64) are written by train_vae.py from
+  # the data the run actually sees.
+
+auxiliary:
+  enable: true
+  targets: [elevation, latitude, longitude]
+  hidden_dim: 64
+  weights:
+    elevation: 1.0
+    latitude: 0.5
+    longitude: 0.5
+
+loss:
+  reconstruction: mse
+  gradient_weight: 0.5
+  beta_end: 0.0005
+  beta_warmup_steps: 5000
+
+training:
+  epochs: 200
+  batch_size: 64
+  lr: 1.0e-3
+  weight_decay: 1.0e-5
+  scheduler: cosine
+  grad_clip: 1.0
+  val_split: 0.1
+  seed: 42
+  num_workers: 4
+  pin_memory: true

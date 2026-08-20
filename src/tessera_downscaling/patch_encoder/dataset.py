@@ -7,6 +7,14 @@ The encoder trains on the per-station TESSERA patch file written by
 ``station_list_filtered.csv`` next to it. Patches are north-up and centred on
 the station.
 
+The same machinery serves the two foundation-model arms of the benchmark,
+whose patches are written by ``scripts/patch_encoder/extract/`` against the
+same station list: AlphaEarth, ``(38870, 128, 128, 64)``, and OlmoEarth,
+``(38870, 16, 16, 768)`` -- a token grid rather than a 10 m raster, used whole
+instead of cropped. Nothing here is specific to a channel count or a patch
+size: both come from the file, and the model is built to match
+(``train_vae.py``).
+
 Three things happen between the file and the model:
 
 1. *Validity.* :func:`prepare_data` scans the file once, flagging stations
@@ -48,7 +56,15 @@ OUTLIER_THRESHOLD = 1000.0
 ELEV_SENTINEL_LOW = -900
 ELEV_SENTINEL_HIGH = 8848
 
-STATION_PATCH_DIR = "tessera_station_patches"
+# Directories under ``processed/`` holding station patch files, one per
+# embedding source. ``eval_vae.py`` searches them in this order when the patch
+# file recorded in a checkpoint no longer resolves.
+STATION_PATCH_DIRS = (
+    "tessera_station_patches",
+    "alphaearth_station_patches",
+    "olmoearth_station_patches",
+)
+STATION_PATCH_DIR = STATION_PATCH_DIRS[0]
 
 
 def default_patches_path(year: int = 2017) -> Path:

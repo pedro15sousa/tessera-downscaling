@@ -13,6 +13,11 @@ Usage:
     uv run python scripts/patch_encoder/prebuild_cache.py \\
         --patches processed/tessera_station_patches/patch_embeddings_2024_p128.npy
 
+    # Before the foundation-model sweep (slurm/submit_fm_sweep.sh):
+    uv run python scripts/patch_encoder/prebuild_cache.py --patches \\
+        processed/alphaearth_station_patches/patch_embeddings_alphaearth_{2017,2024}_p128.npy \\
+        processed/olmoearth_station_patches/patch_embeddings_olmoearth_{2017,2024}_g16.npy
+
 Relative paths are interpreted under the data root.
 """
 

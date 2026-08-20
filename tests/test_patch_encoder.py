@@ -1,20 +1,23 @@
-"""Tests for the TESSERA patch encoder (the VAE behind the station descriptors).
+"""Tests for the patch encoder (the VAE behind the station descriptors).
 
 Two layers:
 
 * Synthetic checks that run anywhere -- the model built from the paper's
-  configuration has the expected shape and outputs, the loss is finite and its
-  KL ramp behaves, and the dataset's station filter, centre crop and
-  normalisation do what the descriptors depend on.
-* Checks against the real run on the data root (skipped when it is absent):
+  configuration has the expected shape and outputs, the shipped foundation-model
+  configs build the geometry their data needs, the loss is finite and its KL
+  ramp behaves, and the dataset's station filter, centre crop and normalisation
+  do what the descriptors depend on.
+* Checks against the real runs on the data root (skipped when it is absent):
   ``best.pt`` still loads into the ported model with ``strict=True``, and
   re-encoding the first stations reproduces the latents that run published --
-  the proof that the migration did not move the descriptor space.
+  the proof that the migration did not move the descriptor space. This covers
+  the paper's TESSERA run and both arms of the foundation-model benchmark.
 """
 
 from __future__ import annotations
 
 import copy
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -86,6 +89,70 @@ STATIONS = (
     data_root() / "processed" / "tessera_station_patches" / "station_list_filtered.csv"
 )
 
+# The run configs shipped with the repository.
+CONFIG_DIR = Path(__file__).resolve().parents[1] / "scripts" / "patch_encoder"
+
+# The foundation-model benchmark: the same recipe as the paper's run, trained on
+# AlphaEarth (64-channel 10 m rasters, centre-cropped to 64 px) and OlmoEarth
+# (768-channel 16x16 token grids, used whole) patches of the same stations.
+FM_RUNS = {
+    "alphaearth": {
+        "config": "vae_alphaearth.yaml",
+        "run_dir": data_root()
+        / "tessera_patch_encoder"
+        / "outputs"
+        / "vae"
+        / "alphaearth"
+        / "2017"
+        / "crop64_lat16_auxon",
+        "patches": data_root()
+        / "processed"
+        / "alphaearth_station_patches"
+        / "patch_embeddings_alphaearth_2017_p128.npy",
+        "cache": data_root()
+        / "tessera_patch_encoder"
+        / "outputs"
+        / "dataset_cache"
+        / "patch_embeddings_alphaearth_2017_p128"
+        / "cache.npz",
+        "patch_shape": (64, 64, 64),  # (C, S, S) the encoder is fed
+    },
+    "olmoearth": {
+        "config": "vae_olmoearth.yaml",
+        "run_dir": data_root()
+        / "tessera_patch_encoder"
+        / "outputs"
+        / "vae"
+        / "olmoearth"
+        / "2017"
+        / "crop64_lat16_auxon",
+        "patches": data_root()
+        / "processed"
+        / "olmoearth_station_patches"
+        / "patch_embeddings_olmoearth_2017_g16.npy",
+        "cache": data_root()
+        / "tessera_patch_encoder"
+        / "outputs"
+        / "dataset_cache"
+        / "patch_embeddings_olmoearth_2017_g16"
+        / "cache.npz",
+        "patch_shape": (768, 16, 16),
+    },
+}
+
+
+def shipped_config(name: str, in_channels: int, input_size: int) -> dict:
+    """Load a shipped run config and fill in what ``train_vae.py`` fills in.
+
+    ``model.in_channels`` and ``model.input_size`` are not written by hand: the
+    training script reads them off the patch file the run actually sees. Doing
+    the same here keeps the test on the real config rather than a copy of it.
+    """
+    cfg = yaml.safe_load((CONFIG_DIR / name).read_text())
+    cfg["model"]["in_channels"] = in_channels
+    cfg["model"]["input_size"] = input_size
+    return cfg
+
 
 # ---------------------------------------------------------------------------
 # Model
@@ -150,6 +217,50 @@ def test_build_model_rejects_the_ablation_branches_that_were_dropped(key, value)
     cfg["model"][key] = value
     with pytest.raises(ValueError, match=key):
         build_model(cfg)
+
+
+def test_alphaearth_config_builds_a_64_channel_encoder():
+    """AlphaEarth differs from TESSERA only in the channel count."""
+    model = build_model(shipped_config("vae_alphaearth.yaml", 64, 64))
+
+    assert model.encoder.blocks[0].conv[0].in_channels == 64
+    assert [b.conv[0].out_channels for b in model.encoder.blocks] == [
+        128,
+        256,
+        256,
+        512,
+    ]
+    # Same four halvings and the same bottleneck as the paper's run.
+    assert model.encoder.final_spatial == 4
+    assert tuple(model.encoder.fc_mu.weight.shape) == (16, 512 * 4 * 4)
+
+    out = model.eval()(torch.randn(2, 64, 64, 64))
+    assert out["x_recon"].shape == (2, 64, 64, 64)
+    assert out["mu"].shape == (2, 16)
+
+
+def test_olmoearth_config_builds_a_three_stage_encoder_for_the_token_grid():
+    """A 16x16 grid cannot be halved four times, so its config uses three stages."""
+    model = build_model(shipped_config("vae_olmoearth.yaml", 768, 16))
+
+    assert model.encoder.blocks[0].conv[0].in_channels == 768
+    assert [b.conv[0].out_channels for b in model.encoder.blocks] == [256, 256, 512]
+    # 16 px through three halvings is 2 px, so the bottleneck flattens 512x2x2.
+    assert model.encoder.final_spatial == 2
+    assert tuple(model.encoder.fc_mu.weight.shape) == (16, 512 * 2 * 2)
+    assert tuple(model.decoder.fc.weight.shape) == (512 * 2 * 2, 16)
+
+    out = model.eval()(torch.randn(2, 768, 16, 16))
+    assert out["x_recon"].shape == (2, 768, 16, 16)
+    assert out["mu"].shape == (2, 16)
+
+    # Why three and not the default four: a fourth halving would leave a 1x1
+    # feature map, so the flatten bottleneck would carry no spatial layout --
+    # exactly what it exists to preserve.
+    cfg = shipped_config("vae_olmoearth.yaml", 768, 16)
+    cfg["model"]["encoder_channels"] = [128, 256, 256, 512]
+    cfg["model"]["decoder_channels"] = [512, 256, 256, 128]
+    assert build_model(cfg).encoder.final_spatial == 1
 
 
 # ---------------------------------------------------------------------------
@@ -457,3 +568,84 @@ def test_re_encoding_reproduces_the_published_station_latents():
         latents = model.encode(x).numpy()
 
     np.testing.assert_allclose(latents, np.asarray(published[rows]), atol=1e-5)
+
+
+# ---------------------------------------------------------------------------
+# The foundation-model benchmark runs on the data root
+# ---------------------------------------------------------------------------
+
+
+@data_root_only
+@pytest.mark.parametrize("source", sorted(FM_RUNS))
+def test_benchmark_checkpoint_loads_into_the_ported_model_strictly(source):
+    """The AlphaEarth and OlmoEarth runs rebuild from their stored configs.
+
+    Their geometries are the ones the migration had to keep configurable: a
+    64-channel input for AlphaEarth, and a 768-channel 16x16 grid with a
+    three-stage encoder for OlmoEarth.
+    """
+    run = FM_RUNS[source]
+    if not (run["run_dir"] / "best.pt").exists():
+        pytest.skip(f"checkpoint not present: {run['run_dir'] / 'best.pt'}")
+
+    ckpt = torch.load(
+        run["run_dir"] / "best.pt", map_location="cpu", weights_only=False
+    )
+    model = build_model(ckpt["config"])
+
+    model.load_state_dict(ckpt["model"], strict=True)
+
+    channels, size, _ = run["patch_shape"]
+    assert ckpt["config"]["model"]["in_channels"] == channels
+    assert ckpt["config"]["model"]["input_size"] == size
+    assert ckpt["config"]["model"]["latent_dim"] == 16
+    assert ckpt["config"]["auxiliary"]["enable"] is True
+    # The recipe is the paper's, so only the surface embedding differs.
+    assert ckpt["config"]["loss"]["gradient_weight"] == 0.5
+    assert ckpt["config"]["loss"]["beta_end"] == 0.0005
+
+
+@data_root_only
+@pytest.mark.parametrize("source", sorted(FM_RUNS))
+def test_re_encoding_reproduces_the_published_benchmark_latents(source):
+    """Re-encode the first stations of each benchmark arm.
+
+    Tolerance is looser than for the TESSERA run because these latents were
+    published from a GPU evaluation (TF32 convolutions on a GH200) while the
+    TESSERA one ran on CPU; the observed disagreement is ~3e-4 on latents whose
+    entries reach 3.6.
+    """
+    run = FM_RUNS[source]
+    published_path = run["run_dir"] / "eval" / "station_latents.npy"
+    for path in (published_path, run["cache"], run["patches"], STATIONS):
+        if not path.exists():
+            pytest.skip(f"not present: {path}")
+
+    ckpt = torch.load(
+        run["run_dir"] / "best.pt", map_location="cpu", weights_only=False
+    )
+    model = build_model(ckpt["config"])
+    model.load_state_dict(ckpt["model"], strict=True)
+    model.eval()
+
+    published = np.load(published_path, mmap_mode="r")
+    # NaN rows are stations the run could not encode; skip those.
+    rows = [i for i in range(4) if np.isfinite(published[i]).all()]
+    assert rows, "expected at least one encodable station among the first four"
+
+    cache = np.load(run["cache"])
+    dataset = TesseraPatchDataset(
+        patches_path=run["patches"],
+        stations_path=STATIONS,
+        valid_indices=np.array(rows),
+        channel_mean=cache["channel_mean"],
+        channel_std=cache["channel_std"],
+        crop_size=ckpt["config"]["data"].get("crop_size"),
+    )
+    x = torch.stack([dataset[i]["patch"] for i in range(len(rows))])
+    assert x.shape == (len(rows), *run["patch_shape"])
+
+    with torch.no_grad():
+        latents = model.encode(x).numpy()
+
+    np.testing.assert_allclose(latents, np.asarray(published[rows]), atol=1e-3)

@@ -23,6 +23,11 @@ about 200 epochs on one GPU):
     uv run python scripts/patch_encoder/train_vae.py \\
         --outdir tessera_patch_encoder/outputs/vae/p128_2017_crop64_lat16_grad0.5_auxon
 
+The same script trains the foundation-model arms of the benchmark, which differ
+only in their data and the resulting geometry -- pass ``--config
+scripts/patch_encoder/vae_alphaearth.yaml`` or ``vae_olmoearth.yaml``, or use
+``slurm/submit_fm_sweep.sh`` for the whole 16-run sweep.
+
 Relative paths (``--outdir``, ``--patches-path``, ``--stations-path``,
 ``--cache-dir``, ``--resume``) are interpreted under the data root.
 """

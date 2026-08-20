@@ -59,10 +59,13 @@ for year in ${YEARS}; do
                 fi
 
                 # Continue from the newest periodic checkpoint if there is one.
+                # The `|| true` matters: without it the failing `ls` of a run
+                # directory that does not exist yet would abort the whole sweep
+                # under `set -e -o pipefail`, i.e. on every first submission.
                 resume_arg=""
                 latest_ckpt=$(ls -1 "${run_dir}"/checkpoint_epoch*.pt 2>/dev/null \
                     | sed -E 's/.*epoch([0-9]+)\.pt$/\1 &/' \
-                    | sort -n -k1,1 | tail -1 | cut -d' ' -f2-)
+                    | sort -n -k1,1 | tail -1 | cut -d' ' -f2- || true)
                 if [ -n "${latest_ckpt}" ]; then
                     resume_arg="--resume ${latest_ckpt}"
                     echo "RESUME:    ${name} <- $(basename "${latest_ckpt}")"

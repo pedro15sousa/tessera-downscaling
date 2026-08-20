@@ -31,7 +31,11 @@ Usage:
 Relative paths are interpreted under the data root. The patch file and station
 CSV default to the ones the run trained on; when that recorded path no longer
 exists (runs trained on the HPC store its absolute paths) the file of the same
-name under ``processed/tessera_station_patches/`` is used instead.
+name in one of the station-patch directories is used instead.
+
+The script is source-agnostic: it rebuilds whatever geometry the checkpoint
+describes, so it evaluates the TESSERA runs and the AlphaEarth / OlmoEarth runs
+of the foundation-model benchmark the same way.
 """
 
 from __future__ import annotations
@@ -53,7 +57,7 @@ from torch.utils.data import DataLoader
 from tessera_downscaling.patch_encoder.dataset import (
     ELEV_SENTINEL_HIGH,
     ELEV_SENTINEL_LOW,
-    STATION_PATCH_DIR,
+    STATION_PATCH_DIRS,
     TesseraPatchDataset,
     filter_elevation_sentinels,
     prepare_data,
@@ -99,23 +103,27 @@ def build_parser() -> argparse.ArgumentParser:
 def locate_data_file(recorded: str, override: str | None) -> Path:
     """Resolve a data path recorded in a checkpoint config.
 
-    ``--patches-path`` / ``--stations-path`` win. Otherwise the recorded path
-    is used if it exists; runs trained on the HPC recorded absolute paths that
-    the data root does not reproduce, so as a last resort we take the file of
-    the same name under ``processed/tessera_station_patches/``.
+    ``--patches-path`` / ``--stations-path`` win. Otherwise the recorded path is
+    used if it exists; runs trained on the HPC recorded absolute paths that the
+    data root does not reproduce, so as a last resort we take the file of the
+    same name from the station-patch directories -- which is also how a
+    foundation-model run finds its AlphaEarth or OlmoEarth patches, since those
+    live beside the TESSERA ones rather than in them.
     """
     if override is not None:
         return resolve(override)
     path = resolve(recorded)
     if path.exists():
         return path
-    fallback = processed_dir(STATION_PATCH_DIR, path.name)
-    if fallback.exists():
-        logger.warning(f"{path} does not exist; using {fallback}")
-        return fallback
+    for directory in STATION_PATCH_DIRS:
+        fallback = processed_dir(directory, path.name)
+        if fallback.exists():
+            logger.warning(f"{path} does not exist; using {fallback}")
+            return fallback
     raise SystemExit(
-        f"Neither {path} (recorded in the checkpoint) nor {fallback} exists; "
-        f"pass --patches-path / --stations-path explicitly."
+        f"{path} (recorded in the checkpoint) does not exist, and no file named "
+        f"{path.name} is in {', '.join(STATION_PATCH_DIRS)} under "
+        f"{processed_dir()}; pass --patches-path / --stations-path explicitly."
     )
 
 

@@ -65,7 +65,8 @@ scripts/
   aurora/        generate the Aurora forecasts used as forecast-driven context
   experiments/   one folder per experiment: experiments.yaml (the runs) + submit.sh (shared _lib.sh:
                  DRY_RUN / LOCAL / sbatch); Norway rollout schedules; see experiments/README.md
-  patch_encoder/ train / evaluate the VAE, encode stations and dense grids (vae.yaml = the paper's run)
+  patch_encoder/ train / evaluate the VAE, encode stations and dense grids (vae.yaml = the paper's run);
+                 extract/ builds the AlphaEarth and OlmoEarth comparison arms (vae_{alphaearth,olmoearth}.yaml)
   maps/          dense 0.05° map inference over Iberia and Norway (Figs 3–4, 9)
   analysis/      descriptor-space analyses (residual probe; Norway reachability / separability)
   paper/         make_paper_figures.py, make_paper_tables.py -- regenerate every figure and table
@@ -109,6 +110,19 @@ elevation/lat/lon heads), trained and applied via
 `scripts/patch_encoder/{prebuild_cache,train_vae,eval_vae,encode_dense_grid}.py`;
 the paper's checkpoint loads into this code strict=True and reproduces its
 published latents to ~2e-6.
+
+The encoder is not tied to TESSERA — channel count and patch size come from the
+data, the number of encoder stages from the config — so the same recipe trains
+on other surface embeddings for follow-up ablations. `scripts/patch_encoder/extract/`
+builds two comparison arms over the same station list: AlphaEarth (64-d, 10 m
+annual embeddings read straight from `gs://alphaearth_foundations`) and
+OlmoEarth (Sentinel-2 L2A monthly mosaics from the Planetary Computer passed
+through the OlmoEarth-v1-Base encoder, 768-d on a 16 × 16 token grid);
+`vae_alphaearth.yaml` / `vae_olmoearth.yaml` and `slurm/submit_fm_sweep.sh`
+run the {AlphaEarth, OlmoEarth} × {2017, 2024} × {latent 16, 32} × {aux on, off}
+sweep. Extraction needs `uv sync --extra fm`; the OlmoEarth encoder itself
+(`olmoearth-pretrain`, which pins an older torch) runs from its own venv — see
+the note in `pyproject.toml`. Everything else runs in the default environment.
 
 ## Provenance
 
