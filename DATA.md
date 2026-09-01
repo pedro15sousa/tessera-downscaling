@@ -1,107 +1,118 @@
-# Data: sources, pipeline, layout
+# Data and training pipeline
 
 Everything the code reads or writes outside this repository lives under one
 directory, the *data root*: `$TESSERA_DATA_ROOT`, default
-`/data/weather-downscaling` (`src/tessera_downscaling/paths.py`; shell scripts
-use `DATA_ROOT="${TESSERA_DATA_ROOT:-/data/weather-downscaling}"`). Point it
+`/data/weather-downscaling` (`src/tessera_downscaling/paths.py`). Point it
 anywhere with enough disk and every script below reads and writes inside it.
-This document lists the external data sources, the pipeline that turns them
-into the training data, and the layout that pipeline produces.
+Relative paths given to any CLI are interpreted under the data root.
 
-Timestamps are 6-hourly UTC (`00/06/12/18`), written `YYYY-MM-DD-HH`.
+This document covers the main line: fetch the external data, train the patch
+encoder, train a downscaler. The paper's experiments are variants of this
+line, driven by the folders of `scripts/experiments/` (see its README);
+follow-on pipelines (Aurora forecast context, dense maps and figures) are
+documented in the headers of `scripts/aurora/`, `scripts/maps/` and
+`scripts/paper/`.
 
-## 1. External sources
+## 1. External data
 
-| source | what | access | ingested by |
+Required for the main line (`uv sync --extra ingest`):
+
+| source | what | access | fetched by |
 |---|---|---|---|
 | WeatherBench2 ERA5 | 0.25 deg ERA5 reanalysis, public GCS zarr (to 2023-01-10) | none (public bucket) | `scripts/data/download_era5_wb2.py` |
 | ARCO-ERA5 | same variables for later dates | none (public bucket) | `scripts/data/download_era5_arco.py` |
 | Copernicus CDS | the 13 ERA5 invariant fields, one file (`era5_static_0p25_all.nc`) | CDS account | one-off manual download (no script); place under `ingest/processed/era5_static/` |
-| NOAA GHCNh | hourly station observations, per-station-year PSV files + `station_list.csv` | none (public) | `scripts/data/download_ghcnh.py` |
-| TESSERA v2 embeddings | 10 m embedding tiles (distributed through the GeoTessera library) | local tile tree (`$TESSERA_V2_MOUNT`, default `/tessera/v2/global_0.1_degree_representation`, or `--mount-dir`) | `scripts/data/extract_tessera_patches_local.py` |
-| Google Earth Engine | mTPI; WorldCover v200, ETH canopy height, SoilGrids, GLO-30 (the hand-crafted descriptors) | Earth Engine account | `scripts/data/fetch_station_mtpi.py`, `fetch_station_extra_descriptors.py` |
-| Aurora checkpoint | pretrained 0.25 deg Aurora weights | none (HuggingFace, cached on first load) | `scripts/aurora/generate_aurora_forecasts.py` |
-| SRTM 1-arcsec DEM | terrain tiles for the map figures | none (AWS open data) | `scripts/maps/fetch_dem.py` |
+| NOAA GHCNh | hourly station observations | none (public) | `scripts/data/download_ghcnh.py` |
+| TESSERA v2 embeddings | 10 m embedding tiles (distributed through the GeoTessera library) | local tile tree (`$TESSERA_V2_MOUNT` or `--mount-dir`) | `scripts/data/extract_tessera_patches_local.py` |
+| Google Earth Engine | mTPI per station | Earth Engine account | `scripts/data/fetch_station_mtpi.py` |
 
-Storage to plan for: the raw + intermediate inputs are ~6 TB, the extracted
-TESSERA patches ~3 TB, the datasets ~440 GB, the trained runs ~60 GB.
+Variant experiments additionally use: the Aurora checkpoint (forecast-context
+experiment; HuggingFace, fetched on first load), further Earth Engine surface
+products (hand-crafted-descriptor baseline;
+`scripts/data/fetch_station_extra_descriptors.py`) and SRTM terrain tiles
+(map figures; `scripts/maps/fetch_dem.py`).
 
-## 2. Pipeline
+Storage to plan for: raw + intermediate inputs ~6 TB, extracted TESSERA
+patches ~3 TB, the dataset ~170 GB.
 
-Install with `uv sync --extra ingest` (steps 1-4) and `--extra aurora`
-(step 6); Slurm wrappers for the long steps sit next to each script.
+## 2. Building the training data
 
 1. **Download ERA5 + GHCNh** -> `ingest/`:
    `scripts/data/download_era5_wb2.py` (+ `download_era5_arco.py` for dates
    after 2023-01-10) and `download_ghcnh.py`; place the CDS static file under
-   `ingest/processed/era5_static/`.
-2. **Station descriptors** (Earth Engine) -> `processed/station_vectors/`:
-   `scripts/data/fetch_station_mtpi.py`, then
-   `fetch_station_extra_descriptors.py` + `build_extra_descriptors.py`.
+   `ingest/processed/era5_static/`. Slurm wrappers in `scripts/data/slurm/`.
+2. **Fetch mTPI** -> `processed/station_vectors/station_mtpi.csv`:
+   `scripts/data/fetch_station_mtpi.py`.
 3. **Build the dataset** -> `datasets/dataset_timestamp_global/`:
    `scripts/preprocessing/preprocess_timestamp_global.py
-   --mtpi-csv processed/station_vectors/station_mtpi.csv`.
-4. **Extract TESSERA patches** -> `processed/tessera_station_patches/`:
+   --mtpi-csv processed/station_vectors/station_mtpi.csv`. This produces the
+   6-hourly episodes 2010-2023 for the five regions (`europe`, `us`,
+   `east_asia`, `australia`, `southern_africa`): `stations.csv` with the
+   85/15 spatial split, shared `ghcnh_snapshot/` station targets, and
+   per-region ERA5 context snapshots, static fields and normalisation stats.
+4. **Extract TESSERA station patches** ->
+   `processed/tessera_station_patches/`:
    `scripts/data/shortlist_tessera_tiles.py` (which tiles are needed), then
    `extract_tessera_patches_local.py --out-dir
-   processed/tessera_station_patches` (landmasks are cached under
-   `<data root>/_cache/geotessera/`).
-5. **Train the patch encoder and export latents** ->
-   `processed/vae_tessera_1B-M/`:
-   `scripts/patch_encoder/{prebuild_cache,train_vae,eval_vae}.py` with config
-   `scripts/patch_encoder/vae.yaml`; copy `eval/station_latents.npy` into
-   `processed/vae_tessera_1B-M/` and record it in `provenance.txt`. Controls:
-   `scripts/data/shuffle_latents.py --seed 0`,
-   `build_summary_stats_latents.py`, `concat_station_vectors.py`.
-6. **Aurora forecast context** -> `datasets/dataset_timestamp_aurora_lead{6,24,72}h/`:
-   `download_era5_wb2.py --levels aurora` ->
-   `scripts/aurora/generate_aurora_forecasts.py` ->
-   `scripts/preprocessing/preprocess_aurora.py` ->
-   `scripts/data/backfill_station_mtpi.py` on each aurora `stations.csv` ->
-   `validate_aurora_datasets.py`.
-7. **Train and evaluate** -> `training_runs/<folder>/`:
-   `bash scripts/experiments/<folder>/submit.sh` for the 19 folders
-   (`scripts/experiments/README.md`); the Norway rollout sidecars come from
-   `pick_probe_set.py` and `build_rollout_schedule.py`. Then
-   `scripts/reeval_train_stations.sh` and `scripts/reeval_truncated_normal.sh`.
+   processed/tessera_station_patches`. This writes the patch array
+   (`patch_embeddings_<year>_p128.npy`) and `station_list_filtered.csv` --
+   the station list that **every per-station artefact from here on is
+   row-aligned with**.
 
-## 3. Layout the pipeline produces
+## 3. Training the patch encoder (VAE)
 
+Inputs: the station patches and station list from step 2.4.
+
+1. `scripts/patch_encoder/prebuild_cache.py` -- one-off validity /
+   normalisation cache for the patch file.
+2. `scripts/patch_encoder/train_vae.py` with config
+   `scripts/patch_encoder/vae.yaml` (the paper's encoder settings) ->
+   `tessera_patch_encoder/outputs/vae/<run>/`.
+3. `scripts/patch_encoder/eval_vae.py <run_dir>` -> the artefact the
+   downscaler consumes: `<run_dir>/eval/station_latents.npy`, one latent per
+   row of `station_list_filtered.csv` (NaN where the station has no valid
+   patch).
+
+Store the exported latents under `processed/vae_tessera_1B-M/` and record the
+file -> run mapping in its `provenance.txt`; the downscaler takes the `.npy`
+path directly.
+
+## 4. Training a downscaler
+
+Input dependencies:
+
+* `datasets/dataset_timestamp_global/` -- context grids + station targets
+  (step 2.3).
+* A patch file + station CSV for the **station-validity filter**
+  (`--tessera-path` / `--tessera-station-csv`): passed to *every* run,
+  baselines included, so all arms train and evaluate on identical station
+  sets. No patch is ever fed to the model, and swapping the file changes the
+  station set of every experiment. The paper's filter lives at
+  `processed/tessera_global/`.
+* For the TESSERA arm: the latents file from step 3
+  (`--vae-latents-path` / `--vae-latents-station-csv`).
+
+Train and evaluate (the full flag set is documented in
+`tessera-train --help` and the module docstring of
+`src/tessera_downscaling/train.py`):
+
+```bash
+uv run tessera-train --dataset-dir datasets/dataset_timestamp_global \
+    --train-regions europe \
+    --tessera-path processed/tessera_global/patch_embeddings_2024.npy \
+    --tessera-station-csv processed/tessera_global/station_list_filtered.csv \
+    --vae-latents-path processed/vae_tessera_1B-M/<latents>.npy \
+    --vae-latents-station-csv processed/tessera_global/station_list_filtered.csv \
+    --interpolation bilinear --tessera-injection concat \
+    --no-static-fields --use-mtpi --weight-decay 1e-4 \
+    --seed 42 --output-dir training_runs/<folder>/<run_name>
+
+uv run tessera-evaluate --checkpoint training_runs/<folder>/<run_name>/best_model.pt
 ```
-<data root>/
-  ingest/                    raw + intermediate inputs (steps 1, 6)
-    processed/era5_wb2_quarter_<var>/data/   one NetCDF per (variable, timestamp), 0.25 deg global
-    processed/era5_static/                   the 13 invariant fields (CDS, one-off)
-    processed/ghcnh/data/                    GHCNh binned to the synoptic hours
-    raw/ghcnh/                               raw PSVs + NOAA station_list.csv
-    aurora/lead{6,24,72}h/<region>/...       Aurora forecasts in the ERA5 staging layout
-  processed/                 patches, latents, descriptors (steps 2, 4, 5, 8)
-    tessera_global/          64x64 patches used as the station-validity filter + the row-alignment CSV
-    tessera_station_patches/ 128x128 TESSERA v2 patches (the encoder's input)
-    vae_tessera_1B-M/        exported per-station latents + provenance.txt
-    station_vectors/         loose per-station vectors (v1 latents, summary stats,
-                             extra_descriptors, station_mtpi.csv)
-    dense/  tessera_dense_grid/  dem_cache/  overview_cache/   map inputs
-  datasets/                  the training / evaluation datasets (steps 3, 6)
-    dataset_timestamp_global/                the paper's dataset (multi_region_snapshot_v1)
-    dataset_timestamp_aurora_lead{6,24,72}h/ Aurora-context datasets
-  training_runs/<folder>/    one directory per scripts/experiments/ folder (step 7)
-  tessera_patch_encoder/     encoder runs and dataset caches (step 5)
-  paper_figure_outputs/maps_outputs/   cached map-figure inputs (step 8)
-```
 
-`datasets/dataset_timestamp_global/` holds 6-hourly episodes 2010-2023 for
-five regions (`europe`, `us`, `east_asia`, `australia`, `southern_africa`):
-23,766 stations (`stations.csv`; 85/15 spatial split, seed 42), shared
-`ghcnh_snapshot/` targets, and per-region `era5_snapshot/` context (20 dynamic
-channels), `static_fields.npy` and normalisation stats. Only `t2m` and `wind`
-are modelled; `precip` is stored unused. The aurora datasets mirror it with 19
-dynamic channels (no precipitation).
-
-A `training_runs/<folder>/<name>_seed<S>/` run holds `config.json`,
-`best_model.pt` / `latest_model.pt`, `training_curves.npz`,
-`training_summary.json` and the evaluation outputs (`test_summary.json` /
-`test_results.json`, `test_predictions.npz`, `test_station_errors.npz`; plus
-`eval_train_stations/`, `eval_lead{0,6,24,72}h/` or `station_crps_cache.npz`
-where applicable). No-model references (`*_era5_interp*`, `*_persistence*`)
-carry only `config.json` + the `test_*` files.
+The ERA5-only baseline is the same command without the `--vae-latents-*`
+flags and without `--no-static-fields`. `tessera-baselines` produces the
+no-model references (ERA5 interpolation, persistence). The paper's full
+experiment matrix -- regions, controls, ablations, the Aurora forecast
+context and the Norway rollout -- is these commands driven by
+`scripts/experiments/<folder>/experiments.yaml` + `submit.sh`.
