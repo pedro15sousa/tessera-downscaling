@@ -9,7 +9,7 @@
 #SBATCH --mem=256G
 
 # Download GHCNh station observations for a year range and bin them into
-# 6-hourly NetCDFs under <DATA_ROOT>/_staging via scripts/data/download_ghcnh.py.
+# 6-hourly NetCDFs under <DATA_ROOT>/ingest via scripts/data/download_ghcnh.py.
 # Two phases per year: ~38k HTTP GETs to NOAA (I/O-bound), then a parse +
 # groupby + NetCDF write that holds one year's merged dataframe in RAM (the
 # reason for the large --mem). Resume-safe; re-submitting skips finished files.

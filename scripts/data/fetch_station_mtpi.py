@@ -18,7 +18,7 @@ Output:
     :func:`tessera_downscaling.preprocessing.helpers.lookup_station_mtpi`) or to
     ``scripts/data/backfill_station_mtpi.py`` to add an ``mtpi`` column to an
     already-built ``stations.csv`` without re-preprocessing. The paper's file is
-    ``processed/station_mtpi.csv`` under the data root.
+    ``processed/station_vectors/station_mtpi.csv`` under the data root.
 
 Authentication (one-time). On a headless HPC node ``gcloud`` is usually absent,
 so the default ``earthengine authenticate`` fails with "gcloud command not
@@ -33,8 +33,8 @@ pass it via ``--gee-project`` (or set EARTHENGINE_PROJECT).
 
 Usage (from the repo root; needs the ``ingest`` extra for earthengine-api):
     uv run python scripts/data/fetch_station_mtpi.py \
-        --stations-csv  <data root>/_staging/raw/ghcnh/station_list.csv \
-        --output-csv    <data root>/processed/station_mtpi.csv \
+        --stations-csv  <data root>/ingest/raw/ghcnh/station_list.csv \
+        --output-csv    <data root>/processed/station_vectors/station_mtpi.csv \
         --gee-project   my-ee-project
 
 The station list can be any CSV with id/lat/lon columns — point it at the

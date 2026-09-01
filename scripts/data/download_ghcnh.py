@@ -13,7 +13,7 @@ Two phases per year, for every station in NOAA's global GHCNh station list:
 The station list itself is cached at ``<root>/raw/ghcnh/station_list.csv``
 (it is also the station list every downstream step is aligned to). Both phases
 are resume-safe via :func:`atomic`. The default root is the data root's
-``_staging/``.
+``ingest/``.
 
 Usage (from the repo root):
     uv run python scripts/data/download_ghcnh.py --years 2010 2023 --num-processes 4
@@ -37,11 +37,11 @@ from tessera_downscaling.io_utils import (
     parallel_foreach,
     write_and_flush_dataset,
 )
-from tessera_downscaling.paths import staging_dir
+from tessera_downscaling.paths import ingest_dir
 
 # Set from --root in main(); module-level so the worker functions can see them.
-RAW_ROOT = staging_dir("raw", "ghcnh")
-PROCESSED_ROOT = staging_dir("processed", "ghcnh")
+RAW_ROOT = ingest_dir("raw", "ghcnh")
+PROCESSED_ROOT = ingest_dir("processed", "ghcnh")
 
 
 def filtering_cols() -> list[str]:
@@ -174,9 +174,9 @@ def main() -> None:
     p.add_argument(
         "--root",
         type=Path,
-        default=staging_dir(),
+        default=ingest_dir(),
         help="Staging root; raw PSVs go to <root>/raw/ghcnh/, 6-hourly NetCDFs to "
-        "<root>/processed/ghcnh/data/ (default: <data root>/_staging).",
+        "<root>/processed/ghcnh/data/ (default: <data root>/ingest).",
     )
     p.add_argument(
         "--years",

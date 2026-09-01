@@ -1,11 +1,12 @@
 # Experiment folders
 
 Every folder here is one output directory of the paper: `<folder>/` drives
-`<data root>/training_runs_<folder>/` (data root = `$TESSERA_DATA_ROOT`,
+`<data root>/training_runs/<folder>/` (data root = `$TESSERA_DATA_ROOT`,
 default `/data/weather-downscaling`; see `DATA.md`). Each folder holds
 
-* `experiments.yaml` -- the list of configurations (the single source of truth;
-  `notebooks/_helpers.py` and `scripts/paper/*` read the same files), and
+* `experiments.yaml` -- the list of configurations (the single source of truth
+  for what was trained; `notebooks/_helpers.py` reads the same files, while
+  `scripts/paper/*` pin the specific run stems each figure/table needs), and
 * `submit.sh` -- the Slurm submitter, a few lines on top of `_lib.sh`.
 
 All trained runs share the dataset `dataset_timestamp_global`
@@ -77,7 +78,7 @@ built once and committed: `probe_station_ids.json` by `pick_probe_set.py`,
 
 ## Outputs
 
-`<data root>/training_runs_<folder>/<name>_seed<S>/` (cross-lead:
+`<data root>/training_runs/<folder>/<name>_seed<S>/` (cross-lead:
 `<region>/<name>_seed<S>/eval_lead<L>h/`; rollout: `<arch>_<sweep>_seed<S>/`)
 with `best_model.pt`, `config.json`, `test_summary.json`, `test_results.json`,
 `test_predictions.npz`, `test_station_errors.npz`, `training_curves.npz`,

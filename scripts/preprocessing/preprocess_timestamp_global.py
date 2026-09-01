@@ -39,11 +39,11 @@ Design notes:
 
 Inputs (defaults resolve under the data root, see ``tessera_downscaling.paths``):
 
-    --era5-dir      _staging/processed          (download_era5_wb2.py)
-    --ghcnh-dir     _staging/processed/ghcnh/data (download_ghcnh.py)
-    --station-csv   _staging/raw/ghcnh/station_list.csv (download_ghcnh.py)
-    --static-path   _staging/processed/era5_static/era5_static_0p25_all.nc
-    --mtpi-csv      processed/station_mtpi.csv  (fetch_station_mtpi.py)
+    --era5-dir      ingest/processed          (download_era5_wb2.py)
+    --ghcnh-dir     ingest/processed/ghcnh/data (download_ghcnh.py)
+    --station-csv   ingest/raw/ghcnh/station_list.csv (download_ghcnh.py)
+    --static-path   ingest/processed/era5_static/era5_static_0p25_all.nc
+    --mtpi-csv      processed/station_vectors/station_mtpi.csv  (fetch_station_mtpi.py)
 
 The static file is the 13 ERA5 invariant fields on the 0.25 deg grid
 (slt cvh cvl tvh tvl anor isor z lsm slor sdfor cl dl). It is a one-off CDS
@@ -53,7 +53,7 @@ Usage (from the repo root):
     uv run python scripts/preprocessing/preprocess_timestamp_global.py \
         --start-date 2010-01-01 --end-date 2024-01-01 \
         --regions europe us east_asia australia southern_africa \
-        --mtpi-csv <data root>/processed/station_mtpi.csv
+        --mtpi-csv <data root>/processed/station_vectors/station_mtpi.csv
 """
 
 import argparse
@@ -66,7 +66,7 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-from tessera_downscaling.paths import dataset_dir, staging_dir
+from tessera_downscaling.paths import dataset_dir, ingest_dir
 from tessera_downscaling.preprocessing.helpers import (
     GHCNH_SNAPSHOT_VARS,
     MIN_VALID_EPISODES,
@@ -270,21 +270,21 @@ def main():
     parser.add_argument(
         "--era5-dir",
         type=Path,
-        default=staging_dir("processed"),
+        default=ingest_dir("processed"),
         help="Root containing era5_wb2_quarter_*/data/ subdirectories "
-        "(default: <data root>/_staging/processed)",
+        "(default: <data root>/ingest/processed)",
     )
     parser.add_argument(
         "--ghcnh-dir",
         type=Path,
-        default=staging_dir("processed", "ghcnh", "data"),
+        default=ingest_dir("processed", "ghcnh", "data"),
         help="Directory containing GHCNh 6-hourly NetCDF files "
-        "(default: <data root>/_staging/processed/ghcnh/data)",
+        "(default: <data root>/ingest/processed/ghcnh/data)",
     )
     parser.add_argument(
         "--static-path",
         type=Path,
-        default=staging_dir("processed", "era5_static", "era5_static_0p25_all.nc"),
+        default=ingest_dir("processed", "era5_static", "era5_static_0p25_all.nc"),
         help="ERA5 static-fields NetCDF (13 invariant fields on the "
         "0.25 deg grid; provided with the data root)",
     )
@@ -294,7 +294,7 @@ def main():
         default=None,
         help="Optional CSV (station_id, mtpi) of per-station "
         "ALOS mTPI from scripts/data/fetch_station_mtpi.py "
-        "(the paper's: <data root>/processed/station_mtpi.csv). "
+        "(the paper's: <data root>/processed/station_vectors/station_mtpi.csv). "
         "When given, an `mtpi` column is added to "
         "stations.csv, which --use-mtpi runs require "
         "(3-feature elevation, delta_elevation, mTPI vector "
@@ -303,15 +303,15 @@ def main():
     parser.add_argument(
         "--station-csv",
         type=Path,
-        default=staging_dir("raw", "ghcnh", "station_list.csv"),
+        default=ingest_dir("raw", "ghcnh", "station_list.csv"),
         help="Global GHCNh station list CSV "
-        "(default: <data root>/_staging/raw/ghcnh/station_list.csv)",
+        "(default: <data root>/ingest/raw/ghcnh/station_list.csv)",
     )
     parser.add_argument(
         "--output-dir",
         type=Path,
         default=dataset_dir(),
-        help="Output directory (default: <data root>/dataset_timestamp_global)",
+        help="Output directory (default: <data root>/datasets/dataset_timestamp_global)",
     )
     parser.add_argument("--start-date", type=str, default="2010-01-01")
     parser.add_argument(

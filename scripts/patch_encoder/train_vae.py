@@ -17,8 +17,8 @@ and the auxiliary heads' R^2, and writes into the run directory:
 Checkpoints carry the config that produced them, so ``eval_vae.py`` and
 ``encode_dense_grid.py`` rebuild the model without being told the settings.
 
-Usage (the paper's run: 2017 patches, 64 px crop, 16-d latent, aux heads on;
-about 200 epochs on one GPU):
+Usage (the paper's run: 2017 patches, 64 px crop, 16-d latent, the settings
+of ``scripts/patch_encoder/vae.yaml``; about 200 epochs on one GPU):
 
     uv run python scripts/patch_encoder/train_vae.py \\
         --outdir tessera_patch_encoder/outputs/vae/p128_2017_crop64_lat16_grad0.5_auxon

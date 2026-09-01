@@ -26,6 +26,7 @@ from tessera_downscaling.evaluate import (
     build_model_from_config,
     load_state_dict_compat,
     precomputed_vector_files,
+    resolve_sidecar_path,
 )
 from tessera_downscaling.paths import data_root
 
@@ -35,22 +36,22 @@ pytestmark = pytest.mark.skipif(
 
 _RUNS = {
     "tessera_t2m": (
-        "training_runs_snapshot_14y_eu_tessera_1B-M_2017/"
+        "training_runs/snapshot_14y_eu_tessera_1B-M_2017/"
         "t2m_snap_vae_crop64_lat16_auxon_concat_mtpi_seed42"
     ),
     "tessera_wind_truncnormal": (
-        "training_runs_snapshot_14y_eu_tessera_1B-M_2017/"
+        "training_runs/snapshot_14y_eu_tessera_1B-M_2017/"
         "wind_truncnormal_snap_vae_crop64_lat16_auxon_concat_mtpi_seed42"
     ),
     "era5_baseline_t2m": (
-        "training_runs_snapshot_14y_eu/t2m_snap_bilinear_baseline_mtpi_wd_seed42"
+        "training_runs/snapshot_14y_eu/t2m_snap_bilinear_baseline_mtpi_wd_seed42"
     ),
     "norway_rollout": (
-        "training_runs_snapshot_14y_eu_temporal_rollout_norway_tessera_1B-M_2017/"
+        "training_runs/snapshot_14y_eu_temporal_rollout_norway_tessera_1B-M_2017/"
         "t2m_snap_vae_lat16_concat_with_elev_mtpi_no_static_wd_r1y_seed42"
     ),
     "cross_lead": (
-        "training_runs_snapshot_14y_cross_lead_tessera_1B-M_2017/europe/"
+        "training_runs/snapshot_14y_cross_lead_tessera_1B-M_2017/europe/"
         "t2m_xlead_snap_vae_lat16_concat_with_elev_no_static_wd_seed42"
     ),
 }
@@ -106,3 +107,25 @@ def test_rollout_config_records_the_experiment_sidecars() -> None:
     probe_file = Path(str(config["probe_active_from_file"]))
     assert probe_file.name.startswith("probe_active_from_")
     assert config["region_specs_train_file"]
+
+
+def test_rollout_sidecars_fall_back_to_the_repo_copies() -> None:
+    """A stored sidecar path from another machine resolves to this repo's copy.
+
+    The rollout configs record ``probe_active_from_file`` under the checkout
+    the runs were launched from. When that path does not exist here,
+    :func:`resolve_sidecar_path` must find the committed
+    ``scripts/experiments/<folder>/<file>`` instead — otherwise re-evaluating
+    a stored rollout checkpoint silently collapses the probe / always_on
+    station split into ``train_stations``.
+    """
+    config = _load(_RUNS["norway_rollout"])["config"]
+    resolved = resolve_sidecar_path(config, "probe_active_from_file")
+    assert resolved is not None and resolved.exists(), (
+        f"probe_active_from_file did not resolve: {config['probe_active_from_file']}"
+    )
+    assert resolved.name.startswith("probe_active_from_")
+
+    # A path that exists is returned untouched (a fresh run's own sidecar).
+    own = {"probe_active_from_file": str(resolved)}
+    assert resolve_sidecar_path(own, "probe_active_from_file") == resolved

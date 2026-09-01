@@ -50,9 +50,9 @@ def main() -> int:
     p.add_argument(
         "--aurora-output-root",
         type=Path,
-        default=data_root(),
+        default=data_root() / "datasets",
         help="Directory containing dataset_timestamp_aurora_lead{L}h "
-        "(default: the data root).",
+        "(default: <data root>/datasets).",
     )
     p.add_argument("--leads", type=int, nargs="+", default=[6, 24, 72])
     p.add_argument("--regions", type=str, nargs="+", default=["europe", "east_asia"])

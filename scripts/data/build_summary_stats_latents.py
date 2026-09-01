@@ -33,7 +33,7 @@ of the 1B-M 2017 p128 patches, NaN-mask aligned to the crop64_lat16_auxon latent
     uv run python scripts/data/build_summary_stats_latents.py \\
         --tessera-path  ${DATA_ROOT}/processed/tessera_station_patches/patch_embeddings_2017_p128.npy \\
         --tessera-station-csv ${DATA_ROOT}/processed/tessera_global/station_list_filtered.csv \\
-        --dataset-stations-csv ${DATA_ROOT}/dataset_timestamp_global/stations.csv \\
+        --dataset-stations-csv ${DATA_ROOT}/datasets/dataset_timestamp_global/stations.csv \\
         --output-dir    ${DATA_ROOT}/processed/ \\
         --output-prefix station_summary_stats_1B-M_p128_2017_crop64 \\
         --center-crop 64 --dims 16 \\

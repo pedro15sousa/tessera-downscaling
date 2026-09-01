@@ -27,11 +27,11 @@ pytestmark = pytest.mark.skipif(
 # Three seed-42 runs from the paper: the Tessera arm for t2m (Gaussian) and wind
 # (truncated normal), and the ERA5-only baseline for t2m.
 _CHECKPOINTS = [
-    "training_runs_snapshot_14y_eu_tessera_1B-M_2017/"
+    "training_runs/snapshot_14y_eu_tessera_1B-M_2017/"
     "t2m_snap_vae_crop64_lat16_auxon_concat_mtpi_seed42/best_model.pt",
-    "training_runs_snapshot_14y_eu_tessera_1B-M_2017/"
+    "training_runs/snapshot_14y_eu_tessera_1B-M_2017/"
     "wind_truncnormal_snap_vae_crop64_lat16_auxon_concat_mtpi_seed42/best_model.pt",
-    "training_runs_snapshot_14y_eu/t2m_snap_bilinear_baseline_mtpi_wd_seed42/best_model.pt",
+    "training_runs/snapshot_14y_eu/t2m_snap_bilinear_baseline_mtpi_wd_seed42/best_model.pt",
 ]
 
 # Context-grid channel budget of ``dataset_timestamp_global`` (snapshot layout):
@@ -91,7 +91,7 @@ def test_paper_checkpoint_loads_strict_and_forwards(rel_path):
     cfg = ckpt["config"]
     model = _model_from_config(cfg)
 
-    # Every paper run used parameter-free bilinear interpolation.
+    # These checkpoints were trained with parameter-free bilinear interpolation.
     assert cfg["interpolation"] == "bilinear"
     assert isinstance(model.interp, BilinearInterp)
 

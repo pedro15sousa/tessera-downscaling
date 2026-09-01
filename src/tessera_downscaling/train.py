@@ -13,7 +13,7 @@ Two arms share the script and differ only in flags:
   (the 16-d latent of a VAE trained on TESSERA patches), served z-scored by
   the dataset and concatenated onto the decoder input::
 
-      tessera-train --dataset-dir dataset_timestamp_global --train-regions europe \
+      tessera-train --dataset-dir datasets/dataset_timestamp_global --train-regions europe \
           --tessera-path processed/tessera_global/patch_embeddings_2024.npy \
           --tessera-station-csv processed/tessera_global/station_list_filtered.csv \
           --interpolation bilinear --tessera-injection concat \
@@ -21,7 +21,7 @@ Two arms share the script and differ only in flags:
           --vae-latents-station-csv processed/tessera_global/station_list_filtered.csv \
           --no-static-fields --use-mtpi --weight-decay 1e-4 \
           [--target-variables wind --likelihood wind=truncated_normal] \
-          --seed 42 --output-dir training_runs_<folder>/<run_name>
+          --seed 42 --output-dir training_runs/<folder>/<run_name>
 
 * The **ERA5-only baseline** drops the ``--vae-latents-*`` flags and keeps the
   ERA5 static fields (``--interpolation bilinear --use-mtpi --weight-decay
@@ -285,7 +285,6 @@ def _check_snapshot_layout(dataset_dir: Path) -> None:
 def _build_mr_train_val(
     shared_kwargs: dict,
     train_region_specs: dict[str, str] | None,
-    val_region_specs: dict[str, str] | None,
     train_regions: list[str] | None,
 ) -> tuple[
     MultiRegionSnapshotDownscalingDataset, MultiRegionSnapshotDownscalingDataset
@@ -295,8 +294,8 @@ def _build_mr_train_val(
     Regions come from ``--region-specs-train-file`` (per-region spatial split)
     or ``--train-regions`` (every listed region contributes its ``train``
     stations; ``None`` = all regions). Validation uses the held-out (``test``)
-    stations of the training regions unless ``--region-specs-val-file`` says
-    otherwise. The cross-lead path calls this once per lead.
+    stations of the training regions. The cross-lead path calls this once per
+    lead.
     """
     if train_region_specs is not None:
         train = MultiRegionSnapshotDownscalingDataset(
@@ -306,17 +305,11 @@ def _build_mr_train_val(
         train = MultiRegionSnapshotDownscalingDataset(
             regions=train_regions, split="train", station_split="train", **shared_kwargs
         )
-    if val_region_specs is not None:
-        val = MultiRegionSnapshotDownscalingDataset(
-            region_specs=val_region_specs, split="val", **shared_kwargs
-        )
-    elif train_region_specs is not None:
+    if train_region_specs is not None:
         derived_val = {
             r: ("test" if s == "train" else s) for r, s in train_region_specs.items()
         }
-        logger.info(
-            f"No --region-specs-val-file; derived val specs from train: {derived_val}"
-        )
+        logger.info(f"Derived val specs from train: {derived_val}")
         val = MultiRegionSnapshotDownscalingDataset(
             region_specs=derived_val, split="val", **shared_kwargs
         )
@@ -334,7 +327,6 @@ def build_datasets(
     precomputed_station_csv: Path | None,
     probe_active_from: dict[str, str] | None,
     train_region_specs: dict[str, str] | None,
-    val_region_specs: dict[str, str] | None,
 ) -> tuple[Dataset, Dataset]:
     """Build the training and validation datasets described by ``args``."""
     shared_kwargs = {
@@ -364,7 +356,7 @@ def build_datasets(
     }
     if lead_dataset_pairs is None:
         return _build_mr_train_val(
-            shared_kwargs, train_region_specs, val_region_specs, args.train_regions
+            shared_kwargs, train_region_specs, args.train_regions
         )
 
     # Cross-lead: one (train, val) pair per lead, each on its own directory
@@ -378,7 +370,7 @@ def build_datasets(
             "lead_hours": lead_hours,
         }
         tr, va = _build_mr_train_val(
-            lead_kwargs, train_region_specs, val_region_specs, args.train_regions
+            lead_kwargs, train_region_specs, args.train_regions
         )
         train_subs.append(tr)
         val_subs.append(va)
@@ -555,13 +547,6 @@ def build_parser() -> argparse.ArgumentParser:
         '"all"}. Mutually exclusive with --train-regions.',
     )
     data.add_argument(
-        "--region-specs-val-file",
-        type=Path,
-        default=None,
-        help="Same for the validation set. Default: the training specs with "
-        "'train' replaced by 'test' (held-out stations of the training regions).",
-    )
-    data.add_argument(
         "--target-variables",
         type=str,
         nargs="+",
@@ -594,8 +579,8 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="LEAD:DIR",
         help="Lead-conditioned (cross-lead) model: one 'LEAD_HOURS:DATASET_DIR' per "
-        "forecast lead, e.g. '0:dataset_timestamp_global "
-        "6:dataset_timestamp_aurora_lead6h 24:... 72:...'. Each lead becomes "
+        "forecast lead, e.g. '0:datasets/dataset_timestamp_global "
+        "6:datasets/dataset_timestamp_aurora_lead6h 24:... 72:...'. Each lead becomes "
         "its own dataset carrying a lead/72 context channel; the leads are "
         "concatenated so one epoch sees every episode at every lead. Pass "
         "--drop-context-channels total_precipitation_sum alongside.",
@@ -677,9 +662,8 @@ def build_parser() -> argparse.ArgumentParser:
         type=str,
         default="bilinear",
         choices=["bilinear", "setconv"],
-        help="Grid-to-station interpolation: parameter-free 'bilinear' (default; "
-        "every paper run) or the vanilla ConvCNP 'setconv' with a learned RBF "
-        "length-scale.",
+        help="Grid-to-station interpolation: parameter-free 'bilinear' (default) "
+        "or the vanilla ConvCNP 'setconv' with a learned RBF length-scale.",
     )
     model.add_argument(
         "--setconv-length-scale",
@@ -709,7 +693,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     model.add_argument("--cnn-hidden", type=int, default=128, help="CNN width.")
     model.add_argument("--cnn-layers", type=int, default=7, help="CNN conv layers.")
-    model.add_argument("--cnn-kernel", type=int, default=3, help="CNN kernel size.")
     model.add_argument("--mlp-hidden", type=int, default=128, help="Decoder MLP width.")
     model.add_argument(
         "--mlp-n-hidden", type=int, default=3, help="Decoder MLP hidden layers."
@@ -727,12 +710,6 @@ def build_parser() -> argparse.ArgumentParser:
         default=0.0,
         help="Linear LR warm-up over this fraction of the planned steps "
         "(epochs x batches). Default 0 (none).",
-    )
-    optim.add_argument(
-        "--grad-clip-norm",
-        type=float,
-        default=1.0,
-        help="Clip the total gradient norm before each step; 0 disables. Default 1.",
     )
     optim.add_argument(
         "--patience",
@@ -782,7 +759,6 @@ def resolve_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> d
         "extra_descriptors_path",
         "extra_descriptors_station_csv",
         "region_specs_train_file",
-        "region_specs_val_file",
         "probe_active_from_file",
     ):
         value = getattr(args, name)
@@ -806,9 +782,6 @@ def resolve_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> d
         )
     train_region_specs = load_region_specs(
         args.region_specs_train_file, "--region-specs-train-file"
-    )
-    val_region_specs = load_region_specs(
-        args.region_specs_val_file, "--region-specs-val-file"
     )
     probe_active_from = load_probe_active_from(args.probe_active_from_file)
 
@@ -873,7 +846,6 @@ def resolve_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> d
     return {
         "lead_dataset_pairs": lead_dataset_pairs,
         "train_region_specs": train_region_specs,
-        "val_region_specs": val_region_specs,
         "probe_active_from": probe_active_from,
         "precomputed_path": precomputed_path,
         "precomputed_station_csv": precomputed_station_csv,
@@ -940,7 +912,6 @@ def main(argv: list[str] | None = None) -> None:
         side["precomputed_station_csv"],
         side["probe_active_from"],
         side["train_region_specs"],
-        side["val_region_specs"],
     )
     train_loader = DataLoader(
         train_dataset,
@@ -980,7 +951,6 @@ def main(argv: list[str] | None = None) -> None:
         n_context_channels=train_dataset.n_context_channels,
         cnn_hidden=args.cnn_hidden,
         cnn_layers=args.cnn_layers,
-        cnn_kernel=args.cnn_kernel,
         setconv_length_scale=args.setconv_length_scale,
         interpolation=args.interpolation,
         mlp_hidden=args.mlp_hidden,
@@ -1070,10 +1040,7 @@ def main(argv: list[str] | None = None) -> None:
                     )
                 continue
 
-            if args.grad_clip_norm > 0:
-                torch.nn.utils.clip_grad_norm_(
-                    model.parameters(), max_norm=args.grad_clip_norm
-                )
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
             if lr_scheduler is not None:
                 lr_scheduler.step()
@@ -1208,7 +1175,6 @@ def main(argv: list[str] | None = None) -> None:
         "likelihood_per_variable": dict(args.likelihood_per_variable),
         "lr": args.lr,
         "weight_decay": args.weight_decay,
-        "grad_clip_norm": args.grad_clip_norm,
         "batch_size": args.batch_size,
         "seed": args.seed,
     }

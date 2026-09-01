@@ -1,6 +1,6 @@
 """Shared helpers for the snapshot-experiment analysis notebooks.
 
-Used by the notebooks in this directory (see README.md): loading the per-run
+Used by the notebooks in this directory: loading the per-run
 ``test_summary.json`` files of one or more experiment folders into a tidy
 dataframe, printing the per-distribution summary tables, shortlisting and
 baseline resolution, and the config-driven run classification behind the
@@ -8,7 +8,7 @@ centralised slice analysis of ``cross_folder_analysis.ipynb``.
 
 Source of truth for "what experiments belong to a folder" is each folder's
 ``scripts/experiments/<folder>/experiments.yaml``. Source of truth for "what
-runs exist on disk" is ``<data_root>/training_runs_<folder>/`` (see
+runs exist on disk" is ``<data_root>/training_runs/<folder>/`` (see
 ``tessera_downscaling.paths``).
 """
 
@@ -58,7 +58,7 @@ def experiments_dir(repo_root: Path | None = None) -> Path:
 
 
 def output_dir_for_folder(folder: str, repo_root: Path | None = None) -> Path:
-    """Map a folder name (e.g. 'snapshot_14y_us') to its training_runs_* dir
+    """Map a folder name (e.g. 'snapshot_14y_us') to its training_runs/ dir
     under the data root. ``repo_root`` is accepted for signature compatibility
     and ignored: runs live under ``$TESSERA_DATA_ROOT``, not in the repo."""
     return training_runs_dir(folder)
@@ -187,14 +187,8 @@ def _flatten_data_efficiency_yaml(spec: dict) -> list[dict]:
 
 # Metric fields that get copied per-variable from test_summary.json.
 #
-# Up to v4 (Gaussian-only era), this was a flat list including
-# Gaussian-specific calibration fields (within_1sigma etc.). The v4
-# evaluator emits different field sets per variable depending on the
-# variable's likelihood: Gaussian variables keep all the legacy fields;
-# Weibull and Bernoulli-Gamma variables emit different point-estimate
-# metric names because mean/median diverge for skewed distributions.
-#
-# We split the metric list into:
+# The evaluator emits a common core for every variable plus extras that
+# depend on the variable's likelihood, so the metric list is split into:
 #
 #   - ``_COMMON_METRICS``: present for every variable, every distribution.
 #     NLL and CRPS are proper scoring rules and are directly comparable
@@ -203,13 +197,12 @@ def _flatten_data_efficiency_yaml(spec: dict) -> list[dict]:
 #     distribution.
 #
 #   - ``_DISTRIBUTION_METRICS[dist]``: extras that only apply to a given
-#     distribution. Gaussian's (mae, rmse, bias, ...) historically lived
-#     in the flat list; they're now scoped here so a Weibull-wind run's
-#     dataframe row doesn't get spurious NaNs for the Gaussian-only
-#     calibration fields.
+#     distribution. Gaussian keeps the mean-based point metrics;
+#     truncated-normal point estimates are split by estimator (MAE on the
+#     predictive median, RMSE/bias/correlation on the mean).
 #
 # The loader uses ``head_spec`` from ``test_results.json`` to dispatch.
-# Pre-v4 test_results.json files don't have ``head_spec`` — those are
+# Older test_results.json files don't have ``head_spec`` — those are
 # treated as all-Gaussian (the implicit legacy behaviour).
 
 _COMMON_METRICS = [
@@ -235,14 +228,8 @@ _DISTRIBUTION_METRICS = {
         "p95",
         "p99",
     ],
-    "weibull": [
-        "mae_at_median",
-        "rmse_at_mean",
-        "bias_at_mean",
-        "correlation_at_mean",
-    ],
     "truncated_normal": [
-        # Point estimates follow the Weibull convention (MAE@median,
+        # Point estimates are split by estimator (MAE@median,
         # RMSE/bias/correlation @mean). Pre-rename eval files wrote the
         # Gaussian-style names (mae/rmse/bias/correlation, all mean-based);
         # _load_run_record aliases those to these names on load so old and
@@ -259,49 +246,17 @@ _DISTRIBUTION_METRICS = {
         "p95",
         "p99",
     ],
-    "bernoulli_gamma": [
-        "wet_mae_at_median",
-        "wet_rmse_at_mean",
-        "wet_bias_at_mean",
-        "wet_correlation_at_mean",
-        "pod",
-        "far",
-        "brier",
-        "r01_obs",
-        "r01_pred",
-        "r05_obs",
-        "r05_pred",
-        "p98_obs_wet_days",
-        "p98_pred_wet_days",
-        "p98_bias_wet_days",
-    ],
-    "generative": [
-        # Implicit CRPS-trained head (no tractable density → its `nll`
-        # column, a _COMMON_METRIC, is written as NaN by the evaluator).
-        # Point estimates follow the skewed-head convention (MAE@median,
-        # RMSE/bias/correlation @mean); there is no σ parameter, so the
-        # Gaussian σ-coverage fields are absent. CRPS (a _COMMON_METRIC) is
-        # the headline proper-scoring metric, comparable across all heads.
-        "mae_at_median",
-        "rmse_at_mean",
-        "bias_at_mean",
-        "correlation_at_mean",
-        "p50",
-        "p90",
-        "p95",
-        "p99",
-    ],
 }
 
 
 def _metrics_for_variable(head_spec: dict | None, var: str) -> list[str]:
     """Return the metric field names to look up for ``var``.
 
-    ``head_spec`` is the optional dict written into v4
-    ``test_results.json`` files: ``{var: {"distribution": ..., "param_names": [...]}}``.
-    Pre-v4 files have no such field — that case falls through to the
-    Gaussian metric set, matching the implicit Gaussian-everywhere
-    assumption of the legacy code.
+    ``head_spec`` is the optional dict the evaluator writes into
+    ``test_results.json``: ``{var: {"distribution": ..., "param_names": [...]}}``.
+    Result files written before it was added have no such field — that case
+    falls through to the Gaussian metric set, the implicit assumption those
+    files were written under.
     """
     distribution = "gaussian"
     if head_spec is not None and var in head_spec:
@@ -442,18 +397,10 @@ def _load_run_record(
         "run_dir": str(run_dir),
         "source_folder": source_folder,
         "variables": variables,
-        "tessera_method": config.get("tessera_method"),
         "include_elevation": config.get("include_elevation", True),
-        "tessera_drop_prob": float(config.get("tessera_drop_prob", 0)),
-        # Training-loss objective recorded by older runs (``"nll"`` or the
-        # since-removed CRPS-loss option; current runs always train with
-        # NLL, so the key may be absent). Simple baselines never ran train.py so there's no
-        # config: ``None`` is the right semantic value for "no training
-        # objective applies".
-        "loss_function": (config.get("loss_function", "nll") if config else None),
         "best_epoch": result.get("checkpoint_epoch", result.get("best_epoch")),
         "best_val_loss": result.get("best_val_loss"),
-        # head_spec is written by the v4 evaluator; pre-v4 files won't
+        # head_spec is written by the evaluator; older result files won't
         # have it. Kept on the record so downstream filters / shortlist
         # logic can dispatch on the per-variable distribution.
         "head_spec": result.get("head_spec"),
@@ -561,9 +508,8 @@ def load_folder_results(
 
     records = []
     for entry in load_experiments_yaml(folder, repo_root):
-        # ---- Filters: skip experiments we don't want loaded ----
-        if "weibull" in entry["name"].lower():
-            continue
+        # Single-variable runs only: every record carries exactly one
+        # target variable, which the summary/pairing code relies on.
         if len(entry["target_variables"]) > 1:
             continue
         for seed in seeds:
@@ -720,11 +666,10 @@ def _print_gaussian_table(
     Columns: Experiment | MAE | RMSE | NLL | CRPS | Epoch | Pred σ | 1σ% |
              2σ% | Seeds | N | Stations | st/Mkm²
 
-    CRPS is a _COMMON_METRIC emitted by evaluate.py for every non-generative
-    head (computed unconditionally alongside NLL), so it's already present in
-    the loaded dataframe for Gaussian rows — this column just surfaces it,
-    making Gaussian rows directly CRPS-comparable to the trunc-normal /
-    Weibull / generative tables.
+    CRPS is a _COMMON_METRIC emitted by evaluate.py for every head (computed
+    unconditionally alongside NLL), so it's already present in the loaded
+    dataframe for Gaussian rows — this column just surfaces it, making
+    Gaussian rows directly CRPS-comparable to the trunc-normal table.
     """
     mae_col = f"{variable}_mae"
     rmse_col = f"{variable}_rmse"
@@ -856,13 +801,13 @@ def _print_truncated_normal_table(
              Pred σ | 1σ% | 2σ% | Seeds | N | Stations | st/Mkm²
 
     Like the Gaussian table — TruncNormal keeps a σ parameter, so the
-    σ-coverage diagnostics still apply — but the point estimates follow the
-    Weibull convention: MAE on the median, RMSE on the mean. NLL/CRPS are
-    the proper scoring rules comparable across distributions, so a
-    wind-TruncNormal row is directly comparable to a wind-Weibull or
-    wind-Gaussian row. Old (pre-rename) result files are handled by the
-    alias in ``_load_run_record``, so this reads one schema regardless of
-    when the file was written.
+    σ-coverage diagnostics still apply — but the point estimates are split
+    by estimator: MAE on the median, RMSE on the mean (the optimal
+    estimators for a skewed distribution). NLL/CRPS are the proper scoring
+    rules comparable across distributions, so a wind-TruncNormal row is
+    directly comparable to a wind-Gaussian row. Old (pre-rename) result
+    files are handled by the alias in ``_load_run_record``, so this reads
+    one schema regardless of when the file was written.
     """
     mae_col = f"{variable}_mae_at_median"
     rmse_col = f"{variable}_rmse_at_mean"
@@ -980,418 +925,9 @@ def _print_truncated_normal_table(
             print(f"{cont:<{LABEL_W}}")
 
 
-def _print_weibull_table(
-    df: pd.DataFrame,
-    variable: str,
-    title_suffix: str,
-    experiments: Iterable[str] | None,
-    region: str | None,
-    distribution: str = "weibull",
-) -> None:
-    """Weibull-likelihood table.
-
-    Columns: Experiment | MAE@med | RMSE@mean | NLL | CRPS | Bias@mean |
-             Corr@mean | Epoch | Seeds | N | Stations | st/Mkm²
-
-    No "Pred σ / 1σ% / 2σ%" — Weibull predictive distribution doesn't have
-    a single std parameter, and the heteroscedastic Gaussian-style coverage
-    test isn't directly applicable. NLL and CRPS are the proper scoring
-    rules that ARE comparable across distributions (so e.g. wind-Weibull
-    NLL is directly comparable to wind-Gaussian NLL).
-    """
-    mae_col = f"{variable}_mae_at_median"
-    rmse_col = f"{variable}_rmse_at_mean"
-    nll_col = f"{variable}_nll"
-    crps_col = f"{variable}_crps"
-    bias_col = f"{variable}_bias_at_mean"
-    corr_col = f"{variable}_correlation_at_mean"
-    n_col = f"{variable}_n_predictions"
-    n_stations_col = f"{variable}_n_test_stations"
-
-    if mae_col not in df.columns or not df[mae_col].notna().any():
-        print(f"No results for {variable} [weibull]")
-        return
-    vdf = df[df[mae_col].notna()].copy()
-    resolved_region, bbox_area_km2 = _resolve_region_and_density(vdf, region)
-
-    LABEL_W, NUM_W, EPOCH_W = 60, 13, 8
-    SEEDS_W, N_W, STA_W, DEN_W = 6, 9, 8, 9
-    # 6 numeric columns (MAE@med, RMSE@mean, NLL, CRPS, Bias, Corr) + Epoch
-    total_w = (
-        LABEL_W
-        + 1
-        + 6 * (NUM_W + 1)
-        + EPOCH_W
-        + 1
-        + SEEDS_W
-        + 1
-        + N_W
-        + 1
-        + STA_W
-        + 1
-        + DEN_W
-    )
-    _print_title(
-        variable, distribution, title_suffix, resolved_region, bbox_area_km2, total_w
-    )
-    header = (
-        f"{'Experiment':<{LABEL_W}} "
-        f"{'MAE@med':>{NUM_W}} "
-        f"{'RMSE@mean':>{NUM_W}} "
-        f"{'NLL(test)':>{NUM_W}} "
-        f"{'CRPS':>{NUM_W}} "
-        f"{'Bias@mean':>{NUM_W}} "
-        f"{'Corr@mean':>{NUM_W}} "
-        f"{'Epoch':>{EPOCH_W}} "
-        f"{'Seeds':>{SEEDS_W}} "
-        f"{'N':>{N_W}} "
-        f"{'Stations':>{STA_W}} "
-        f"{'st/Mkm²':>{DEN_W}}"
-    )
-    print(header)
-    print("-" * total_w)
-
-    for exp_name in vdf["experiment"].unique() if experiments is None else experiments:
-        edata = vdf[vdf["experiment"] == exp_name]
-        if edata.empty:
-            continue
-        n = len(edata)
-
-        def col_mean_std(col, edata=edata, n=n):
-            if col not in edata.columns:
-                return float("nan"), 0.0
-            return edata[col].mean(), (edata[col].std() if n > 1 else 0.0)
-
-        mae_mean, mae_std = col_mean_std(mae_col)
-        rmse_mean, rmse_std = col_mean_std(rmse_col)
-        nll_mean, nll_std = col_mean_std(nll_col)
-        crps_mean, crps_std = col_mean_std(crps_col)
-        bias_mean, bias_std = col_mean_std(bias_col)
-        corr_mean, corr_std = col_mean_std(corr_col)
-        epoch_mean = edata["best_epoch"].mean()
-        epoch_std = edata["best_epoch"].std() if n > 1 else 0.0
-        n_pred = edata[n_col].iloc[0] if n_col in edata.columns else float("nan")
-        ns_str, density_str = _station_count_and_density(
-            edata,
-            n_stations_col,
-            bbox_area_km2,
-        )
-
-        label = edata["label"].iloc[0]
-        wrapped = textwrap.wrap(label, width=LABEL_W) or [""]
-        first_label = wrapped[0]
-        continuation_labels = wrapped[1:]
-
-        line = (
-            f"{first_label:<{LABEL_W}} "
-            f"{_fmt_mean_std(mae_mean, mae_std, NUM_W):>{NUM_W}} "
-            f"{_fmt_mean_std(rmse_mean, rmse_std, NUM_W):>{NUM_W}} "
-            f"{_fmt_mean_std(nll_mean, nll_std, NUM_W):>{NUM_W}} "
-            f"{_fmt_mean_std(crps_mean, crps_std, NUM_W):>{NUM_W}} "
-            f"{_fmt_mean_std(bias_mean, bias_std, NUM_W):>{NUM_W}} "
-            f"{_fmt_mean_std(corr_mean, corr_std, NUM_W):>{NUM_W}} "
-            f"{_fmt_single(epoch_mean, EPOCH_W - 3, 0)}±"
-            f"{_fmt_single(epoch_std, 2, 0).strip()} "
-            f"{n:>{SEEDS_W}} "
-            f"{_fmt_count(n_pred, N_W)} "
-            f"{ns_str:>{STA_W}} "
-            f"{density_str:>{DEN_W}}"
-        )
-        print(line)
-        for cont in continuation_labels:
-            print(f"{cont:<{LABEL_W}}")
-
-
-def _print_generative_table(
-    df: pd.DataFrame,
-    variable: str,
-    title_suffix: str,
-    experiments: Iterable[str] | None,
-    region: str | None,
-    distribution: str = "generative",
-) -> None:
-    """Implicit generative (CRPS-trained) head table.
-
-    Columns: Experiment | MAE@med | RMSE@mean | CRPS | Bias@mean |
-             Corr@mean | Epoch | Seeds | N | Stations | st/Mkm²
-
-    Mirrors the Weibull layout (no "Pred σ / 1σ% / 2σ%" — the implicit
-    head has no σ parameter) but drops the NLL column: this head has no
-    tractable density, so NLL is undefined (the evaluator writes NaN).
-    CRPS is the headline proper scoring rule and is directly comparable to
-    the CRPS of every other head, which is the whole point of the
-    generative variant.
-    """
-    mae_col = f"{variable}_mae_at_median"
-    rmse_col = f"{variable}_rmse_at_mean"
-    crps_col = f"{variable}_crps"
-    bias_col = f"{variable}_bias_at_mean"
-    corr_col = f"{variable}_correlation_at_mean"
-    n_col = f"{variable}_n_predictions"
-    n_stations_col = f"{variable}_n_test_stations"
-
-    if mae_col not in df.columns or not df[mae_col].notna().any():
-        print(f"No results for {variable} [generative]")
-        return
-    vdf = df[df[mae_col].notna()].copy()
-    resolved_region, bbox_area_km2 = _resolve_region_and_density(vdf, region)
-
-    LABEL_W, NUM_W, EPOCH_W = 60, 13, 8
-    SEEDS_W, N_W, STA_W, DEN_W = 6, 9, 8, 9
-    # 5 numeric columns (MAE@med, RMSE@mean, CRPS, Bias, Corr) + Epoch.
-    total_w = (
-        LABEL_W
-        + 1
-        + 5 * (NUM_W + 1)
-        + EPOCH_W
-        + 1
-        + SEEDS_W
-        + 1
-        + N_W
-        + 1
-        + STA_W
-        + 1
-        + DEN_W
-    )
-    _print_title(
-        variable, distribution, title_suffix, resolved_region, bbox_area_km2, total_w
-    )
-    header = (
-        f"{'Experiment':<{LABEL_W}} "
-        f"{'MAE@med':>{NUM_W}} "
-        f"{'RMSE@mean':>{NUM_W}} "
-        f"{'CRPS':>{NUM_W}} "
-        f"{'Bias@mean':>{NUM_W}} "
-        f"{'Corr@mean':>{NUM_W}} "
-        f"{'Epoch':>{EPOCH_W}} "
-        f"{'Seeds':>{SEEDS_W}} "
-        f"{'N':>{N_W}} "
-        f"{'Stations':>{STA_W}} "
-        f"{'st/Mkm²':>{DEN_W}}"
-    )
-    print(header)
-    print("-" * total_w)
-
-    for exp_name in vdf["experiment"].unique() if experiments is None else experiments:
-        edata = vdf[vdf["experiment"] == exp_name]
-        if edata.empty:
-            continue
-        n = len(edata)
-
-        def col_mean_std(col, edata=edata, n=n):
-            if col not in edata.columns:
-                return float("nan"), 0.0
-            return edata[col].mean(), (edata[col].std() if n > 1 else 0.0)
-
-        mae_mean, mae_std = col_mean_std(mae_col)
-        rmse_mean, rmse_std = col_mean_std(rmse_col)
-        crps_mean, crps_std = col_mean_std(crps_col)
-        bias_mean, bias_std = col_mean_std(bias_col)
-        corr_mean, corr_std = col_mean_std(corr_col)
-        epoch_mean = edata["best_epoch"].mean()
-        epoch_std = edata["best_epoch"].std() if n > 1 else 0.0
-        n_pred = edata[n_col].iloc[0] if n_col in edata.columns else float("nan")
-        ns_str, density_str = _station_count_and_density(
-            edata,
-            n_stations_col,
-            bbox_area_km2,
-        )
-
-        label = edata["label"].iloc[0]
-        wrapped = textwrap.wrap(label, width=LABEL_W) or [""]
-        first_label = wrapped[0]
-        continuation_labels = wrapped[1:]
-
-        line = (
-            f"{first_label:<{LABEL_W}} "
-            f"{_fmt_mean_std(mae_mean, mae_std, NUM_W):>{NUM_W}} "
-            f"{_fmt_mean_std(rmse_mean, rmse_std, NUM_W):>{NUM_W}} "
-            f"{_fmt_mean_std(crps_mean, crps_std, NUM_W):>{NUM_W}} "
-            f"{_fmt_mean_std(bias_mean, bias_std, NUM_W):>{NUM_W}} "
-            f"{_fmt_mean_std(corr_mean, corr_std, NUM_W):>{NUM_W}} "
-            f"{_fmt_single(epoch_mean, EPOCH_W - 3, 0)}±"
-            f"{_fmt_single(epoch_std, 2, 0).strip()} "
-            f"{n:>{SEEDS_W}} "
-            f"{_fmt_count(n_pred, N_W)} "
-            f"{ns_str:>{STA_W}} "
-            f"{density_str:>{DEN_W}}"
-        )
-        print(line)
-        for cont in continuation_labels:
-            print(f"{cont:<{LABEL_W}}")
-
-
-def _print_bg_table(
-    df: pd.DataFrame,
-    variable: str,
-    title_suffix: str,
-    experiments: Iterable[str] | None,
-    region: str | None,
-    distribution: str = "bernoulli_gamma",
-) -> None:
-    """Bernoulli-Gamma table.
-
-    Columns: Experiment | NLL | CRPS | PoD | FaR | Brier | Wet MAE@med |
-             Wet RMSE@mean | R01 o/p | R05 o/p | Epoch | Seeds | N |
-             Stations | st/Mkm²
-
-    The wet/dry hurdle means MAE on the unconditional mean is dominated by
-    zeros; ``wet_mae_at_median`` is the meaningful point-estimate metric.
-    PoD/FaR/Brier describe the wet/dry classification; R01/R05 give the
-    obs-vs-pred wet-day frequencies at standard thresholds.
-    """
-    # Filter rows where the variable IS bernoulli-gamma — gate column is
-    # nll (always present for trained B-G runs).
-    nll_col = f"{variable}_nll"
-    crps_col = f"{variable}_crps"
-    pod_col = f"{variable}_pod"
-    far_col = f"{variable}_far"
-    brier_col = f"{variable}_brier"
-    wet_mae_col = f"{variable}_wet_mae_at_median"
-    wet_rmse_col = f"{variable}_wet_rmse_at_mean"
-    r01_obs = f"{variable}_r01_obs"
-    r01_pred = f"{variable}_r01_pred"
-    r05_obs = f"{variable}_r05_obs"
-    r05_pred = f"{variable}_r05_pred"
-    n_col = f"{variable}_n_predictions"
-    n_stations_col = f"{variable}_n_test_stations"
-
-    if nll_col not in df.columns or not df[nll_col].notna().any():
-        print(f"No results for {variable} [bernoulli_gamma]")
-        return
-    vdf = df[df[nll_col].notna()].copy()
-    resolved_region, bbox_area_km2 = _resolve_region_and_density(vdf, region)
-
-    LABEL_W, NUM_W = 60, 11
-    PCT_W, RATE_W = 7, 11
-    EPOCH_W, SEEDS_W, N_W, STA_W, DEN_W = 8, 6, 9, 8, 9
-    total_w = (
-        LABEL_W
-        + 1
-        + NUM_W
-        + 1
-        + NUM_W
-        + 1  # NLL, CRPS
-        + PCT_W
-        + 1
-        + PCT_W
-        + 1
-        + PCT_W
-        + 1  # PoD, FaR, Brier
-        + NUM_W
-        + 1
-        + NUM_W
-        + 1  # Wet MAE, Wet RMSE
-        + RATE_W
-        + 1
-        + RATE_W
-        + 1  # R01 o/p, R05 o/p
-        + EPOCH_W
-        + 1
-        + SEEDS_W
-        + 1
-        + N_W
-        + 1
-        + STA_W
-        + 1
-        + DEN_W
-    )
-    _print_title(
-        variable, distribution, title_suffix, resolved_region, bbox_area_km2, total_w
-    )
-    header = (
-        f"{'Experiment':<{LABEL_W}} "
-        f"{'NLL(test)':>{NUM_W}} "
-        f"{'CRPS':>{NUM_W}} "
-        f"{'PoD':>{PCT_W}} "
-        f"{'FaR':>{PCT_W}} "
-        f"{'Brier':>{PCT_W}} "
-        f"{'Wet MAE@m':>{NUM_W}} "
-        f"{'Wet RMSE@m':>{NUM_W}} "
-        f"{'R01 o/p':>{RATE_W}} "
-        f"{'R05 o/p':>{RATE_W}} "
-        f"{'Epoch':>{EPOCH_W}} "
-        f"{'Seeds':>{SEEDS_W}} "
-        f"{'N':>{N_W}} "
-        f"{'Stations':>{STA_W}} "
-        f"{'st/Mkm²':>{DEN_W}}"
-    )
-    print(header)
-    print("-" * total_w)
-
-    for exp_name in vdf["experiment"].unique() if experiments is None else experiments:
-        edata = vdf[vdf["experiment"] == exp_name]
-        if edata.empty:
-            continue
-        n = len(edata)
-
-        def col_mean_std(col, edata=edata, n=n):
-            if col not in edata.columns:
-                return float("nan"), 0.0
-            return edata[col].mean(), (edata[col].std() if n > 1 else 0.0)
-
-        def col_mean(col, edata=edata):
-            return edata[col].mean() if col in edata.columns else float("nan")
-
-        nll_mean, nll_std = col_mean_std(nll_col)
-        crps_mean, crps_std = col_mean_std(crps_col)
-        pod = col_mean(pod_col)
-        far = col_mean(far_col)
-        brier = col_mean(brier_col)
-        wet_mae_mean, wet_mae_std = col_mean_std(wet_mae_col)
-        wet_rmse_mean, wet_rmse_std = col_mean_std(wet_rmse_col)
-        r01_o = col_mean(r01_obs)
-        r01_p = col_mean(r01_pred)
-        r05_o = col_mean(r05_obs)
-        r05_p = col_mean(r05_pred)
-        epoch_mean = edata["best_epoch"].mean()
-        epoch_std = edata["best_epoch"].std() if n > 1 else 0.0
-        n_pred = edata[n_col].iloc[0] if n_col in edata.columns else float("nan")
-        ns_str, density_str = _station_count_and_density(
-            edata,
-            n_stations_col,
-            bbox_area_km2,
-        )
-
-        def fmt_rate_pair(o, p, width):
-            if o != o or p != p:
-                return f"{'N/A':>{width}}"
-            return f"{f'{o:.2f}/{p:.2f}':>{width}}"
-
-        label = edata["label"].iloc[0]
-        wrapped = textwrap.wrap(label, width=LABEL_W) or [""]
-        first_label = wrapped[0]
-        continuation_labels = wrapped[1:]
-
-        line = (
-            f"{first_label:<{LABEL_W}} "
-            f"{_fmt_mean_std(nll_mean, nll_std, NUM_W):>{NUM_W}} "
-            f"{_fmt_mean_std(crps_mean, crps_std, NUM_W):>{NUM_W}} "
-            f"{_fmt_single(pod, PCT_W, prec=3):>{PCT_W}} "
-            f"{_fmt_single(far, PCT_W, prec=3):>{PCT_W}} "
-            f"{_fmt_single(brier, PCT_W, prec=3):>{PCT_W}} "
-            f"{_fmt_mean_std(wet_mae_mean, wet_mae_std, NUM_W):>{NUM_W}} "
-            f"{_fmt_mean_std(wet_rmse_mean, wet_rmse_std, NUM_W):>{NUM_W}} "
-            f"{fmt_rate_pair(r01_o, r01_p, RATE_W):>{RATE_W}} "
-            f"{fmt_rate_pair(r05_o, r05_p, RATE_W):>{RATE_W}} "
-            f"{_fmt_single(epoch_mean, EPOCH_W - 3, 0)}±"
-            f"{_fmt_single(epoch_std, 2, 0).strip()} "
-            f"{n:>{SEEDS_W}} "
-            f"{_fmt_count(n_pred, N_W)} "
-            f"{ns_str:>{STA_W}} "
-            f"{density_str:>{DEN_W}}"
-        )
-        print(line)
-        for cont in continuation_labels:
-            print(f"{cont:<{LABEL_W}}")
-
-
 _DISTRIBUTION_TABLE_PRINTERS = {
     "gaussian": _print_gaussian_table,
-    "weibull": _print_weibull_table,
     "truncated_normal": _print_truncated_normal_table,
-    "bernoulli_gamma": _print_bg_table,
-    "generative": _print_generative_table,
 }
 
 
@@ -1400,8 +936,8 @@ def _infer_distribution(df: pd.DataFrame, variable: str) -> str:
 
     If every row in ``df`` has the same value in ``<variable>_distribution``,
     return that. Otherwise default to "gaussian" (the legacy assumption).
-    Pre-v4 dataframes have no ``<var>_distribution`` column at all — those
-    also fall back to "gaussian".
+    Dataframes loaded from older result files have no ``<var>_distribution``
+    column at all — those also fall back to "gaussian".
     """
     dist_col = f"{variable}_distribution"
     if dist_col not in df.columns:
@@ -1424,14 +960,13 @@ def print_summary(
 
     The table layout depends on the variable's likelihood:
 
-      * Gaussian: legacy layout (MAE/RMSE/NLL + Pred σ + 1σ/2σ coverage).
-      * Weibull: MAE@median/RMSE@mean + NLL/CRPS + Bias/Corr (no σ-coverage
-        — Weibull has no homoscedastic σ).
-      * Bernoulli-Gamma: NLL/CRPS + PoD/FaR/Brier + wet-day MAE/RMSE + R01/R05.
+      * Gaussian: MAE/RMSE/NLL/CRPS + Pred σ + 1σ/2σ coverage.
+      * Truncated-Normal: MAE@median/RMSE@mean + NLL/CRPS + the same
+        σ-coverage diagnostics.
 
     If ``distribution`` is None, auto-detected from ``<variable>_distribution``
-    in ``df`` (matches the v4 evaluator's ``head_spec``). Pre-v4 rows
-    default to ``"gaussian"`` — so legacy callers like
+    in ``df`` (matches the evaluator's ``head_spec``). Rows from older
+    result files default to ``"gaussian"`` — so legacy callers like
     ``print_summary(df, "t2m")`` are unchanged.
 
     If ``experiments`` is given, only those experiment names are printed,
@@ -1452,10 +987,10 @@ def print_summary(
 # -----------------------------------------------------------------------------
 
 # Heuristic: a run is "TESSERA-enhanced" if its name contains any of these.
-# Used to filter out baselines from shortlists. ``hypernet`` was here
-# pre-v4 but the injection mode is no longer supported and any new run
-# uses one of the kept tokens (or names containing 'tessera'/'vae').
-_TESSERA_NAME_TOKENS = ("tessera", "vae", "jepa", "film", "concat")
+# Used to filter out baselines from shortlists. ``film`` names runs of the
+# superseded FiLM-injection arm still present on disk; new runs use one of
+# the other tokens.
+_TESSERA_NAME_TOKENS = ("tessera", "vae", "film", "concat")
 
 
 def is_tessera(experiment_name: str) -> bool:
@@ -1468,21 +1003,12 @@ def _point_estimate_mae_column(distribution: str) -> str:
 
     For Gaussian: ``mae`` (predictive mean = median, so this is just MAE
     on the point estimate).
-    For Weibull: ``mae_at_median`` (median minimises expected MAE for a
-    skewed distribution).
-    For Bernoulli-Gamma: ``wet_mae_at_median`` (wet-day MAE on the
-    Gamma-conditional median, since the unconditional point estimate is
-    dominated by the dry-day mass).
-    For Truncated-Normal: ``mae_at_median`` (same skew rationale as
-    Weibull; the median minimises expected MAE).
+    For Truncated-Normal: ``mae_at_median`` (the median minimises expected
+    MAE for a skewed distribution).
     """
     return {
         "gaussian": "mae",
-        "weibull": "mae_at_median",
         "truncated_normal": "mae_at_median",
-        "bernoulli_gamma": "wet_mae_at_median",
-        "generative": "mae_at_median",
-        "generative_nonneg": "mae_at_median",
     }.get(distribution, "mae")
 
 
@@ -1491,21 +1017,12 @@ def _point_estimate_rmse_column(distribution: str) -> str:
     given likelihood.
 
     For Gaussian: ``rmse`` (point estimate is the mean; RMSE on mean).
-    For Weibull: ``rmse_at_mean`` (mean minimises expected MSE for any
-    distribution; the evaluator writes this column for skewed heads).
-    For Bernoulli-Gamma: ``wet_rmse_at_mean`` (wet-day RMSE on the
-    predictive mean; restricted to wet observations for the same reason
-    MAE@median is).
-    For Truncated-Normal: ``rmse_at_mean`` (RMSE on the predictive mean,
-    matching Weibull).
+    For Truncated-Normal: ``rmse_at_mean`` (the mean minimises expected
+    MSE for any distribution).
     """
     return {
         "gaussian": "rmse",
-        "weibull": "rmse_at_mean",
         "truncated_normal": "rmse_at_mean",
-        "bernoulli_gamma": "wet_rmse_at_mean",
-        "generative": "rmse_at_mean",
-        "generative_nonneg": "rmse_at_mean",
     }.get(distribution, "rmse")
 
 
@@ -1519,11 +1036,10 @@ def shortlist_experiments(
     """Rank experiments by composite (MAE, MAE-stability) score; return top names.
 
     The MAE column is picked per-distribution: ``<variable>_mae`` for
-    Gaussian, ``<variable>_mae_at_median`` for Weibull,
-    ``<variable>_wet_mae_at_median`` for Bernoulli-Gamma. The dataframe
-    must therefore carry a ``<variable>_distribution`` column (added by
-    ``_load_run_record`` from v4 ``test_results.json``'s ``head_spec``
-    field; pre-v4 rows default to ``"gaussian"``).
+    Gaussian, ``<variable>_mae_at_median`` for Truncated-Normal. The
+    dataframe must therefore carry a ``<variable>_distribution`` column
+    (added by ``_load_run_record`` from ``test_results.json``'s
+    ``head_spec`` field; rows from older files default to ``"gaussian"``).
 
     A run-level shortlist mixes runs of different distributions only if
     you explicitly evaluated the same variable under several likelihoods
@@ -1531,7 +1047,7 @@ def shortlist_experiments(
     distributions ARE comparable (they're all on the same target
     observations) but reflect different point estimators. NLL and CRPS
     are the metrics to use if you want a strictly proper-scoring-rule
-    ranking — see ``shortlist_experiments_by_nll`` for that.
+    ranking.
 
     Returns a list of experiment names in rank order.
     """
@@ -1549,7 +1065,7 @@ def shortlist_experiments(
 
         mae_series = df.apply(_pick_mae, axis=1)
     else:
-        # Pre-v4 dataframe — only Gaussian.
+        # No distribution column (older result files) — only Gaussian.
         mae_col = f"{variable}_mae"
         if mae_col not in df.columns or not df[mae_col].notna().any():
             if print_table:
@@ -1596,13 +1112,7 @@ def shortlist_experiments(
     sdf["composite_rank"] = sdf["mae_rank"] + 0.3 * sdf["std_rank"]
     sdf = sdf.sort_values("composite_rank")
 
-    unit = {
-        "tmax": "°C",
-        "t2m": "°C",
-        "wind": "m/s",
-        "wind_mean": "m/s",
-        "precip": "mm",
-    }.get(variable, "")
+    unit = {"t2m": "°C", "wind": "m/s"}.get(variable, "")
 
     if print_table:
         max_label = max(max(len(r["label"]) for r in rows) + 2, 60)
@@ -1642,60 +1152,34 @@ def shortlist_experiments(
 # Baseline resolution
 # -----------------------------------------------------------------------------
 
-# Per-variable, per-distribution baseline-name resolution. Each v4 likelihood
-# family writes its baselines under family-prefixed names (e.g.
-# `wind_weibull_snap_era5_interp_baseline`), even though the predictions are
-# numerically identical to the corresponding Gaussian-family baselines —
-# baselines are pure data lookups, the likelihood head isn't involved. The
-# nested layout below lets ``baselines_for(variable, distribution)`` resolve
-# to the right family-specific baseline names so each table picks up its own
-# baselines without crossing families.
-#
-# Daily-cadence variables (tmax, wind_mean) predate the per-distribution
-# split and remain flat lists; the resolver tolerates both shapes.
+# Per-variable, per-distribution baseline-name resolution, matching the
+# baseline entries of the regional ``experiments.yaml`` files. Simple
+# baselines (ERA5 interp / persistence) don't write ``head_spec``, so the
+# loader defaults their ``<var>_distribution`` to "gaussian"; listing them
+# under every family they should accompany lets the non-Gaussian tables
+# pull them back in by name. Trained ConvCNP baselines are listed under
+# the likelihood head they were trained with.
 BASELINE_NAMES = {
-    "tmax": ["tmax_bilinear_baseline"],
-    "wind_mean": ["wind_bilinear_baseline"],
     "t2m": {
         "gaussian": [
             "t2m_snap_era5_interp_baseline",  # no model — bilinear ERA5 interp
+            "t2m_snap_era5_interp_lapse_baseline",  # + fixed lapse-rate correction
+            "t2m_snap_era5_interp_lapse_fitted_baseline",  # + fitted lapse rate
             "t2m_snap_persistence_baseline",  # no model — last valid station obs
-            "t2m_snap_bilinear_baseline_wd",  # trained ConvCNP, no TESSERA
-            "t2m_snap_setconv_baseline_wd",
-            "multitask_full_snap_bilinear_baseline_wd",
-            "multitask_mixed_snap_bilinear_baseline_wd",
-            "t2m_snap_bilinear_baseline_wd_crps",  # trained ConvCNP, no TESSERA, CRPS-loss training
+            "t2m_snap_bilinear_baseline_mtpi_wd",  # trained ConvCNP, no TESSERA
+            "t2m_snap_bilinear_baseline_mtpi_extradesc_wd",  # + hand-crafted surface descriptors
         ],
     },
     "wind": {
         "gaussian": [
             "wind_snap_era5_interp_baseline",
             "wind_snap_persistence_baseline",
-            "wind_snap_bilinear_baseline_wd",
-            "wind_snap_setconv_baseline_wd",
-        ],
-        "weibull": [
-            "wind_weibull_snap_era5_interp_baseline",
-            "wind_weibull_snap_persistence_baseline",
-            "wind_weibull_snap_bilinear_baseline_wd",
-            "multitask_full_snap_bilinear_baseline_wd",
-            "multitask_mixed_snap_bilinear_baseline_wd",
         ],
         "truncated_normal": [
-            # TN-headed bilinear baselines were added alongside the CRPS-loss
-            # training experiment. The NLL variant gives us a fair (matched-
-            # distribution) reference for the TN TESSERA winners on wind;
-            # the CRPS variant is the loss-comparison baseline.
-            "wind_truncnormal_snap_bilinear_baseline_wd",
-            "wind_truncnormal_snap_bilinear_baseline_wd_crps",
-        ],
-    },
-    "precip": {
-        "bernoulli_gamma": [
-            "precip_snap_era5_interp_baseline",
-            "precip_snap_persistence_baseline",
-            "precip_snap_bilinear_baseline_wd",
-            "multitask_full_snap_bilinear_baseline_wd",
+            "wind_snap_era5_interp_baseline",  # simple references (loaded as Gaussian rows)
+            "wind_snap_persistence_baseline",
+            "wind_truncnormal_snap_bilinear_baseline_mtpi_wd",  # trained ConvCNP, no TESSERA
+            "wind_truncnormal_snap_bilinear_baseline_mtpi_extradesc_wd",  # + hand-crafted surface descriptors
         ],
     },
 }
@@ -1704,22 +1188,12 @@ BASELINE_NAMES = {
 def baselines_for(variable: str, distribution: str = "gaussian") -> list[str]:
     """Resolve baseline experiment names for a (variable, distribution) pair.
 
-    Tolerates both schemas in :data:`BASELINE_NAMES`:
-
-      * Nested ``{variable: {distribution: [...]}}`` (snapshot families).
-      * Flat ``{variable: [...]}`` (daily-cadence legacy keys like ``tmax``,
-        which never had a per-distribution split).
-
     Returns ``[]`` if nothing is registered — keeps cross-folder iteration
-    safe when a (variable, distribution) cell legitimately has no baselines
-    (e.g. distribution combinations we haven't run yet).
+    safe when a (variable, distribution) cell legitimately has no baselines.
     """
     entry = BASELINE_NAMES.get(variable)
     if entry is None:
         return []
-    if isinstance(entry, list):
-        # Legacy flat shape — distribution unused.
-        return list(entry)
     return list(entry.get(distribution, []))
 
 
@@ -1727,15 +1201,14 @@ def baselines_for(variable: str, distribution: str = "gaussian") -> list[str]:
 # Centralised slice analysis (config-driven classification + pairing tables)
 # ============================================================================
 # A "slice" is a single (folder, variable, distribution, task) cell. For each
-# single-task slice we print seven tables, for each multi-task slice three:
+# single-task slice we print six tables, for each multi-task slice three:
 #
 #   1. Simple baselines (uncapped)                              — both tasks
 #   2. Trained baselines, no TESSERA (uncapped)                 — both tasks
-#   3. Top-N vanilla TESSERA, kernels mixed                     — both tasks
-#   4. Top-N TESSERA + new mechanism                            — single only
-#   5. Shuffled-control pairing for top-N from tables 3 + 4     — single only
-#   6. Detached-control pairing for top-N from table 4          — single only
-#   7. Kernel-swap pairing for top-N from table 3               — single only
+#   3. Top-N vanilla TESSERA                                    — both tasks
+#   4. Shuffled-control pairing for the top-N                   — single only
+#   5. Stats-encoder counterpart pairing for the top-N          — single only
+#   6. Kernel-swap pairing for the top-N                        — single only
 #
 # Classification is config.json-driven via the ``config`` field on each row
 # (added by ``_load_run_record``). Legacy / corrupted runs fall through to
@@ -1752,7 +1225,6 @@ class RunCategory(str, Enum):
     SIMPLE_BASELINE = "simple_baseline"
     TRAINED_NO_TESSERA = "trained_no_tessera"
     TESSERA_VANILLA = "tessera_vanilla"
-    TESSERA_NEW_MECHANISM = "tessera_new_mechanism"
     UNKNOWN = "unknown"
 
 
@@ -1777,43 +1249,21 @@ def is_simple_baseline(record: dict) -> bool:
 
 
 def is_tessera_using(record: dict) -> bool:
-    """True if the run uses TESSERA via VAE latents OR end-to-end encoder."""
-    cfg = _config_of(record)
-    if cfg.get("vae_latents_path"):
-        return True
-    tm = cfg.get("tessera_method")
-    return tm is not None and tm != ""
-
-
-def has_new_mechanism(record: dict) -> bool:
-    """True if any new mechanism flag (kernel-cond, embed-stream, attention)
-    is on. Defaults match train.py defaults so missing fields => False."""
-    cfg = _config_of(record)
-    return (
-        cfg.get("decoder_kernel", "isotropic") == "embedding_conditioned"
-        or bool(cfg.get("use_target_embed_stream", False))
-        or cfg.get("target_embed_attention", "none") != "none"
-    )
+    """True if the run conditions on a precomputed per-station vector
+    (the VAE latents; the hand-crafted-descriptor-only baselines do not
+    set ``vae_latents_path`` and stay in the no-TESSERA category)."""
+    return bool(_config_of(record).get("vae_latents_path"))
 
 
 def is_shuffled(record: dict) -> bool:
     """True iff the VAE latents file is a shuffled-control sibling.
 
-    Detection: ``_shuffle_seed`` substring in vae_latents_path — the convention
-    used by scripts/shuffle_latents.py for its output filenames.
+    Detection: ``_shuffle_seed`` substring in vae_latents_path — the
+    convention used by scripts/data/shuffle_latents.py for its output
+    filenames.
     """
     path = _config_of(record).get("vae_latents_path") or ""
     return "_shuffle_seed" in path
-
-
-def is_detached(record: dict) -> bool:
-    """True iff the attention-input-detach ablation was enabled."""
-    return bool(_config_of(record).get("detach_attn_embed", False))
-
-
-def is_control(record: dict) -> bool:
-    """True iff the run is a control variant (shuffled OR detached)."""
-    return is_shuffled(record) or is_detached(record)
 
 
 def classify_run(record: dict) -> RunCategory:
@@ -1828,8 +1278,6 @@ def classify_run(record: dict) -> RunCategory:
         return RunCategory.UNKNOWN
     if not is_tessera_using(record):
         return RunCategory.TRAINED_NO_TESSERA
-    if has_new_mechanism(record):
-        return RunCategory.TESSERA_NEW_MECHANISM
     return RunCategory.TESSERA_VANILLA
 
 
@@ -1839,7 +1287,7 @@ def kernel_of(record: dict) -> str:
 
 
 def injection_of(record: dict) -> str:
-    """Embedding injection mode: 'concat' | 'film' | 'none'."""
+    """Embedding injection mode recorded in the config: 'concat' | 'none'."""
     if not is_tessera_using(record):
         return "none"
     return _config_of(record).get("tessera_injection", "concat") or "concat"
@@ -1856,25 +1304,17 @@ def _latent_dim_from_path(path: str | None) -> int | None:
 
 
 def latent_setting_of(record: dict) -> str:
-    """Compact label: 'none' | 'vae_lat16' | 'vae_lat16_proj8[_mlp]' etc."""
+    """Compact label: 'none' | 'vae_lat16' | 'vae_lat32' etc."""
     if not is_tessera_using(record):
         return "none"
-    cfg = _config_of(record)
-    lat = _latent_dim_from_path(cfg.get("vae_latents_path"))
-    proj = int(cfg.get("vae_latents_proj_dim", 0) or 0)
-    mlp = bool(cfg.get("vae_latents_proj_mlp", False))
-    prefix = "jepa" if latent_encoder_of(record) == "jepa" else "vae"
-    lat_part = f"{prefix}_lat{lat}" if lat is not None else f"{prefix}_latUNK"
-    if proj > 0:
-        return f"{lat_part}_proj{proj}{'_mlp' if mlp else ''}"
-    return lat_part
+    lat = _latent_dim_from_path(_config_of(record).get("vae_latents_path"))
+    return f"vae_lat{lat}" if lat is not None else "vae_latUNK"
 
 
 def latent_encoder_of(record: dict) -> str:
     """Identify which static-feature encoder produced the latents:
-    'jepa'  — JEPA-encoder latents (path contains 'jepa')
     'vae'   — VAE-encoder latents (path contains 'station_latents_lat')
-    'stats' — hand-crafted summary statistics (path contains 'summary_stats')
+    'stats' — patch summary statistics (path contains 'summary_stats')
     'none'  — runs without TESSERA latents.
     """
     if not is_tessera_using(record):
@@ -1882,8 +1322,6 @@ def latent_encoder_of(record: dict) -> str:
     path = _config_of(record).get("vae_latents_path") or ""
     if "summary_stats" in path:
         return "stats"
-    if "jepa" in path:
-        return "jepa"
     return "vae"
 
 
@@ -1893,40 +1331,18 @@ def latent_encoder_of(record: dict) -> str:
 # Two records are siblings along a dimension iff their pairing_key matches
 # when that dimension is excluded. The same generic mechanism handles all
 # three: shuffled (latents-path normalised by stripping the shuffle marker),
-# detached (skip detach_attn_embed), and kernel (skip interpolation).
+# stats (latents-path canonicalised to its dim token), and kernel (skip
+# interpolation).
 
-# _PAIRING_AXIS_FIELDS: tuple[str, ...] = (
-#     "interpolation",
-#     "decoder_kernel",
-#     "use_target_embed_stream",
-#     "target_embed_attention",
-#     "detach_attn_embed",
-#     "tessera_injection",
-#     "vae_latents_path",
-#     "vae_latents_proj_dim",
-#     "vae_latents_proj_mlp",
-#     "include_elevation",
-#     "include_static_fields",
-#     "weight_decay",
-#     "vae_latents_drop_prob",
-#     "tessera_method",
-# )
-
+# Config fields that define a run's architectural / regularisation identity
+# for pairing, with the default a config lacking the key implies.
 _PAIRING_AXIS_FIELDS: dict[str, object] = {
     "interpolation": "bilinear",
-    "decoder_kernel": "isotropic",
-    "use_target_embed_stream": False,
-    "target_embed_attention": "none",
-    "detach_attn_embed": False,
     "tessera_injection": "concat",
     "vae_latents_path": None,
-    "vae_latents_proj_dim": 0,
-    "vae_latents_proj_mlp": False,
     "include_elevation": True,
     "include_static_fields": True,
     "weight_decay": 0.0,
-    "vae_latents_drop_prob": 0.0,
-    "tessera_method": None,
 }
 
 _SHUFFLE_MARKER_RE = re.compile(r"_shuffle_seed\d+")
@@ -1964,7 +1380,6 @@ def pairing_key(record: dict, dimension: str) -> tuple:
     cfg = _config_of(record)
     skip_fields = {
         "shuffled": set(),
-        "detached": {"detach_attn_embed"},
         "kernel": {"interpolation"},
         "stats": set(),
     }[dimension]
@@ -1990,8 +1405,8 @@ def _augment_df_with_classification(df: pd.DataFrame) -> pd.DataFrame:
     """Attach per-row classification columns. Idempotent — calling on an
     already-augmented df returns it unchanged.
 
-    Adds: category, kernel, injection, latent_setting, is_shuffled,
-    is_detached, is_control, n_target_variables.
+    Adds: category, kernel, injection, latent_setting, latent_encoder,
+    is_shuffled, n_target_variables.
     """
     if df.empty or "category" in df.columns:
         return df
@@ -2003,8 +1418,6 @@ def _augment_df_with_classification(df: pd.DataFrame) -> pd.DataFrame:
     df["latent_setting"] = [latent_setting_of(r) for r in records]
     df["latent_encoder"] = [latent_encoder_of(r) for r in records]
     df["is_shuffled"] = [is_shuffled(r) for r in records]
-    df["is_detached"] = [is_detached(r) for r in records]
-    df["is_control"] = df["is_shuffled"] | df["is_detached"]
     df["n_target_variables"] = df["variables"].apply(
         lambda vs: len(vs) if isinstance(vs, list | tuple) else 1
     )
@@ -2024,10 +1437,9 @@ def _top_n_experiments(
     task: str,
     top_n: int,
     encoder: str | None = None,
-    loss_function: str | None = None,
 ) -> list[str]:
     """Top-N experiment names by per-seed-averaged MAE within
-    (variable, distribution, category, task). Excludes control rows.
+    (variable, distribution, category, task). Excludes shuffled-control rows.
 
     If ``encoder`` is provided ('vae', 'stats', or 'none'), additionally
     restricts to runs with that ``latent_encoder``. Used to keep the
@@ -2035,21 +1447,15 @@ def _top_n_experiments(
     stats variants don't displace VAE rows when they outperform, and
     stats results surface in the stats-counterpart pairing table instead
     (where the signed Δ already exposes 'stats beats VAE' cases).
-
-    If ``loss_function`` is provided (``'nll'`` or ``'crps'``), restricts
-    to runs trained with that loss objective. Default ``None`` = no
-    filter (preserves the legacy behaviour for callers that don't pass
-    the new arg). Used by ``print_slice_analysis`` to rank NLL- and
-    CRPS-trained runs independently when both are present in a slice.
     """
     mae_col = f"{variable}_{_point_estimate_mae_column(distribution)}"
     if mae_col not in df.columns:
         return []
     sub = df[
-        (df["category"] == category.value) & (~df["is_control"]) & (df[mae_col].notna())
+        (df["category"] == category.value)
+        & (~df["is_shuffled"])
+        & (df[mae_col].notna())
     ]
-    if loss_function is not None and "loss_function" in df.columns:
-        sub = sub[sub["loss_function"] == loss_function]
     if encoder is not None:
         sub = sub[sub["latent_encoder"] == encoder]
     if task == "single":
@@ -2092,8 +1498,8 @@ def _resolve_pairing_for_top(
 
     Sibling selection rules:
       - shuffled: same pairing_key (after path normalisation) AND is_shuffled
-      - detached: same pairing_key AND is_detached
-      - kernel:   same pairing_key AND opposite-kernel AND not a control
+      - stats:    same pairing_key AND opposite latent encoder, not shuffled
+      - kernel:   same pairing_key AND opposite kernel, not shuffled
     """
     mae_col = f"{variable}_{_point_estimate_mae_column(distribution)}"
     rows = []
@@ -2111,18 +1517,16 @@ def _resolve_pairing_for_top(
         candidates = df[df["experiment"] != exp]
         if dimension == "shuffled":
             candidates = candidates[candidates["is_shuffled"]]
-        elif dimension == "detached":
-            candidates = candidates[candidates["is_detached"]]
         elif dimension == "kernel":
             candidates = candidates[
-                (~candidates["is_control"]) & (candidates["kernel"] != live_kernel)
+                (~candidates["is_shuffled"]) & (candidates["kernel"] != live_kernel)
             ]
         elif dimension == "stats":
-            # Pair vanilla VAE ↔ vanilla stats (not shuffled, not detached).
+            # Pair vanilla VAE ↔ vanilla stats (not shuffled).
             live_encoder = live_first.get("latent_encoder", "vae")
             opposite_encoder = "stats" if live_encoder == "vae" else "vae"
             candidates = candidates[
-                (~candidates["is_control"])
+                (~candidates["is_shuffled"])
                 & (candidates["latent_encoder"] == opposite_encoder)
             ]
 
@@ -2192,7 +1596,6 @@ def _resolve_pairing_for_top(
 
 _PAIRING_KIND_LABELS = {
     "shuffled": "shuffled-latents control",
-    "detached": "detached-attention control",
     "kernel": "kernel-swap comparison",
     "stats": "stats-encoder counterpart",
 }
@@ -2356,7 +1759,7 @@ def print_slice_analysis(
     task: Literal["single", "multi"] = "single",
     top_n: int = 5,
 ) -> None:
-    """Print the 7 (single-task) or 3 (multi-task) tables for one slice."""
+    """Print the 6 (single-task) or 3 (multi-task) tables for one slice."""
     if df.empty:
         return
     df = _augment_df_with_classification(df)
@@ -2393,27 +1796,7 @@ def print_slice_analysis(
     task_label = "single-task" if task == "single" else "multi-task"
     title_suffix_base = f"{folder} — {task_label}"
 
-    # Detect distinct training-loss objectives present in this slice. When
-    # only one loss is present (the legacy / common case) we keep the
-    # current single-table layout for Tables 2 and 3 verbatim. When more
-    # than one is present (after the CRPS-vs-NLL training experiment runs),
-    # those tables are split into independent per-loss sub-tables ranked
-    # by their own MAE — by design NOT counterpart-paired against the NLL
-    # top-N, since CRPS and NLL may genuinely prefer different
-    # architectures and a forced pairing would hide that.
-    # Sort key forces NLL first (legacy reference) and any other losses
-    # alphabetically after.
-    if "loss_function" in slice_df_task.columns:
-        losses_present = sorted(
-            (v for v in slice_df_task["loss_function"].dropna().unique()),
-            key=lambda lf: (lf != "nll", lf),
-        )
-    else:
-        losses_present = []
-    multi_loss = len(losses_present) > 1
-
-    # Table 1: simple baselines (loss-agnostic: ERA5 interp / persistence
-    # have no training objective).
+    # Table 1: simple baselines (ERA5 interp / persistence).
     simple = slice_df_task[
         slice_df_task["category"] == RunCategory.SIMPLE_BASELINE.value
     ]
@@ -2431,118 +1814,39 @@ def print_slice_analysis(
         slice_df_task["category"] == RunCategory.TRAINED_NO_TESSERA.value
     ]
     if not trained_nt.empty:
-        if not multi_loss:
-            print_summary(
-                slice_df,
-                variable,
-                distribution=distribution,
-                title_suffix=f"{title_suffix_base} — trained baselines (no TESSERA)",
-                experiments=trained_nt["experiment"].drop_duplicates().tolist(),
-            )
-        else:
-            for loss in losses_present:
-                trained_nt_loss = trained_nt[trained_nt["loss_function"] == loss]
-                if trained_nt_loss.empty:
-                    continue
-                print_summary(
-                    slice_df,
-                    variable,
-                    distribution=distribution,
-                    title_suffix=(
-                        f"{title_suffix_base} — trained baselines (no TESSERA), "
-                        f"{loss.upper()}-loss"
-                    ),
-                    experiments=trained_nt_loss["experiment"]
-                    .drop_duplicates()
-                    .tolist(),
-                )
+        print_summary(
+            slice_df,
+            variable,
+            distribution=distribution,
+            title_suffix=f"{title_suffix_base} — trained baselines (no TESSERA)",
+            experiments=trained_nt["experiment"].drop_duplicates().tolist(),
+        )
 
     # Table 3: vanilla TESSERA top-N.
-    # In multi-loss mode, print one top-N sub-table per loss (each ranked
-    # independently). The ``vanilla_top`` variable consumed by the
-    # downstream pairings (Tables 5/7 — shuffled / kernel / stats) is set
-    # from the NLL-loss top-N, since the pairings make sense within a
-    # single training objective: a shuffled-TESSERA control isn't
-    # meaningfully comparable to a CRPS-trained model.
-    if not multi_loss:
-        vanilla_top = _top_n_experiments(
+    vanilla_top = _top_n_experiments(
+        slice_df,
+        variable,
+        distribution,
+        RunCategory.TESSERA_VANILLA,
+        task,
+        top_n,
+        encoder="vae",  # stats variants surface in the stats-counterpart pairing instead
+    )
+    if vanilla_top:
+        print_summary(
             slice_df,
             variable,
-            distribution,
-            RunCategory.TESSERA_VANILLA,
-            task,
-            top_n,
-            encoder="vae",  # stats variants surface in the stats-counterpart pairing instead
-        )
-        if vanilla_top:
-            print_summary(
-                slice_df,
-                variable,
-                distribution=distribution,
-                title_suffix=f"{title_suffix_base} — top {top_n} vanilla TESSERA (VAE)",
-                experiments=vanilla_top,
-            )
-    else:
-        for loss in losses_present:
-            vanilla_top_loss = _top_n_experiments(
-                slice_df,
-                variable,
-                distribution,
-                RunCategory.TESSERA_VANILLA,
-                task,
-                top_n,
-                encoder="vae",
-                loss_function=loss,
-            )
-            if vanilla_top_loss:
-                print_summary(
-                    slice_df,
-                    variable,
-                    distribution=distribution,
-                    title_suffix=(
-                        f"{title_suffix_base} — top {top_n} vanilla TESSERA (VAE), "
-                        f"{loss.upper()}-loss"
-                    ),
-                    experiments=vanilla_top_loss,
-                )
-        # Anchor the downstream pairings on the NLL-loss top-N (or, if
-        # NLL is absent for some reason, the first loss in sorted order).
-        # Pairings compare against shuffled / stats / kernel controls
-        # which only exist in NLL, so mixing in CRPS would yield rows
-        # without counterparts.
-        anchor_loss = "nll" if "nll" in losses_present else losses_present[0]
-        vanilla_top = _top_n_experiments(
-            slice_df,
-            variable,
-            distribution,
-            RunCategory.TESSERA_VANILLA,
-            task,
-            top_n,
-            encoder="vae",
-            loss_function=anchor_loss,
+            distribution=distribution,
+            title_suffix=f"{title_suffix_base} — top {top_n} vanilla TESSERA (VAE)",
+            experiments=vanilla_top,
         )
 
-    # Multi-task stops here (tables 4-7 are single-task only).
+    # Multi-task stops here (the pairing tables are single-task only).
     if task == "multi":
         _print_unknown_warnings(slice_df_task, title_suffix_base)
         return
 
-    # # Table 4: new-mechanism TESSERA top-N.
-    # new_mech_top = _top_n_experiments(
-    #     slice_df, variable, distribution,
-    #     RunCategory.TESSERA_NEW_MECHANISM, task, top_n,
-    # )
-    # if new_mech_top:
-    #     print_summary(
-    #         slice_df, variable, distribution=distribution,
-    #         title_suffix=(
-    #             f"{title_suffix_base} — top {top_n} TESSERA + new mechanism"
-    #         ),
-    #         experiments=new_mech_top,
-    #     )
-    # parents = list(dict.fromkeys(vanilla_top + new_mech_top))
-
-    # Table 5: shuffled pairing for top-N from tables 3 + 4.
+    # Table 4: shuffled-control pairing for the top-N.
     shuffled_rows = _resolve_pairing_for_top(
         slice_df,
         vanilla_top,
@@ -2558,6 +1862,7 @@ def print_slice_analysis(
         distribution,
     )
 
+    # Table 5: stats-encoder counterpart pairing for the top-N.
     stats_rows = _resolve_pairing_for_top(
         slice_df,
         vanilla_top,
@@ -2567,16 +1872,7 @@ def print_slice_analysis(
     )
     _print_pairing_table(stats_rows, "stats", title_suffix_base, variable, distribution)
 
-    # # Table 6: detached pairing for top-N from table 4 only.
-    # detached_rows = _resolve_pairing_for_top(
-    #     slice_df, new_mech_top, "detached", variable, distribution,
-    # )
-    # _print_pairing_table(
-    #     detached_rows, "detached", title_suffix_base,
-    #     variable, distribution,
-    # )
-
-    # Table 7: kernel-swap pairing for top-N from table 3 only.
+    # Table 6: kernel-swap pairing for the top-N.
     kernel_rows = _resolve_pairing_for_top(
         slice_df,
         vanilla_top,

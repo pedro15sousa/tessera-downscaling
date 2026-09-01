@@ -4,7 +4,7 @@
 # model-selection sweep and the extradesc / summary-stats controls -- see
 # experiments.yaml. Same dataset, region, normalisation and hyperparameters as
 # the baseline folder snapshot_14y_eu; runs land in
-# <data root>/training_runs_snapshot_14y_eu_tessera_1B-M_2017/<name>_seed<S>.
+# <data root>/training_runs/snapshot_14y_eu_tessera_1B-M_2017/<name>_seed<S>.
 #
 # Usage (from anywhere; data root from $TESSERA_DATA_ROOT):
 #   bash scripts/experiments/snapshot_14y_eu_tessera_1B-M_2017/submit.sh
@@ -24,6 +24,6 @@ export EMBED_YEAR="2017"
 export VAE_LATENTS_DIR="${BASE_DIR}/processed/vae_tessera_${TESSERA_VARIANT}"
 # Patch summary-statistics control (Appendix A): 16 hand-crafted stats over the
 # same crop64 window of the same patches (scripts/data/build_summary_stats_latents.py).
-export SUMMARY_STATS_PATH="${BASE_DIR}/processed/station_summary_stats_${TESSERA_VARIANT}_p128_${EMBED_YEAR}_crop64_dim16.npy"
+export SUMMARY_STATS_PATH="${BASE_DIR}/processed/station_vectors/station_summary_stats_${TESSERA_VARIANT}_p128_${EMBED_YEAR}_crop64_dim16.npy"
 
 run_single_region_matrix "${REGION}"

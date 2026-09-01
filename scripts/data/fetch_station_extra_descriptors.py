@@ -46,7 +46,7 @@ Output:
     ``--resume`` (already-fetched stations are skipped). Feed the CSV to
     ``scripts/data/build_extra_descriptors.py`` to produce the row-aligned
     ``extra_descriptors.npy`` for training. The paper's file is
-    ``processed/station_extra_descriptors.csv`` under the data root.
+    ``processed/station_vectors/station_extra_descriptors.csv`` under the data root.
 
 Authentication (one-time) is identical to fetch_station_mtpi.py:
     earthengine authenticate --auth_mode=notebook
@@ -56,7 +56,7 @@ rely on the project stored in ~/.config/earthengine/credentials.
 Usage (from the repo root; needs the ``ingest`` extra for earthengine-api):
     uv run python scripts/data/fetch_station_extra_descriptors.py \
         --stations-csv <data root>/processed/tessera_global/station_list_filtered.csv \
-        --output-csv   <data root>/processed/station_extra_descriptors.csv
+        --output-csv   <data root>/processed/station_vectors/station_extra_descriptors.csv
 
 Point ``--stations-csv`` at the broadest station list available (the global
 TESSERA station list above) so a single run covers every regional dataset.

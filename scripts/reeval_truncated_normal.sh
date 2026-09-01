@@ -25,7 +25,7 @@
 # assigns "truncated_normal" to any variable (grep on the literal string).
 #
 # REGION SPECS: if the run's experiment folder carries a
-# region_specs_test.json (the EU efficiency / rollout folders do), it is
+# region_specs_test.json (the Norway rollout folders do), it is
 # passed through with --region-specs-test-file so the same station set is
 # scored as in the original eval. Folders without one (the standard
 # regional folders: australia, east_asia, southern_africa, eu, us, ...)
@@ -57,7 +57,7 @@
 #   FORCE=1 bash scripts/reeval_truncated_normal.sh
 #
 # Restrict to specific output roots:
-#   ROOTS="training_runs_snapshot_14y_australia training_runs_snapshot_14y_eu" \
+#   ROOTS="training_runs/snapshot_14y_australia training_runs/snapshot_14y_eu" \
 #       bash scripts/reeval_truncated_normal.sh
 set -euo pipefail
 
@@ -82,7 +82,7 @@ LOCAL="${LOCAL:-0}"
 
 mkdir -p "${LOG_DIR}"
 
-# Resolve the set of output roots to scan. Default: every training_runs_*
+# Resolve the set of output roots to scan. Default: every training_runs/*
 # directory under DATA_ROOT. Override with ROOTS (space-separated basenames
 # or absolute paths).
 if [ -n "${ROOTS:-}" ]; then
@@ -96,13 +96,13 @@ if [ -n "${ROOTS:-}" ]; then
     done
 else
     SCAN_ROOTS=()
-    for d in "${DATA_ROOT}"/training_runs_*/; do
+    for d in "${DATA_ROOT}"/training_runs/*/; do
         [ -d "${d}" ] && SCAN_ROOTS+=("${d%/}")
     done
 fi
 
 if [ "${#SCAN_ROOTS[@]}" -eq 0 ]; then
-    echo "ERROR: no training_runs_* roots found under ${DATA_ROOT}" >&2
+    echo "ERROR: no roots found under ${DATA_ROOT}/training_runs" >&2
     exit 1
 fi
 
@@ -123,8 +123,8 @@ declare -a NESTED_WARNINGS=()
 for OUTPUT_ROOT in "${SCAN_ROOTS[@]}"; do
     [ -d "${OUTPUT_ROOT}" ] || continue
     root_name="$(basename "${OUTPUT_ROOT}")"
-    # training_runs_<folder> -> <folder>; used to find the region-specs file.
-    folder="${root_name#training_runs_}"
+    # training_runs/<folder> -> <folder>; used to find the region-specs file.
+    folder="${root_name}"
     region_specs_file="${EXPERIMENTS_DIR}/${folder}/region_specs_test.json"
 
     for run_dir in "${OUTPUT_ROOT}"/*/; do
@@ -180,8 +180,8 @@ for OUTPUT_ROOT in "${SCAN_ROOTS[@]}"; do
         fi
 
         # Build the eval command. Auto-attach region-specs if the folder
-        # has one (efficiency / rollout folders); otherwise --checkpoint
-        # only, matching the standard regional submit.sh.
+        # has one (the rollout folders); otherwise --checkpoint only,
+        # matching the standard regional submit.sh.
         EVAL_CMD="${EVAL_CMD_BASE} \
             --checkpoint ${ckpt} \
             --batch-size ${BATCH_SIZE} \

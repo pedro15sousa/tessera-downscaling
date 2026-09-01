@@ -19,12 +19,11 @@ Forward pass::
 
 Grid-to-point interpolation
 ---------------------------
-``interpolation="bilinear"`` (the default, used by every run in the paper)
-samples the CNN feature grid at the station coordinates with parameter-free
-bilinear interpolation. ``interpolation="setconv"`` is the vanilla ConvCNP
-SetConv: a separable RBF kernel with a single learned log length-scale
-(``setconv_length_scale`` initialises it, in degrees). It is kept for
-future re-runs; it adds one parameter, ``interp.log_scale``.
+``interpolation="bilinear"`` (the default) samples the CNN feature grid at
+the station coordinates with parameter-free bilinear interpolation.
+``interpolation="setconv"`` is the vanilla ConvCNP SetConv: a separable RBF
+kernel with a single learned log length-scale (``setconv_length_scale``
+initialises it, in degrees); it adds one parameter, ``interp.log_scale``.
 
 TESSERA conditioning
 --------------------
@@ -292,8 +291,8 @@ class ConvCNPDownscaler(nn.Module):
         setconv_length_scale: Initial RBF length scale in degrees. Only
             used when ``interpolation="setconv"``.
         interpolation: Grid-to-station interpolator: ``"bilinear"``
-            (default; parameter-free, used by every paper run) or
-            ``"setconv"`` (vanilla SetConv with a learned length-scale).
+            (default; parameter-free) or ``"setconv"`` (vanilla SetConv
+            with a learned length-scale).
         mlp_hidden: Decoder MLP hidden width (also the input width of each
             likelihood head).
         mlp_n_hidden: Number of ``Linear → ReLU`` blocks in the decoder MLP.

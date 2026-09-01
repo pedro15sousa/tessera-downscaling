@@ -6,14 +6,25 @@ and writes one NetCDF per (variable, timestamp) at 0.25 deg:
 
     <root>/era5_wb2_quarter_<variable>/data/YYYY-MM-DD-HH.nc
 
-for the 12 variables the downscaling datasets use (5 surface + 5 atmospheric x
-the 3 pressure levels 500/700/850 hPa; see ``tessera_downscaling.io_utils``).
-Every file is written through :func:`atomic`, so an interrupted run resumes
-where it stopped. The default root is the data root's ``_staging/processed/``.
+for the 10 variables the downscaling datasets use (5 surface + 5 atmospheric;
+see ``tessera_downscaling.io_utils``). Every file is written through
+:func:`atomic`, so an interrupted run resumes where it stopped.
+
+``--levels`` selects which pressure levels the atmospheric variables keep:
+
+* ``paper`` (default): the 3 levels the downscaling datasets use
+  (500/700/850 hPa), written under ``<data root>/ingest/processed/``.
+* ``aurora``: all 13 WeatherBench2 levels (50..1000 hPa), which the Aurora
+  0.25 deg model needs as initial conditions, written under
+  ``<data root>/ingest/aurora_inputs/`` so they never overwrite the 3-level
+  staging. Pass this only when preparing inputs for
+  ``scripts/aurora/generate_aurora_forecasts.py``.
 
 Usage (from the repo root; needs the ``ingest`` extra for gcsfs):
     uv run python scripts/data/download_era5_wb2.py \\
         --start 2010-01-01 --end 2023-01-10T18:00 --num-processes 8
+    uv run python scripts/data/download_era5_wb2.py --levels aurora \\
+        --start 2009-12-28 --end 2021-12-26T18:00 --num-processes 16
 """
 
 from __future__ import annotations
@@ -29,15 +40,22 @@ from tessera_downscaling.io_utils import (
     ATMOS_VARIABLES,
     PAPER_LEVELS,
     SURFACE_VARIABLES,
+    WB_LEVELS,
     atomic,
     atomic_completed,
     compute_file_name,
     parallel_foreach,
     write_and_flush_dataset,
 )
-from tessera_downscaling.paths import staging_dir
+from tessera_downscaling.paths import ingest_dir
 
 REMOTE_ROOT = "gs://weatherbench2/datasets/era5"
+
+# Pressure-level set and default output root per --levels choice.
+LEVEL_CHOICES = {
+    "paper": (PAPER_LEVELS, "processed"),
+    "aurora": (WB_LEVELS, "aurora_inputs"),
+}
 
 
 # Choose between the `init_<resolution>` functions to pick which resolution to download.
@@ -55,6 +73,7 @@ def process_slice(
     var_and_datetime: tuple[str, pd.Timestamp],
     dataset_and_res_name: tuple[xr.Dataset, str],
     root: Path,
+    levels: list[int],
 ) -> None:
     # Extract everything.
     var, datetime = var_and_datetime
@@ -78,9 +97,9 @@ def process_slice(
         var: str,
     ) -> None:
         x = dataset[var].sel(time=datetime).load()
-        # Filter to only the pressure levels we need for atmospheric variables.
+        # Filter atmospheric variables to the pressure levels this run keeps.
         if "level" in x.dims:
-            x = x.sel(level=PAPER_LEVELS)
+            x = x.sel(level=levels)
         x = x.load()
         write_and_flush_dataset(output_path, x, engine="h5netcdf")
 
@@ -94,20 +113,32 @@ def main() -> None:
         "--end", default="2023-01-10T18:00:00", help="Last timestamp (inclusive)."
     )
     p.add_argument(
+        "--levels",
+        choices=sorted(LEVEL_CHOICES),
+        default="paper",
+        help="Pressure levels for atmospheric variables: 'paper' (500/700/850 hPa, "
+        "the downscaling datasets) or 'aurora' (all 13 WB2 levels, Aurora initial "
+        "conditions). Default: paper.",
+    )
+    p.add_argument(
         "--root",
         type=Path,
-        default=staging_dir("processed"),
-        help="Output root; files go to <root>/era5_wb2_quarter_<var>/data/ "
-        "(default: <data root>/_staging/processed).",
+        default=None,
+        help="Output root; files go to <root>/era5_wb2_quarter_<var>/data/. "
+        "Default: <data root>/ingest/processed for --levels paper, "
+        "<data root>/ingest/aurora_inputs for --levels aurora.",
     )
     p.add_argument("--num-processes", type=int, default=8)
     args = p.parse_args()
+
+    levels, default_subdir = LEVEL_CHOICES[args.levels]
+    root = args.root if args.root is not None else ingest_dir(default_subdir)
 
     variables = ATMOS_VARIABLES + SURFACE_VARIABLES
     dates = pd.date_range(args.start, args.end, freq="6h")
 
     parallel_foreach(
-        f=partial(process_slice, root=args.root),
+        f=partial(process_slice, root=root, levels=levels),
         init=init_quarter,
         items=[(v, d) for d in dates for v in variables],
         num_processes=args.num_processes,

@@ -37,16 +37,16 @@ Lead times are harvested from a SINGLE rollout per init:
 so adding the 24 h lead costs no extra rollouts. Per-init we only roll out as
 many steps as the longest lead that init actually feeds.
 
-Inputs: 13-level ERA5 staging (``scripts/data/download_era5_wb2_aurora_levels.py``)
+Inputs: 13-level ERA5 staging (``scripts/data/download_era5_wb2.py --levels aurora``)
 and the ERA5 static file (z / lsm / slt); see ``scripts/aurora/submit_aurora_forecasts.sh``.
 Needs the ``aurora`` extra (``uv sync --extra aurora``).
 
 Usage (dry run first -- no model load, just accounting):
     uv run python scripts/aurora/generate_aurora_forecasts.py \
         --global-metadata <data root>/dataset_timestamp_global/metadata.json \
-        --era5-staging-root <data root>/_staging/aurora_inputs \
-        --static-file <data root>/_staging/processed/era5_static/era5_static_0p25_all.nc \
-        --output-root <data root>/_staging/aurora \
+        --era5-staging-root <data root>/ingest/aurora_inputs \
+        --static-file <data root>/ingest/processed/era5_static/era5_static_0p25_all.nc \
+        --output-root <data root>/ingest/aurora \
         --dry-run
 
 Real run (GPU node):        ... --model pretrained
@@ -118,31 +118,6 @@ def lead_to_step(lead_hours: int) -> int:
 def parse_ts(s: str) -> pd.Timestamp:
     """Parse a 'YYYY-MM-DD-HH' valid-timestamp string."""
     return pd.Timestamp(dt.datetime.strptime(s, "%Y-%m-%d-%H"))
-
-
-def load_test_times(global_metadata_path: str | Path) -> list[pd.Timestamp]:
-    """Read the global dataset metadata and return the TEST valid-times.
-
-    This MUST match the dataset classes' split exactly so the Aurora test set is
-    identical to the ERA5 eval set. Those classes compare the 'YYYY-MM-DD-HH'
-    timestamp strings *lexicographically* against the 'YYYY-MM-DD' val_end
-    string: test = {s : s > val_end}. Because 'YYYY-MM-DD' is a prefix of
-    'YYYY-MM-DD-HH', this places ALL hours of the val_end day itself into test
-    (e.g. '2021-12-31-00' > '2021-12-31'). A datetime cutoff would silently drop
-    those, so we replicate the string comparison verbatim.
-    """
-    import json
-
-    meta = json.loads(Path(global_metadata_path).read_text())
-    val_end = meta["temporal_split"]["val_end"]  # e.g. "2021-12-31"
-    test_strs = [s for s in meta["valid_timestamps"] if s > val_end]
-    test = sorted(parse_ts(s) for s in test_strs)
-    expected = meta["temporal_split"].get("n_test_timestamps")
-    if expected is not None and len(test) != expected:
-        raise ValueError(
-            f"Derived {len(test)} test times but metadata says {expected}; check the split logic."
-        )
-    return test
 
 
 def load_times(

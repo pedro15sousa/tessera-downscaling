@@ -66,7 +66,7 @@ def point(d, var):
 
 def ens_point(reg, stem, var, suffix=""):
     """suffix selects a latents-generation retrain folder, e.g.
-    "_tessera_1B-M_2017" -> training_runs_snapshot_14y_<reg>_tessera_1B-M_2017."""
+    "_tessera_1B-M_2017" -> training_runs/snapshot_14y_<reg>_tessera_1B-M_2017."""
     pts, tgt = [], None
     for s in SEEDS:
         f = (

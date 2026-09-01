@@ -83,7 +83,14 @@ def default_cache_dir() -> Path:
 
 
 def _scan_patches(patches_path: Path) -> dict[str, np.ndarray]:
-    """One pass over the patch file, splitting rows into valid/zero/outlier."""
+    """One pass over the patch file, splitting rows into valid/zero/outlier.
+
+    This is the encoder-side validity rule: it defines the VAE's training
+    set and hence the NaN rows of the published latents. The downscaler
+    filters stations with a different, deliberately separate rule at
+    dataset-build time — see
+    :func:`tessera_downscaling.data.helpers.filter_stations_by_tessera_patches`.
+    """
     mmap = np.load(str(patches_path), mmap_mode="r")
     n_patches = mmap.shape[0]
     logger.info(f"Scanning {n_patches} patches for invalid values...")

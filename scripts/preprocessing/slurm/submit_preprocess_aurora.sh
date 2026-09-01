@@ -34,8 +34,8 @@ mkdir -p logs/preprocess
 
 # shellcheck disable=SC2086  # LEADS / REGIONS are intentionally word-split.
 uv run python scripts/preprocessing/preprocess_aurora.py \
-    --global-dataset "${DATA_ROOT}/dataset_timestamp_global" \
-    --aurora-staging-root "${DATA_ROOT}/_staging/aurora" \
+    --global-dataset "${DATA_ROOT}/datasets/dataset_timestamp_global" \
+    --aurora-staging-root "${DATA_ROOT}/ingest/aurora" \
     --output-root "${DATA_ROOT}" \
     --leads ${LEADS} \
     --regions ${REGIONS}

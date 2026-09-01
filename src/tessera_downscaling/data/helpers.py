@@ -109,6 +109,13 @@ def filter_stations_by_tessera_patches(
     Stations absent from ``tessera_station_csv`` are dropped. Applied for BOTH
     baseline and TESSERA-enabled models, so they always operate on identical
     station sets.
+
+    This is the downscaler-side validity rule. The patch encoder applies a
+    different, deliberately separate rule when building the VAE's training
+    set (:func:`tessera_downscaling.patch_encoder.dataset._scan_patches`,
+    which rejects all-zero and outlier rows); the two run at different
+    pipeline stages on different patch products, and each is pinned by the
+    artefacts built with it.
     """
     tessera_stations = pd.read_csv(tessera_station_csv)
     patches_mmap = np.load(str(tessera_path), mmap_mode="r")

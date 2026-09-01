@@ -24,7 +24,7 @@
 # --use-mtpi is in COMMON_ARGS, so every lead's stations.csv needs an mtpi
 # column (scripts/data/backfill_station_mtpi.py on the Aurora datasets).
 #
-# Runs: <data root>/training_runs_snapshot_14y_cross_lead/<region>/<name>_seed<S>
+# Runs: <data root>/training_runs/snapshot_14y_cross_lead/<region>/<name>_seed<S>
 # Usage (from anywhere; data root from $TESSERA_DATA_ROOT):
 #   bash scripts/experiments/snapshot_14y_cross_lead/submit.sh
 #   DRY_RUN=1 ... (print only)   LOCAL=1 ... (run in this shell)
@@ -40,9 +40,9 @@ export VAE_LATENTS_PATH="${VAE_LATENTS_PATH_V1}"
 # ---- The four leads (mixed at train time, evaluated separately) ----
 LEAD_DIRS=(
     "0:${DATASET_DIR}"
-    "6:${BASE_DIR}/dataset_timestamp_aurora_lead6h"
-    "24:${BASE_DIR}/dataset_timestamp_aurora_lead24h"
-    "72:${BASE_DIR}/dataset_timestamp_aurora_lead72h"
+    "6:${BASE_DIR}/datasets/dataset_timestamp_aurora_lead6h"
+    "24:${BASE_DIR}/datasets/dataset_timestamp_aurora_lead24h"
+    "72:${BASE_DIR}/datasets/dataset_timestamp_aurora_lead72h"
 )
 LEAD_DATASETS="${LEAD_DIRS[*]}"
 REGIONS=(europe east_asia)

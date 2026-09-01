@@ -51,14 +51,14 @@ import numpy as np
 import pandas as pd
 from regions import OUTPUTS as MAPS_OUTPUTS
 
-from tessera_downscaling.paths import dataset_dir, processed_dir
+from tessera_downscaling.paths import dataset_dir, processed_dir, station_vectors_dir
 
 DATASET = dataset_dir("dataset_timestamp_global")
 OUTPUTS = MAPS_OUTPUTS / "overview"
 
 PATCHES = processed_dir("tessera_global", "patch_embeddings_2024.npy")
 PATCH_CSV = processed_dir("tessera_global", "station_list_filtered.csv")
-LATENTS = processed_dir("station_latents_lat16_grad0.5.npy")
+LATENTS = station_vectors_dir("station_latents_lat16_grad0.5.npy")
 MIN_PATCH_COVERAGE = 0.5
 
 # Region boxes — MUST stay in sync with REGIONS in

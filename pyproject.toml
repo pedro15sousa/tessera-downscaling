@@ -7,7 +7,7 @@ requires-python = ">=3.12"
 license = { text = "MIT" }
 authors = [{ name = "Pedro Sousa" }]
 
-# Pinned to the versions the paper's runs used (monorepo lockfile, Aug 2026).
+# Pinned to the versions the paper's runs used (August 2026).
 dependencies = [
     "torch==2.9.0",
     "numpy==2.3.4",

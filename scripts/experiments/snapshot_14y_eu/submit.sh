@@ -4,7 +4,7 @@
 # with hand-crafted extra descriptors, and the v1 TESSERA arm -- see
 # experiments.yaml. Trained on dataset_timestamp_global with
 # --train-regions europe (per-region normalisation stats); runs land in
-# <data root>/training_runs_snapshot_14y_eu/<name>_seed<S>.
+# <data root>/training_runs/snapshot_14y_eu/<name>_seed<S>.
 #
 # Usage (from anywhere; data root from $TESSERA_DATA_ROOT):
 #   bash scripts/experiments/snapshot_14y_eu/submit.sh              # sbatch one job per (entry, seed)

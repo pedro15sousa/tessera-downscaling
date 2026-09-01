@@ -9,7 +9,7 @@
 #SBATCH --mem=32G
 
 # Download 6-hourly ERA5 (12 variables, 0.25 deg) from WeatherBench2's public
-# GCS bucket into <DATA_ROOT>/_staging/processed via
+# GCS bucket into <DATA_ROOT>/ingest/processed via
 # scripts/data/download_era5_wb2.py. Runs as a Slurm job so it survives
 # login-session disconnects; the downloader is resume-safe (atomic_completed
 # skips finished files), so re-submitting picks up where it stopped.

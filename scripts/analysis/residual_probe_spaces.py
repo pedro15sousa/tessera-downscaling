@@ -85,7 +85,11 @@ from tessera_downscaling.baselines import (  # noqa: E402
     detect_layout,
     era5_interp_predict,
 )
-from tessera_downscaling.paths import dataset_dir, processed_dir  # noqa: E402
+from tessera_downscaling.paths import (  # noqa: E402
+    dataset_dir,
+    processed_dir,
+    station_vectors_dir,
+)
 
 logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -387,7 +391,7 @@ def main():
     parser.add_argument(
         "--latents-npy",
         type=Path,
-        default=processed_dir("station_latents_lat16_grad0.5.npy"),
+        default=station_vectors_dir("station_latents_lat16_grad0.5.npy"),
     )
     parser.add_argument(
         "--latents-csv",
@@ -397,7 +401,7 @@ def main():
     parser.add_argument(
         "--extra-descriptors-npy",
         type=Path,
-        default=processed_dir("extra_descriptors.npy"),
+        default=station_vectors_dir("extra_descriptors.npy"),
     )
     # Station filters are intentionally NOT applied here: the probe is
     # model-free and should use every station with a usable residual.

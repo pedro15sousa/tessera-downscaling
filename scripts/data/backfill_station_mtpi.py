@@ -13,7 +13,7 @@ datasets you actually want to upgrade.
 
 Inputs:
     --mtpi-csv    station_id,mtpi lookup from scripts/data/fetch_station_mtpi.py
-                  (the paper's: <data root>/processed/station_mtpi.csv)
+                  (the paper's: <data root>/processed/station_vectors/station_mtpi.csv)
     --dataset-dir directory containing stations.csv  (OR --stations-csv <file>)
 
 By default the target stations.csv is rewritten in place after saving a
@@ -22,8 +22,8 @@ By default the target stations.csv is rewritten in place after saving a
 
 Usage (from the repo root):
     uv run python scripts/data/backfill_station_mtpi.py \
-        --dataset-dir <data root>/dataset_timestamp_global \
-        --mtpi-csv    <data root>/processed/station_mtpi.csv
+        --dataset-dir <data root>/datasets/dataset_timestamp_global \
+        --mtpi-csv    <data root>/processed/station_vectors/station_mtpi.csv
 """
 
 from __future__ import annotations

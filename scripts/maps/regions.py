@@ -9,7 +9,7 @@ A "region" is a dense 0.05deg grid crop whose TESSERA latents live in
     <data_root>/processed/dense/<region>/<region>_<grid>_<year>.npz
 sitting inside a parent ERA5 region (here always `europe`) whose trained ConvCNP
 models and context grid we reuse. Iberia and Norway are both crops of europe, so
-they share `training_runs_snapshot_14y_eu` and the europe snapshots/static fields.
+they share `training_runs/snapshot_14y_eu` and the europe snapshots/static fields.
 
 Outputs are written region-prefixed under OUTPUTS/<region>/, e.g.
     <data_root>/paper_figure_outputs/maps_outputs/norway/norway_t2m_2022-07-18-12.png

@@ -36,7 +36,7 @@ Example: build the Norway rollout schedule of the paper
 ------------------------------------------------------
 
     uv run python scripts/experiments/build_rollout_schedule.py \\
-        --dataset-dir <data root>/dataset_timestamp_global \\
+        --dataset-dir <data root>/datasets/dataset_timestamp_global \\
         --probe-ids-json scripts/experiments/snapshot_14y_eu_temporal_rollout_norway_lat16_mtpi/probe_station_ids.json \\
         --out scripts/experiments/snapshot_14y_eu_temporal_rollout_norway_lat16_mtpi/rollout_schedule.json
 """

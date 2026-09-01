@@ -12,8 +12,10 @@ the metrics the paper's tables and figures are built from::
 
 Everything the model needs -- dataset, regions, station filters, per-station
 vector, head types, topographic features -- comes from the checkpoint config;
-paths recorded on the Isambard HPC are remapped onto the current data root
-(:mod:`tessera_downscaling.paths`). Older configs may lack keys that were
+stored paths from the machine a run was trained on are remapped onto the
+current data root (:mod:`tessera_downscaling.paths`) and experiment sidecars
+fall back to the copies committed under ``scripts/experiments/``
+(:func:`resolve_sidecar_path`). Older configs may lack keys that were
 added later or carry keys of since-removed options; both are read tolerantly,
 so every checkpoint family on the data root evaluates unchanged.
 
@@ -90,6 +92,50 @@ def config_path(config: dict, key: str) -> Path | None:
     if value is None or str(value) == "None":
         return None
     return resolve(str(value))
+
+
+def _candidate_repo_roots() -> list[Path]:
+    """Directories that look like a checkout of this repository.
+
+    Tried in order: the checkout this module is imported from (when running
+    from source), then the working directory and its parents.
+    """
+    candidates = [Path(__file__).resolve().parents[2]]
+    p = Path.cwd().resolve()
+    while True:
+        candidates.append(p)
+        if p == p.parent:
+            break
+        p = p.parent
+    return [c for c in candidates if (c / "scripts" / "experiments").is_dir()]
+
+
+def resolve_sidecar_path(config: dict, key: str) -> Path | None:
+    """Resolve an experiment-sidecar JSON recorded in a training config.
+
+    The stored path is used as-is when it exists -- a fresh run's config
+    points at the checkout it was launched from. When it does not (the run
+    was trained from another checkout or machine), fall back to the same
+    ``scripts/experiments/<folder>/<file>`` inside the current repository,
+    where every sidecar is committed.
+    """
+    stored = config_path(config, key)
+    if stored is None or stored.exists():
+        return stored
+    parts = stored.parts
+    for i in range(len(parts) - 1, 0, -1):
+        if parts[i - 1 : i + 1] == ("scripts", "experiments"):
+            rel = Path(*parts[i - 1 :])
+            for root in _candidate_repo_roots():
+                candidate = root / rel
+                if candidate.exists():
+                    logger.info(
+                        f"{key}: stored path {stored} not found; using the "
+                        f"repo copy {candidate}"
+                    )
+                    return candidate
+            break
+    return stored  # missing everywhere; the caller reports it
 
 
 def precomputed_vector_files(config: dict) -> tuple[Path | None, Path | None]:
@@ -242,7 +288,7 @@ def resolve_subset_labels(
     run), ``train_stations`` (spatial-train stations otherwise),
     ``spatial_test`` (held-out stations) and ``unmapped``.
     """
-    probe_file = config_path(config, "probe_active_from_file")
+    probe_file = resolve_sidecar_path(config, "probe_active_from_file")
     spec_all = region_specs_test is not None and "all" in region_specs_test.values()
     if probe_file is None and not spec_all:
         return None

@@ -142,20 +142,9 @@ class LikelihoodHead(nn.Module, ABC):
 
         Identical to :meth:`cdf` for the continuous heads here. A head with
         a point mass would override it with the conditional CDF of its
-        continuous branch (and restrict the test via :meth:`pit_mask`).
+        continuous branch.
         """
         return self.cdf(params, target)
-
-    def pit_mask(
-        self,
-        target: torch.Tensor,
-    ) -> torch.Tensor | None:
-        """Boolean mask selecting observations to include in the PIT test.
-
-        ``None`` means "all observations", which is what the continuous
-        heads here return.
-        """
-        return None
 
     @abstractmethod
     def crps(

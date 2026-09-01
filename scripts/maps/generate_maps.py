@@ -29,7 +29,7 @@ are derived from the dense npz, so the same script serves iberia, norway, etc.
 
 Provenance of the paper's map figures (preprint Figs 3/4/9, AMS Figs 4-7 +
 App. E). They were produced from the *v1-generation* runs in
-``training_runs_snapshot_14y_eu`` --
+``training_runs/snapshot_14y_eu`` --
 ``{t2m,wind_truncnormal}_snap_vae_lat16_concat_with_elev_no_static_wd`` (TESSERA
 arm) and ``{t2m,wind_truncnormal}_snap_bilinear_baseline_wd`` (baseline), see
 regions.DEFAULT_JOBS -- whose latents come from the v1 VAE
@@ -37,7 +37,7 @@ regions.DEFAULT_JOBS -- whose latents come from the v1 VAE
 1B-M 2017 latents behind Table 1 / Fig 2. The dense grids
 (``processed/dense/<region>/<region>_0.05deg_2024.npz``) are TESSERA v1 2024
 patches encoded by that same v1 VAE, z-scored with its station-latent stats
-(``processed/station_latents_lat16_grad0.5_global_stats.npz``). Neither run
+(``processed/station_vectors/station_latents_lat16_grad0.5_global_stats.npz``). Neither run
 family uses mTPI, because mTPI is a per-station descriptor that is undefined on
 a dense grid. Regenerating the maps therefore needs the v1 runs, the v1 dense
 grids and the europe ERA5 snapshots of ``dataset_timestamp_global`` for the
@@ -59,7 +59,7 @@ from regions import SEEDS, Z_STATIC_IDX, G, get_region
 
 from tessera_downscaling.data.helpers import build_context_grid
 from tessera_downscaling.evaluate import build_model_from_config, load_state_dict_compat
-from tessera_downscaling.paths import processed_dir
+from tessera_downscaling.paths import station_vectors_dir
 
 # ---------------------------------------------------------------------------
 # Region selection / paths (see regions.py). Module-level EU/RUNS/OUT_DIR are
@@ -69,7 +69,7 @@ R = get_region()
 EU = R.region_data
 RUNS = R.runs
 DENSE_NPZ = R.dense_npz
-VAE_STATS = processed_dir("station_latents_lat16_grad0.5_global_stats.npz")
+VAE_STATS = station_vectors_dir("station_latents_lat16_grad0.5_global_stats.npz")
 OUT_DIR = R.out_dir
 JOBS = R.jobs
 

@@ -9,7 +9,7 @@
 #
 # What it provides:
 #   * the data-root layout (DATA_ROOT, DATASET_DIR, TESSERA_PATH, ...), all
-#     env-overridable; runs land in ${OUTPUT_ROOT} = ${DATA_ROOT}/training_runs_${FOLDER};
+#     env-overridable; runs land in ${OUTPUT_ROOT} = ${DATA_ROOT}/training_runs/${FOLDER};
 #   * the training hyperparameters shared by every folder of the paper;
 #   * the execution knobs DRY_RUN=1 (print only) / LOCAL=1 (run in this shell
 #     instead of sbatch) / TIME / PARTITION;
@@ -34,7 +34,7 @@ export TESSERA_DATA_ROOT="${DATA_ROOT}"
 BASE_DIR="${DATA_ROOT}"
 
 # The paper's dataset (multi_region_snapshot_v1 layout, five regions).
-DATASET_DIR="${DATASET_DIR:-${BASE_DIR}/dataset_timestamp_global}"
+DATASET_DIR="${DATASET_DIR:-${BASE_DIR}/datasets/dataset_timestamp_global}"
 
 # Station-validity filter used by EVERY run (baselines included): a station is
 # kept iff its 2024 v1 TESSERA patch has a non-zero centre pixel and >= 50 %
@@ -51,10 +51,10 @@ export VAE_LATENTS_CSV="${VAE_LATENTS_CSV:-${BASE_DIR}/processed/tessera_global/
 # the Norway rollout baseline folder.
 export VAE_LATENTS_DIR_1BM="${BASE_DIR}/processed/vae_tessera_1B-M"
 export VAE_LATENTS_PATH_1BM="${VAE_LATENTS_DIR_1BM}/station_latents_1B-M_p128_2017_crop64_lat16_grad0.5_auxon.npy"
-export VAE_LATENTS_PATH_V1="${BASE_DIR}/processed/station_latents_lat16_grad0.5.npy"
-export EXTRA_DESCRIPTORS_PATH="${EXTRA_DESCRIPTORS_PATH:-${BASE_DIR}/processed/extra_descriptors.npy}"
+export VAE_LATENTS_PATH_V1="${BASE_DIR}/processed/station_vectors/station_latents_lat16_grad0.5.npy"
+export EXTRA_DESCRIPTORS_PATH="${EXTRA_DESCRIPTORS_PATH:-${BASE_DIR}/processed/station_vectors/extra_descriptors.npy}"
 
-OUTPUT_ROOT="${OUTPUT_ROOT:-${BASE_DIR}/training_runs_${FOLDER}}"
+OUTPUT_ROOT="${OUTPUT_ROOT:-${BASE_DIR}/training_runs/${FOLDER}}"
 EXPERIMENTS_YAML="${SCRIPT_DIR}/experiments.yaml"
 LOG_DIR="${LOG_DIR:-${REPO_ROOT}/logs/${FOLDER}}"
 

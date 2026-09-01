@@ -38,11 +38,12 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 from pathlib import Path
 
 import numpy as np
 
-from tessera_downscaling.paths import data_root, dataset_dir, staging_dir
+from tessera_downscaling.paths import data_root, dataset_dir, ingest_dir
 from tessera_downscaling.preprocessing.helpers import (
     ATMOS_VARS,
     PRESSURE_LEVELS,
@@ -377,7 +378,11 @@ def build_lead(
     dst_ghcnh = out_dataset / "ghcnh_snapshot"
     if not dst_ghcnh.exists():
         if symlink_ghcnh:
-            dst_ghcnh.symlink_to(src_ghcnh, target_is_directory=True)
+            # Link relatively (../dataset_timestamp_global/ghcnh_snapshot in
+            # the standard layout) so the tree survives being copied or moved
+            # to a different root; an absolute target would dangle there.
+            target = Path(os.path.relpath(src_ghcnh, dst_ghcnh.parent))
+            dst_ghcnh.symlink_to(target, target_is_directory=True)
         else:
             dst_ghcnh.mkdir()
             for ts in split_times:
@@ -437,14 +442,15 @@ def parse_args():
     p.add_argument(
         "--aurora-staging-root",
         type=Path,
-        default=staging_dir("aurora"),
-        help="Contains lead{L}h/<region>/processed (default: <data root>/_staging/aurora)",
+        default=ingest_dir("aurora"),
+        help="Contains lead{L}h/<region>/processed (default: <data root>/ingest/aurora)",
     )
     p.add_argument(
         "--output-root",
         type=Path,
-        default=data_root(),
-        help="Where dataset_timestamp_aurora_lead{L}h dirs are written (default: the data root)",
+        default=data_root() / "datasets",
+        help="Where dataset_timestamp_aurora_lead{L}h dirs are written "
+        "(default: <data root>/datasets)",
     )
     p.add_argument("--leads", type=int, nargs="+", default=[6, 24, 72])
     p.add_argument(

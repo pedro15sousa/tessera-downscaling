@@ -8,7 +8,7 @@
 # difference is VAE_LATENTS_PATH. The no-TESSERA baseline and the ERA5-interp
 # references are latents-independent and are NOT re-run here.
 #
-# Runs: <data root>/training_runs_snapshot_14y_cross_lead_tessera_1B-M_2017/<region>/<name>_seed<S>
+# Runs: <data root>/training_runs/snapshot_14y_cross_lead_tessera_1B-M_2017/<region>/<name>_seed<S>
 # Usage (from anywhere; data root from $TESSERA_DATA_ROOT):
 #   bash scripts/experiments/snapshot_14y_cross_lead_tessera_1B-M_2017/submit.sh
 #   DRY_RUN=1 ... (print only)   LOCAL=1 ... (run in this shell)
@@ -23,9 +23,9 @@ export VAE_LATENTS_PATH="${VAE_LATENTS_PATH_1BM}"
 
 LEAD_DIRS=(
     "0:${DATASET_DIR}"
-    "6:${BASE_DIR}/dataset_timestamp_aurora_lead6h"
-    "24:${BASE_DIR}/dataset_timestamp_aurora_lead24h"
-    "72:${BASE_DIR}/dataset_timestamp_aurora_lead72h"
+    "6:${BASE_DIR}/datasets/dataset_timestamp_aurora_lead6h"
+    "24:${BASE_DIR}/datasets/dataset_timestamp_aurora_lead24h"
+    "72:${BASE_DIR}/datasets/dataset_timestamp_aurora_lead72h"
 )
 LEAD_DATASETS="${LEAD_DIRS[*]}"
 REGIONS=(europe east_asia)

@@ -23,7 +23,7 @@ from generate_maps import bilinear_grid_to_points
 from regions import OUTPUTS, REGIONS, Region
 
 from tessera_downscaling.data.dataset import MultiRegionSnapshotDownscalingDataset
-from tessera_downscaling.paths import dataset_dir, processed_dir
+from tessera_downscaling.paths import dataset_dir, processed_dir, station_vectors_dir
 
 # Snapshots/grid are shared across these europe crops; take them from any region.
 EU = Region(next(iter(REGIONS))).region_data
@@ -54,7 +54,7 @@ def main():
         region_specs={"europe": "test"},
         split="test",
         target_variables=["t2m"],
-        vae_latents_path=processed_dir("station_latents_lat16_grad0.5.npy"),
+        vae_latents_path=station_vectors_dir("station_latents_lat16_grad0.5.npy"),
         vae_latents_station_csv=processed_dir(
             "tessera_global", "station_list_filtered.csv"
         ),

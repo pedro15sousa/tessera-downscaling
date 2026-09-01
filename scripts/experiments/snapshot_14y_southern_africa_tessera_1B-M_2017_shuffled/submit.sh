@@ -2,8 +2,8 @@
 # Submit the shuffled-latent control for region "southern_africa" (Table 4 / App. C):
 # the canonical 1B-M 2017 arm with the station->latent assignment permuted
 # (scripts/data/shuffle_latents.py --seed 0). Compare against
-# training_runs_snapshot_14y_southern_africa_tessera_1B-M_2017; runs land in
-# <data root>/training_runs_snapshot_14y_southern_africa_tessera_1B-M_2017_shuffled/<name>_seed<S>.
+# training_runs/snapshot_14y_southern_africa_tessera_1B-M_2017; runs land in
+# <data root>/training_runs/snapshot_14y_southern_africa_tessera_1B-M_2017_shuffled/<name>_seed<S>.
 #
 # Usage (from anywhere; data root from $TESSERA_DATA_ROOT):
 #   bash scripts/experiments/snapshot_14y_southern_africa_tessera_1B-M_2017_shuffled/submit.sh

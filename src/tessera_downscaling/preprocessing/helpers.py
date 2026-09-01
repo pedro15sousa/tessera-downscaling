@@ -597,12 +597,13 @@ def partition_timestamps_by_temporal_split(
 ) -> dict[str, list[str]]:
     """Partition sorted ``"YYYY-MM-DD-HH"`` strings into train/val/test.
 
-    Lexicographic comparison with a bare ``"YYYY-MM-DD"`` boundary works
-    because any timestamp on the boundary date compares greater than the
-    bare date itself (``"2020-12-31-00" > "2020-12-31"``), so *all four*
-    snapshots of the boundary date fall into the earlier split: the whole
-    of the train_end day is training, the whole of the next day onward is
-    val.
+    ``train_end`` / ``val_end`` are bare dates (``"YYYY-MM-DD"``) and the
+    comparison is lexicographic. A timestamp on a boundary date compares
+    *greater* than the bare date (``"2020-12-31-00" > "2020-12-31"``), so
+    the four snapshots of the ``train_end`` date open the val split and the
+    four of the ``val_end`` date open the test split. This mirrors
+    :func:`tessera_downscaling.data.helpers.episodes_for_split` exactly;
+    the two must not diverge.
     """
     return {
         "train_timestamps": [t for t in timestamps if t <= train_end],

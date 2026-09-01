@@ -46,7 +46,7 @@ resume after interruption.
 Usage (from the repo root)
 --------------------------
     uv run python scripts/data/extract_tessera_patches_local.py \
-        --station-csv <data root>/_staging/raw/ghcnh/station_list.csv \
+        --station-csv <data root>/ingest/raw/ghcnh/station_list.csv \
         --out-dir     <data root>/processed/tessera_station_patches \
         --years 2017 --patch-sizes 128 --workers 8
 

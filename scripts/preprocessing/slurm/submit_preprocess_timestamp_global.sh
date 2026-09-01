@@ -19,12 +19,12 @@ REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)}"
 DATA_ROOT="${TESSERA_DATA_ROOT:-/data/weather-downscaling}"
 export TESSERA_DATA_ROOT="${DATA_ROOT}"
 
-ERA5_DIR="${ERA5_DIR:-${DATA_ROOT}/_staging/processed}"
-GHCNH_DIR="${GHCNH_DIR:-${DATA_ROOT}/_staging/processed/ghcnh/data}"
-STATIC_PATH="${STATIC_PATH:-${DATA_ROOT}/_staging/processed/era5_static/era5_static_0p25_all.nc}"
-STATION_CSV="${STATION_CSV:-${DATA_ROOT}/_staging/raw/ghcnh/station_list.csv}"
-MTPI_CSV="${MTPI_CSV:-${DATA_ROOT}/processed/station_mtpi.csv}"
-OUTPUT_DIR="${OUTPUT_DIR:-${DATA_ROOT}/dataset_timestamp_global}"
+ERA5_DIR="${ERA5_DIR:-${DATA_ROOT}/ingest/processed}"
+GHCNH_DIR="${GHCNH_DIR:-${DATA_ROOT}/ingest/processed/ghcnh/data}"
+STATIC_PATH="${STATIC_PATH:-${DATA_ROOT}/ingest/processed/era5_static/era5_static_0p25_all.nc}"
+STATION_CSV="${STATION_CSV:-${DATA_ROOT}/ingest/raw/ghcnh/station_list.csv}"
+MTPI_CSV="${MTPI_CSV:-${DATA_ROOT}/processed/station_vectors/station_mtpi.csv}"
+OUTPUT_DIR="${OUTPUT_DIR:-${DATA_ROOT}/datasets/dataset_timestamp_global}"
 
 # Date range and regions of the paper's dataset.
 START_DATE="${START_DATE:-2010-01-01}"

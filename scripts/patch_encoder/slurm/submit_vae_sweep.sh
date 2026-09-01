@@ -2,9 +2,10 @@
 # Submit patch-encoder training runs as one Slurm job each (one GPU per job).
 #
 # The sweep spans year x crop size x latent dim x auxiliary heads; the paper's
-# descriptors come from its 2017 / crop 64 / latent 16 / aux-on corner, and the
-# siblings are the ablations in processed/vae_tessera_1B-M/. Run names are the
-# directory names under <data root>/tessera_patch_encoder/outputs/vae/.
+# descriptors come from its 2017 / crop 64 / latent 16 corner (the settings of
+# scripts/patch_encoder/vae.yaml), and the siblings are the ablations in
+# processed/vae_tessera_1B-M/. Run names are the directory names under
+# <data root>/tessera_patch_encoder/outputs/vae/.
 #
 # A run with last.pt is complete and gets skipped; a run with periodic
 # checkpoints but no last.pt is resumed from its newest one, so a wall-clock

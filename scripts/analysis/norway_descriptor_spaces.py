@@ -88,7 +88,7 @@ from sklearn.neighbors import NearestNeighbors
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
-from tessera_downscaling.paths import dataset_dir, processed_dir
+from tessera_downscaling.paths import dataset_dir, processed_dir, station_vectors_dir
 
 REPO = Path(__file__).resolve().parents[2]
 OUT = REPO / "notebooks" / "norway_analysis_outputs"
@@ -102,7 +102,7 @@ LATENTS_NPY = processed_dir(
     "vae_tessera_1B-M", "station_latents_1B-M_p128_2017_crop64_lat16_grad0.5_auxon.npy"
 )
 # Previous main: TESSERA v1 16-d latents.
-# LATENTS_NPY = processed_dir("station_latents_lat16_grad0.5.npy")
+# LATENTS_NPY = station_vectors_dir("station_latents_lat16_grad0.5.npy")
 
 # ---- load & join latents + station table -------------------------------
 lat = np.load(LATENTS_NPY)
@@ -187,7 +187,7 @@ groups = {
 # a default run reproduces the published figures unchanged. Enable with
 #     WITH_EXTRA_DESCRIPTORS=1 uv run python scripts/analysis/norway_descriptor_spaces.py
 # for the appendix version.
-_EXTRA_NPY = processed_dir("extra_descriptors.npy")
+_EXTRA_NPY = station_vectors_dir("extra_descriptors.npy")
 _WITH_EXTRA = os.environ.get("WITH_EXTRA_DESCRIPTORS", "0") not in ("0", "", "false")
 EXTRA_DESC = None
 if not _WITH_EXTRA:

@@ -12,7 +12,7 @@
 # Stage 1 of the Aurora-context pipeline. Runs the pretrained Aurora 0.25 deg
 # model from ERA5 initial conditions and writes region-cropped forecasts
 # (4 surface + 5 atmos x 13 levels, fp32) in ERA5-staging layout under
-# <DATA_ROOT>/_staging/aurora/lead{6,24,72}h/<region>/processed/. Resume-safe:
+# <DATA_ROOT>/ingest/aurora/lead{6,24,72}h/<region>/processed/. Resume-safe:
 # re-submitting skips (lead, valid) frames already written.
 #
 # Environment: Aurora is an optional extra of this project --
@@ -23,8 +23,8 @@
 # a newer CUDA than the node driver supports, pin torch to a matching wheel
 # (see pyproject's pytorch-cu126 index).
 #
-# Inputs: 13-level ERA5 staging from scripts/data/download_era5_wb2_aurora_levels.py
-# (ERA5_STAGING, default <DATA_ROOT>/_staging/aurora_inputs) and the ERA5 static
+# Inputs: 13-level ERA5 staging from scripts/data/download_era5_wb2.py --levels aurora
+# (ERA5_STAGING, default <DATA_ROOT>/ingest/aurora_inputs) and the ERA5 static
 # file (z / lsm / slt).
 #
 # RECOMMENDED SEQUENCE
@@ -44,10 +44,10 @@ REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 DATA_ROOT="${TESSERA_DATA_ROOT:-/data/weather-downscaling}"
 export TESSERA_DATA_ROOT="${DATA_ROOT}"
 
-DATASET_META="${DATASET_META:-${DATA_ROOT}/dataset_timestamp_global/metadata.json}"
-ERA5_STAGING="${ERA5_STAGING:-${DATA_ROOT}/_staging/aurora_inputs}"
-STATIC_FILE="${STATIC_FILE:-${DATA_ROOT}/_staging/processed/era5_static/era5_static_0p25_all.nc}"
-OUTPUT_ROOT="${OUTPUT_ROOT:-${DATA_ROOT}/_staging/aurora}"
+DATASET_META="${DATASET_META:-${DATA_ROOT}/datasets/dataset_timestamp_global/metadata.json}"
+ERA5_STAGING="${ERA5_STAGING:-${DATA_ROOT}/ingest/aurora_inputs}"
+STATIC_FILE="${STATIC_FILE:-${DATA_ROOT}/ingest/processed/era5_static/era5_static_0p25_all.nc}"
+OUTPUT_ROOT="${OUTPUT_ROOT:-${DATA_ROOT}/ingest/aurora}"
 
 # ---- Knobs (override via env) ----
 MODEL="${MODEL:-pretrained}"       # pretrained | small

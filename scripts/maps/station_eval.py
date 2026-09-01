@@ -30,9 +30,9 @@ from generate_maps import (
 )
 
 from tessera_downscaling.data.dataset import MultiRegionSnapshotDownscalingDataset
-from tessera_downscaling.paths import dataset_dir, processed_dir
+from tessera_downscaling.paths import dataset_dir, processed_dir, station_vectors_dir
 
-VAE_LAT = processed_dir("station_latents_lat16_grad0.5.npy")
+VAE_LAT = station_vectors_dir("station_latents_lat16_grad0.5.npy")
 VAE_CSV = processed_dir("tessera_global", "station_list_filtered.csv")
 glats = np.load(EU / "lats.npy").astype(np.float32)
 glons = np.load(EU / "lons.npy").astype(np.float32)

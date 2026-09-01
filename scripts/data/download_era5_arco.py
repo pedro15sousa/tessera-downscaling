@@ -35,7 +35,7 @@ from tessera_downscaling.io_utils import (
     parallel_foreach,
     write_and_flush_dataset,
 )
-from tessera_downscaling.paths import staging_dir
+from tessera_downscaling.paths import ingest_dir
 
 if TYPE_CHECKING:
     from google.cloud import storage
@@ -163,18 +163,18 @@ def main() -> None:
     p.add_argument(
         "--root",
         type=Path,
-        default=staging_dir("processed"),
+        default=ingest_dir("processed"),
         help="Output root. Files are written to "
         "{root}/era5_wb2_quarter_{var}/data/{timestamp}.nc "
-        "(default: <data root>/_staging/processed).",
+        "(default: <data root>/ingest/processed).",
     )
     p.add_argument("--num-processes", type=int, default=4)
     p.add_argument(
         "--tmp-dir",
         type=Path,
-        default=staging_dir("tmp", "arco_tmp"),
+        default=ingest_dir("tmp", "arco_tmp"),
         help="Temporary directory for daily NetCDFs before splitting "
-        "(default: <data root>/_staging/tmp/arco_tmp).",
+        "(default: <data root>/ingest/tmp/arco_tmp).",
     )
     p.add_argument(
         "--atmos-vars",

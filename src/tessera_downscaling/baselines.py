@@ -5,11 +5,11 @@ Scores three deterministic references on the test split of a
 ``tessera-evaluate``, so the analysis code treats a baseline run like any
 trained run::
 
-    tessera-baselines --baseline era5_interp --dataset-dir dataset_timestamp_global \
+    tessera-baselines --baseline era5_interp --dataset-dir datasets/dataset_timestamp_global \
         --target-variables t2m --train-regions europe \
         --tessera-path processed/tessera_global/patch_embeddings_2024.npy \
         --tessera-station-csv processed/tessera_global/station_list_filtered.csv \
-        --output-dir training_runs_snapshot_14y_eu/t2m_snap_era5_interp_baseline_seed42
+        --output-dir training_runs/snapshot_14y_eu/t2m_snap_era5_interp_baseline_seed42
 
 ``--baseline``:
 

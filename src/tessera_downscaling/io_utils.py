@@ -1,8 +1,5 @@
 """Small I/O helpers shared by the ERA5 / GHCNh ingestion scripts.
 
-Vendored from the ``dataprocessing`` package of the ``end-to-end-forecasting``
-monorepo (``src/dataprocessing/utils.py``); the logic is unchanged.
-
 Three things live here:
 
 * :func:`atomic` / :func:`atomic_completed` -- write a file in a way that makes
@@ -11,8 +8,8 @@ Three things live here:
   :func:`atomic_completed` before redoing work, which is what makes the
   ingestion scripts resume-safe.
 * :func:`compute_file_name` -- the ``YYYY-MM-DD-HH.nc`` naming convention of the
-  raw staging tree (``_staging/processed/era5_wb2_quarter_<var>/data/`` and
-  ``_staging/processed/ghcnh/data/``). Every preprocessor assumes it.
+  raw staging tree (``ingest/processed/era5_wb2_quarter_<var>/data/`` and
+  ``ingest/processed/ghcnh/data/``). Every preprocessor assumes it.
 * :func:`parallel_foreach` -- a queue-based multiprocessing map with a per-worker
   ``init`` (used to open one zarr store / GCS client per process).
 

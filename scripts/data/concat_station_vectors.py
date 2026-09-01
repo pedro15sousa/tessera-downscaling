@@ -22,7 +22,7 @@ to a pure-VAE run — the comparison stays exact.
 
 Usage (from the repo root):
     uv run python scripts/data/concat_station_vectors.py \
-        --inputs  <latents>.npy <data root>/processed/extra_descriptors.npy \
+        --inputs  <latents>.npy <data root>/processed/station_vectors/extra_descriptors.npy \
         --output  <latents>_plus_extra_descriptors.npy
 """
 

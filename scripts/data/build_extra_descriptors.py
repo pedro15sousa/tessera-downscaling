@@ -34,9 +34,9 @@ column (catches lat/lon swaps and unit mistakes immediately).
 
 Usage (from the repo root):
     uv run python scripts/data/build_extra_descriptors.py \
-        --descriptors-csv <data root>/processed/station_extra_descriptors.csv \
+        --descriptors-csv <data root>/processed/station_vectors/station_extra_descriptors.csv \
         --station-csv     <data root>/processed/tessera_global/station_list_filtered.csv \
-        --output-npy      <data root>/processed/extra_descriptors.npy
+        --output-npy      <data root>/processed/station_vectors/extra_descriptors.npy
 """
 
 from __future__ import annotations

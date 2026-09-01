@@ -26,7 +26,7 @@ Usage:
     uv run python scripts/patch_encoder/encode_dense_grid.py \\
         --patches processed/tessera_dense_grid/norway_0.05deg_2024/patch_embeddings.npy \\
         --run-dir tessera_patch_encoder/outputs/vae/lat16_beta0.0005_grad0.5_e200 \\
-        --coords  processed/tessera_dense_grid/norway_0.05deg_2024/coords.csv \\
+        --coords  processed/tessera_dense_grid/norway_0.05deg_2024/grid_points.csv \\
         --out     processed/dense/norway/norway_0.05deg_2024.npz
 
 Relative paths are interpreted under the data root.

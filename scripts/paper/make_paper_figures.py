@@ -364,7 +364,7 @@ def _agg(region: str, run_name: str, var: str):
     recs = [
         r
         for s in SEEDS
-        if (r := _read(DATA / f"training_runs_{region}" / f"{run_name}_seed{s}", var))
+        if (r := _read(DATA / "training_runs" / region / f"{run_name}_seed{s}", var))
         is not None
     ]
     if not recs:
@@ -483,7 +483,8 @@ def _fig2_rows():
                 for s in SEEDS:
                     r = _read(
                         DATA
-                        / f"training_runs_{region}"
+                        / "training_runs"
+                        / region
                         / f"{run}_seed{s}"
                         / "eval_train_stations",
                         var,
@@ -905,10 +906,10 @@ def fig09(out: Path) -> None:
 # ===========================================================================
 # Figs 6 & 10 — cross-lead uplift and relative skill decay
 # (replicates analyze_cross_lead.ipynb cells 1/2/4/8/13/17, reading the same
-# training_runs_snapshot_14y_cross_lead* folders under the data root)
+# training_runs/snapshot_14y_cross_lead* folders under the data root)
 # ===========================================================================
-XLEAD_ROOT = DATA / "training_runs_snapshot_14y_cross_lead"
-XLEAD_TESS = DATA / "training_runs_snapshot_14y_cross_lead_tessera_1B-M_2017"
+XLEAD_ROOT = DATA / "training_runs" / "snapshot_14y_cross_lead"
+XLEAD_TESS = DATA / "training_runs" / "snapshot_14y_cross_lead_tessera_1B-M_2017"
 XLEAD_REGIONS = ["europe", "east_asia"]
 EVAL_SOURCES = {
     "eval_lead0h": "ERA5 (lead 0)",
@@ -1210,7 +1211,7 @@ def fig10(out: Path) -> None:
 # (replicates residual_structure_analysis.ipynb §3c/3e/3g; the HPC paths stored
 # in the runs' config.json are remapped onto the data root by paths.resolve)
 # ===========================================================================
-SR_DATASET = DATA / "dataset_timestamp_global"
+SR_DATASET = DATA / "datasets" / "dataset_timestamp_global"
 SR_MIN_N = 100  # 'well-sampled' regions: Europe (898), US (357)
 SR_WELL_SAMPLED = {  # folder -> (display name, region key)
     "snapshot_14y_eu": ("Europe", "europe"),
@@ -1341,7 +1342,8 @@ def _sr_latents(folder, var):
         for s in SEEDS:
             cfgp = (
                 DATA
-                / f"training_runs_{folder}_tessera_1B-M_2017"
+                / "training_runs"
+                / f"{folder}_tessera_1B-M_2017"
                 / f"{SR_TESS_STEM[var]}_seed{s}"
                 / "config.json"
             )
@@ -1361,7 +1363,7 @@ def _sr_latents(folder, var):
 
 def _sr_era5_target(folder, var):
     """station_id -> (lat, lon, mean ERA5-interp residual) (§3c)."""
-    root = DATA / f"training_runs_{folder}"
+    root = DATA / "training_runs" / folder
     base_stem = SR_MODELS[var]
     for s in SEEDS:
         ep = root / f"{var}_snap_era5_interp_baseline_seed{s}/test_predictions.npz"
@@ -1646,7 +1648,7 @@ def _roll_runs():
 
     recs = []
     for folder, want_tess in ((ROLL_FOLDER, False), (ROLL_TESS, True)):
-        root = DATA / f"training_runs_{folder}"
+        root = DATA / "training_runs" / folder
         for d in sorted(root.iterdir()):
             m = re.match(r"(?P<exp>.+)_seed(?P<seed>\d+)$", d.name)
             if not m:
@@ -1965,7 +1967,7 @@ def _nw_setup(extra: bool = False):
     ll = pd.read_csv(DATA / "processed/tessera_global/station_list_filtered.csv")
     ll["station_id"] = ll["station_id"].astype(str)
     lat_of = {s: i for i, s in enumerate(ll["station_id"])}
-    st = pd.read_csv(DATA / "dataset_timestamp_global/stations.csv")
+    st = pd.read_csv(DATA / "datasets" / "dataset_timestamp_global/stations.csv")
     st["station_id"] = st["station_id"].astype(str)
     st["lrow"] = st["station_id"].map(lat_of)
     st = st[st["lrow"].notna()].copy()
@@ -1973,7 +1975,7 @@ def _nw_setup(extra: bool = False):
     st = st[~np.isnan(lat[st["lrow"].to_numpy()]).any(axis=1)].reset_index(drop=True)
     Z16 = lat[st["lrow"].to_numpy()]
 
-    edir = DATA / "dataset_timestamp_global/regions/europe"
+    edir = DATA / "datasets" / "dataset_timestamp_global/regions/europe"
     sf = np.load(edir / "static_fields.npy")
     glat, glon = np.load(edir / "lats.npy"), np.load(edir / "lons.npy")
     q = np.column_stack(

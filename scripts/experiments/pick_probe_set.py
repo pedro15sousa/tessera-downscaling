@@ -43,8 +43,8 @@ Example: build the Norway probe set of the paper
 
     # Mainland Norway bbox; no elevation floor.
     uv run python scripts/experiments/pick_probe_set.py \\
-        --dataset-dir       <data root>/dataset_timestamp_global \\
-        --vae-latents-path  <data root>/processed/station_latents_lat16_grad0.5.npy \\
+        --dataset-dir       <data root>/datasets/dataset_timestamp_global \\
+        --vae-latents-path  <data root>/processed/station_vectors/station_latents_lat16_grad0.5.npy \\
         --vae-latents-csv   <data root>/processed/tessera_global/station_list_filtered.csv \\
         --region            europe \\
         --spatial-split     train \\
@@ -79,7 +79,7 @@ def _parse_args() -> argparse.Namespace:
         type=Path,
         required=True,
         help="Path to the dataset directory containing stations.csv "
-        "(e.g. <data root>/dataset_timestamp_global).",
+        "(e.g. <data root>/datasets/dataset_timestamp_global).",
     )
     p.add_argument(
         "--vae-latents-path",

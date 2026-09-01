@@ -41,8 +41,8 @@ export TESSERA_DATA_ROOT="${DATA_ROOT}"
 EVAL_CMD_BASE="uv run tessera-evaluate"
 
 # The paper's TESSERA arm: 1B-M (v2) 2017 latents, runs in the
-# training_runs_snapshot_14y_<region>${TESSERA_SUFFIX} folders; the no-TESSERA
-# baseline lives in training_runs_snapshot_14y_<region>. Same files as
+# training_runs/snapshot_14y_<region>${TESSERA_SUFFIX} folders; the no-TESSERA
+# baseline lives in training_runs/snapshot_14y_<region>. Same files as
 # scripts/experiments/_lib.sh.
 TESSERA_SUFFIX="${TESSERA_SUFFIX:-_tessera_1B-M_2017}"
 VAE_NPY="${VAE_LATENTS_PATH:-${DATA_ROOT}/processed/vae_tessera_1B-M/station_latents_1B-M_p128_2017_crop64_lat16_grad0.5_auxon.npy}"
@@ -80,9 +80,9 @@ for reg in "${REGIONS[@]}"; do
         RUN_NAME="${exp_spec% *}"
         IS_BASELINE="${exp_spec##* }"
         if [ "${IS_BASELINE}" = "1" ]; then
-            OUTPUT_ROOT="${DATA_ROOT}/training_runs_snapshot_14y_${reg}"
+            OUTPUT_ROOT="${DATA_ROOT}/training_runs/snapshot_14y_${reg}"
         else
-            OUTPUT_ROOT="${DATA_ROOT}/training_runs_snapshot_14y_${reg}${TESSERA_SUFFIX}"
+            OUTPUT_ROOT="${DATA_ROOT}/training_runs/snapshot_14y_${reg}${TESSERA_SUFFIX}"
         fi
         for seed in "${SEEDS[@]}"; do
             run_dir="${OUTPUT_ROOT}/${RUN_NAME}_seed${seed}"

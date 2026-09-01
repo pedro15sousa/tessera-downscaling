@@ -12,7 +12,7 @@
 # stations (region_specs_test.json). Both sidecars are materialised from
 # rollout_schedule.json on every run; the references run once (seed 42).
 # Runs land in
-# <data root>/training_runs_snapshot_14y_eu_temporal_rollout_norway_lat16_mtpi/
+# <data root>/training_runs/snapshot_14y_eu_temporal_rollout_norway_lat16_mtpi/
 # <arch>_<sweep>_seed<S> and <reference>_seed42.
 #
 # Sidecars (built once, committed): probe_station_ids.json from
