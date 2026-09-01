@@ -23,7 +23,7 @@ Required for the main line (`uv sync --extra ingest`):
 | ARCO-ERA5 | same variables for later dates | none (public bucket) | `scripts/data/download_era5_arco.py` |
 | Copernicus CDS | the 13 ERA5 invariant fields, one file (`era5_static_0p25_all.nc`) | CDS account | one-off manual download (no script); place under `ingest/processed/era5_static/` |
 | NOAA GHCNh | hourly station observations | none (public) | `scripts/data/download_ghcnh.py` |
-| TESSERA v2 embeddings | 10 m embedding tiles (distributed through the GeoTessera library) | local tile tree (`$TESSERA_V2_MOUNT` or `--mount-dir`) | `scripts/data/extract_tessera_patches_local.py` |
+| TESSERA embeddings | 10 m embedding tiles on the global 0.1 deg grid | GeoTessera library (public releases) | `scripts/data/prefetch_tessera_tiles.py` -> local tile tree -> `extract_tessera_patches_local.py` |
 | Google Earth Engine | mTPI per station | Earth Engine account | `scripts/data/fetch_station_mtpi.py` |
 
 Variant experiments additionally use: the Aurora checkpoint (forecast-context
@@ -51,13 +51,25 @@ patches ~3 TB, the dataset ~170 GB.
    85/15 spatial split, shared `ghcnh_snapshot/` station targets, and
    per-region ERA5 context snapshots, static fields and normalisation stats.
 4. **Extract TESSERA station patches** ->
-   `processed/tessera_station_patches/`:
-   `scripts/data/shortlist_tessera_tiles.py` (which tiles are needed), then
-   `extract_tessera_patches_local.py --out-dir
+   `processed/tessera_station_patches/`: first populate a local tile tree
+   with `scripts/data/prefetch_tessera_tiles.py --station-csv
+   ingest/raw/ghcnh/station_list.csv --tiles-dir <tile tree>` -- it computes
+   the exact set of tiles the stations' patches touch (using the extractor's
+   own patch geometry, so a patch straddling a tile edge pulls in all of its
+   tiles) and downloads them through the GeoTessera library, skipping tiles
+   already present -- then run
+   `extract_tessera_patches_local.py --mount-dir <tile tree> --out-dir
    processed/tessera_station_patches`. This writes the patch array
    (`patch_embeddings_<year>_p128.npy`) and `station_list_filtered.csv` --
    the station list that **every per-station artefact from here on is
-   row-aligned with**.
+   row-aligned with**. The extraction is byte-identical to geotessera's own
+   mosaicking, so any tile source with the library's layout works.
+
+   *Unreleased embedding versions:* if the version you want is not yet
+   released through the library, run
+   `scripts/data/shortlist_tessera_tiles.py` to emit the same tile set as a
+   hand-off list for the TESSERA team, and place the generated tiles in the
+   tile tree the extractor reads from.
 
 ## 3. Training the patch encoder (VAE)
 
@@ -73,9 +85,13 @@ Inputs: the station patches and station list from step 2.4.
    row of `station_list_filtered.csv` (NaN where the station has no valid
    patch).
 
-Store the exported latents under `processed/vae_tessera_1B-M/` and record the
-file -> run mapping in its `provenance.txt`; the downscaler takes the `.npy`
-path directly.
+Store the exported latents wherever suits your embedding source -- the
+downscaler takes the `.npy` path directly (`--vae-latents-path`), so no
+particular directory or file name is required; keeping a `provenance.txt`
+mapping each latents file to the encoder run that produced it is
+recommended. The paper's instantiation stores its latents under
+`processed/vae_tessera_1B-M/`, which is what the defaults in
+`scripts/experiments/` point at.
 
 ## 4. Training a downscaler
 
@@ -87,7 +103,8 @@ Input dependencies:
   (`--tessera-path` / `--tessera-station-csv`): passed to *every* run,
   baselines included, so all arms train and evaluate on identical station
   sets. No patch is ever fed to the model, and swapping the file changes the
-  station set of every experiment. The paper's filter lives at
+  station set of every experiment. On a fresh build this is naturally the
+  patch file from step 2.4; the paper's instantiation used the patch file at
   `processed/tessera_global/`.
 * For the TESSERA arm: the latents file from step 3
   (`--vae-latents-path` / `--vae-latents-station-csv`).
@@ -99,10 +116,10 @@ Train and evaluate (the full flag set is documented in
 ```bash
 uv run tessera-train --dataset-dir datasets/dataset_timestamp_global \
     --train-regions europe \
-    --tessera-path processed/tessera_global/patch_embeddings_2024.npy \
-    --tessera-station-csv processed/tessera_global/station_list_filtered.csv \
-    --vae-latents-path processed/vae_tessera_1B-M/<latents>.npy \
-    --vae-latents-station-csv processed/tessera_global/station_list_filtered.csv \
+    --tessera-path processed/tessera_station_patches/patch_embeddings_<year>_p128.npy \
+    --tessera-station-csv processed/tessera_station_patches/station_list_filtered.csv \
+    --vae-latents-path <path to your station_latents.npy> \
+    --vae-latents-station-csv processed/tessera_station_patches/station_list_filtered.csv \
     --interpolation bilinear --tessera-injection concat \
     --no-static-fields --use-mtpi --weight-decay 1e-4 \
     --seed 42 --output-dir training_runs/<folder>/<run_name>
@@ -112,7 +129,11 @@ uv run tessera-evaluate --checkpoint training_runs/<folder>/<run_name>/best_mode
 
 The ERA5-only baseline is the same command without the `--vae-latents-*`
 flags and without `--no-static-fields`. `tessera-baselines` produces the
-no-model references (ERA5 interpolation, persistence). The paper's full
-experiment matrix -- regions, controls, ablations, the Aurora forecast
-context and the Norway rollout -- is these commands driven by
+no-model references (ERA5 interpolation, persistence).
+
+This workflow is embedding-agnostic: which embedding version, latents file
+and filter patches to use are choices made at the command line. The paper is
+one specific instantiation of it -- its exact choices, together with the full
+experiment matrix (regions, controls, ablations, the Aurora forecast context
+and the Norway rollout), are pinned in
 `scripts/experiments/<folder>/experiments.yaml` + `submit.sh`.
