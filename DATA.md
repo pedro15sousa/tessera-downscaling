@@ -64,15 +64,6 @@ Install with `uv sync --extra ingest` (steps 1-4) and `--extra aurora`
    (`scripts/experiments/README.md`); the Norway rollout sidecars come from
    `pick_probe_set.py` and `build_rollout_schedule.py`. Then
    `scripts/reeval_train_stations.sh` and `scripts/reeval_truncated_normal.sh`.
-8. **Maps, figures, tables**:
-   `scripts/maps/extract_dense_grid_patches.py` ->
-   `scripts/patch_encoder/encode_dense_grid.py` ->
-   `REGION=<region> bash scripts/maps/run_region_maps.sh`, then
-   `make figures tables`. Caveat: the paper's map figures come from
-   earlier-generation runs whose stems are pinned in
-   `scripts/maps/regions.py` and are not trained by step 7 (see the
-   provenance note atop `scripts/maps/generate_maps.py`); point `regions.py`
-   at your own runs to regenerate maps from a fresh rebuild.
 
 ## 3. Layout the pipeline produces
 
