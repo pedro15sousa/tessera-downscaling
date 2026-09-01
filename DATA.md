@@ -114,31 +114,3 @@ A `training_runs/<folder>/<name>_seed<S>/` run holds `config.json`,
 `eval_train_stations/`, `eval_lead{0,6,24,72}h/` or `station_crps_cache.npz`
 where applicable). No-model references (`*_era5_interp*`, `*_persistence*`)
 carry only `config.json` + the `test_*` files.
-
-## 4. Invariants to preserve
-
-* **Row alignment.** Every per-station vector file is row-aligned with
-  `processed/tessera_global/station_list_filtered.csv` (38,870 rows; NaN rows
-  are dropped by the dataset loader).
-* **The station-validity filter.** Every run -- baselines included -- passes
-  `processed/tessera_global/patch_embeddings_2024.npy` as `--tessera-path`
-  purely to filter stations (centre pixel non-zero and >= 50 % patch
-  coverage); no patch is ever fed to a model. Swapping that file silently
-  changes the station set of every experiment.
-* **Relative symlinks.** The aurora datasets' `ghcnh_snapshot` are relative
-  symlinks into `datasets/dataset_timestamp_global/ghcnh_snapshot` (identical
-  targets across leads), so the tree survives being copied or re-rooted.
-
-## 5. Notes on the authors' archive
-
-The paper's runs were trained on an HPC whose data root used an older layout
-under a project-local `.tmp_output/` prefix. Stored `config.json` files and
-checkpoints therefore carry paths that no longer exist verbatim;
-`paths.resolve()` maps them onto the current root and layout
-(`paths.LEGACY_ROOT_PREFIXES`, `paths.RELOCATIONS`), and experiment sidecar
-JSONs fall back to the copies committed under `scripts/experiments/`
-(`evaluate.resolve_sidecar_path`). Fresh runs need none of this. The archive
-also carries superseded precursors (`datasets/dataset_timestamp/`,
-`datasets/dataset_timestamp_aurora_lead6h_test/`) and `training_runs/` folders
-without a matching `scripts/experiments/` entry; nothing in this repository
-reads them.
