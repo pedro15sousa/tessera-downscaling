@@ -32,6 +32,16 @@ products (hand-crafted-descriptor baseline;
 `scripts/data/fetch_station_extra_descriptors.py`) and SRTM terrain tiles
 (map figures; `scripts/maps/fetch_dem.py`).
 
+The Aurora runs (`scripts/aurora/`) need ERA5 at all 13 WeatherBench2 pressure
+levels as initial conditions, a separate ~5.5 TB staging tree written by
+`download_era5_wb2.py --levels aurora` (default `ingest/aurora_inputs/`) that
+is not kept after a run; the 3-level staging above cannot feed Aurora.
+`generate_aurora_forecasts.py` writes the region-cropped forecasts under
+`ingest/aurora/lead{L}h/<region>/processed/`; `extract_aurora_latents.py`
+re-runs the same rollouts and stores Aurora's internal state per region next
+to them (`lead{L}h/<region>/latent_backbone/`, `lead0h/<region>/latent_encoder/`,
+each with a `latent_meta.json`), checked by `verify_aurora_latents.py`.
+
 Storage to plan for: raw + intermediate inputs ~6 TB, extracted TESSERA
 patches ~3 TB, the dataset ~170 GB.
 
