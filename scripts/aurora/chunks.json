@@ -1,0 +1,125 @@
+{
+  "schema": 1,
+  "comment": "Chunks of valid times for the CSD3 Aurora latent extraction; see chunks.py. Windows are inclusive 'YYYY-MM-DD-HH' stems on the 6-hourly grid. staging_start = valid_start - 78 h (lead 72 h + the 6 h history frame). Paths are relative to RDS_ROOT (scripts/aurora/_csd3.sh). One-year chunks keep one chunk's transient inputs (~430 GB) plus its latents inside the RDS project's free quota (~3.4 TB, Sept 2026) even while the next chunk is being staged.",
+  "valid_range": [
+    "2010-01-01-00",
+    "2023-01-10-18"
+  ],
+  "leads_hours": [
+    6,
+    24,
+    72
+  ],
+  "regions": [
+    "europe",
+    "east_asia"
+  ],
+  "staging_lead_hours": 78,
+  "marker_dir": "ingest/aurora/chunks",
+  "chunks": [
+    {
+      "id": "2010",
+      "valid_start": "2010-01-01-00",
+      "valid_end": "2010-12-31-18",
+      "staging_start": "2009-12-28-18",
+      "staging_end": "2010-12-31-18",
+      "marker": "ingest/aurora/chunks/2010.done"
+    },
+    {
+      "id": "2011",
+      "valid_start": "2011-01-01-00",
+      "valid_end": "2011-12-31-18",
+      "staging_start": "2010-12-28-18",
+      "staging_end": "2011-12-31-18",
+      "marker": "ingest/aurora/chunks/2011.done"
+    },
+    {
+      "id": "2012",
+      "valid_start": "2012-01-01-00",
+      "valid_end": "2012-12-31-18",
+      "staging_start": "2011-12-28-18",
+      "staging_end": "2012-12-31-18",
+      "marker": "ingest/aurora/chunks/2012.done"
+    },
+    {
+      "id": "2013",
+      "valid_start": "2013-01-01-00",
+      "valid_end": "2013-12-31-18",
+      "staging_start": "2012-12-28-18",
+      "staging_end": "2013-12-31-18",
+      "marker": "ingest/aurora/chunks/2013.done"
+    },
+    {
+      "id": "2014",
+      "valid_start": "2014-01-01-00",
+      "valid_end": "2014-12-31-18",
+      "staging_start": "2013-12-28-18",
+      "staging_end": "2014-12-31-18",
+      "marker": "ingest/aurora/chunks/2014.done"
+    },
+    {
+      "id": "2015",
+      "valid_start": "2015-01-01-00",
+      "valid_end": "2015-12-31-18",
+      "staging_start": "2014-12-28-18",
+      "staging_end": "2015-12-31-18",
+      "marker": "ingest/aurora/chunks/2015.done"
+    },
+    {
+      "id": "2016",
+      "valid_start": "2016-01-01-00",
+      "valid_end": "2016-12-31-18",
+      "staging_start": "2015-12-28-18",
+      "staging_end": "2016-12-31-18",
+      "marker": "ingest/aurora/chunks/2016.done"
+    },
+    {
+      "id": "2017",
+      "valid_start": "2017-01-01-00",
+      "valid_end": "2017-12-31-18",
+      "staging_start": "2016-12-28-18",
+      "staging_end": "2017-12-31-18",
+      "marker": "ingest/aurora/chunks/2017.done"
+    },
+    {
+      "id": "2018",
+      "valid_start": "2018-01-01-00",
+      "valid_end": "2018-12-31-18",
+      "staging_start": "2017-12-28-18",
+      "staging_end": "2018-12-31-18",
+      "marker": "ingest/aurora/chunks/2018.done"
+    },
+    {
+      "id": "2019",
+      "valid_start": "2019-01-01-00",
+      "valid_end": "2019-12-31-18",
+      "staging_start": "2018-12-28-18",
+      "staging_end": "2019-12-31-18",
+      "marker": "ingest/aurora/chunks/2019.done"
+    },
+    {
+      "id": "2020",
+      "valid_start": "2020-01-01-00",
+      "valid_end": "2020-12-31-18",
+      "staging_start": "2019-12-28-18",
+      "staging_end": "2020-12-31-18",
+      "marker": "ingest/aurora/chunks/2020.done"
+    },
+    {
+      "id": "2021",
+      "valid_start": "2021-01-01-00",
+      "valid_end": "2021-12-31-18",
+      "staging_start": "2020-12-28-18",
+      "staging_end": "2021-12-31-18",
+      "marker": "ingest/aurora/chunks/2021.done"
+    },
+    {
+      "id": "2022",
+      "valid_start": "2022-01-01-00",
+      "valid_end": "2023-01-10-18",
+      "staging_start": "2021-12-28-18",
+      "staging_end": "2023-01-10-18",
+      "marker": "ingest/aurora/chunks/2022.done"
+    }
+  ]
+}
