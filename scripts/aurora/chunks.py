@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """The chunk schedule of the Aurora latent extraction on CSD3 (``chunks.json``).
 
-Standard library only, so it runs under the login node's system python as
-well as inside the ROCm env; the shell scripts call it to turn a chunk id
-into shell variables.
+Standard library only and Python 3.6 compatible (the login nodes' system
+``python3``), so it runs there as well as inside the ROCm env; the shell
+scripts call it to turn a chunk id into shell variables.
 
 A chunk is a contiguous window of *valid* times (the timestamps of
 ``dataset_timestamp_global``; 6-hourly, no gaps between 2010-01-01-00 and
@@ -27,14 +27,14 @@ Commands:
     chunks.py check                                      -> validates chunks.json
 """
 
-from __future__ import annotations
-
+# ruff: noqa: UP006, UP007, UP035, UP045  -- typing.* forms: must run on the login nodes' Python 3.6
 import argparse
 import datetime as dt
 import json
 import shlex
 import sys
 from pathlib import Path
+from typing import Dict, List, Optional, Tuple
 
 HERE = Path(__file__).resolve().parent
 DEFAULT_JSON = HERE / "chunks.json"
@@ -67,13 +67,13 @@ def chunk(cfg: dict, chunk_id: str) -> dict:
     )
 
 
-def next_chunk(cfg: dict, chunk_id: str) -> dict | None:
+def next_chunk(cfg: dict, chunk_id: str) -> Optional[dict]:
     ids = [c["id"] for c in cfg["chunks"]]
     i = ids.index(chunk_id)
     return cfg["chunks"][i + 1] if i + 1 < len(ids) else None
 
 
-def slots(start: str, end: str) -> list[dt.datetime]:
+def slots(start: str, end: str) -> List[dt.datetime]:
     t, e = parse(start), parse(end)
     out = []
     while t <= e:
@@ -84,7 +84,7 @@ def slots(start: str, end: str) -> list[dt.datetime]:
 
 def shard_window(
     c: dict, shard: int, n_shards: int, window: str = "valid"
-) -> tuple[str, str]:
+) -> Tuple[str, str]:
     """Contiguous sub-window ``shard`` (0-based) of ``n_shards`` equal parts of
     the chunk's valid (or staging) window. Contiguous, not interleaved: an
     init's rollout serves three valid times, so only the inits at a
@@ -103,7 +103,7 @@ def shard_window(
     return fmt(s[lo]), fmt(s[hi - 1])
 
 
-def windows(cfg: dict, c: dict) -> dict[str, tuple[str, str]]:
+def windows(cfg: dict, c: dict) -> Dict[str, Tuple[str, str]]:
     leads = cfg["leads_hours"]
     vs, ve = parse(c["valid_start"]), parse(c["valid_end"])
     return {
@@ -116,7 +116,7 @@ def windows(cfg: dict, c: dict) -> dict[str, tuple[str, str]]:
     }
 
 
-def stems(cfg: dict, c: dict, kind: str, until_next: bool) -> list[str]:
+def stems(cfg: dict, c: dict, kind: str, until_next: bool) -> List[str]:
     """Timestamp stems of the chunk's files of one kind. With ``until_next``
     the stems the next chunk also needs are left out (what ``clean`` deletes)."""
     start, end = windows(cfg, c)[kind]
@@ -157,10 +157,11 @@ def check(cfg: dict) -> None:
         raise ValueError("chunks do not cover valid_range exactly")
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: Optional[List[str]] = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("--json", type=Path, default=DEFAULT_JSON)
-    sub = p.add_subparsers(dest="cmd", required=True)
+    sub = p.add_subparsers(dest="cmd")
+    sub.required = True  # the keyword form needs Python >= 3.7
     sub.add_parser("list")
     sub.add_parser("check")
     s = sub.add_parser("show")
