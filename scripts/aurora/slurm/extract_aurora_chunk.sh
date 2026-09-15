@@ -20,7 +20,10 @@
 
 set -euo pipefail
 
-REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)}"
+# sbatch runs a COPY of this script from Slurm's spool directory, so
+# BASH_SOURCE cannot locate the repo: take the submitter's exported REPO_ROOT,
+# then the submission directory (the submitter cd's to the repo root).
+REPO_ROOT="${REPO_ROOT:-${SLURM_SUBMIT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)}}"
 # shellcheck source=scripts/aurora/_csd3.sh
 source "${REPO_ROOT}/scripts/aurora/_csd3.sh"
 csd3_require_env

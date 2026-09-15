@@ -87,7 +87,9 @@ CALIBRATION="${OUTPUT_ROOT}/latent_calibration.json"
 LOG_DIR="logs/aurora/${CHUNK}"
 mkdir -p "${LOG_DIR}"
 
-export CHUNK N_SHARDS STAGE_SHARDS STAGE_PROCESSES CALIBRATE_N RDS_ROOT FORCE
+# --export=ALL hands these to the job scripts; REPO_ROOT matters because sbatch
+# runs a copy of each script from the spool, where BASH_SOURCE says nothing.
+export REPO_ROOT CHUNK N_SHARDS STAGE_SHARDS STAGE_PROCESSES CALIBRATE_N RDS_ROOT FORCE
 
 # --------------------------------------------------------------------------- #
 # sbatch wrappers: print the command with --print, else submit and echo the id.
