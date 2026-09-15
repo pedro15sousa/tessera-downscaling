@@ -26,8 +26,9 @@
 #              <id>.pulled (the workstation writes .pulled after its checks)
 #
 # Options: --n-shards N   --stage-shards N   --calibrate-n N   --after <jobid>
-#          --with-calibrate (pipeline)   --force (redo/ignore markers)   --print (show
-#          the sbatch commands, submit nothing)
+#          --array <spec> (shard: only these task indices, e.g. "1" or "1,3", to
+#          redo failed tasks of an N_SHARDS array)   --with-calibrate (pipeline)
+#          --force (redo/ignore markers)   --print (show the sbatch commands, submit nothing)
 # Every mode is resume-safe: the downloader and extractor skip files already
 # written, verify/stage-check rewrite their markers, clean is idempotent.
 # Resources, accounts, RDS_ROOT and the env come from scripts/aurora/_csd3.sh.
@@ -46,6 +47,7 @@ STAGE_SHARDS="${STAGE_SHARDS:-4}"
 STAGE_PROCESSES="${STAGE_PROCESSES:-8}"
 CALIBRATE_N="${CALIBRATE_N:-50}"
 AFTER=""
+ARRAY_SPEC=""
 WITH_CALIBRATE=0
 FORCE=0
 PRINT=0
@@ -68,6 +70,7 @@ while [ $# -gt 0 ]; do
         --stage-shards) STAGE_SHARDS="$2"; shift 2 ;;
         --calibrate-n) CALIBRATE_N="$2"; shift 2 ;;
         --after) AFTER="$2"; shift 2 ;;
+        --array) ARRAY_SPEC="$2"; shift 2 ;;
         --with-calibrate) WITH_CALIBRATE=1; shift ;;
         --force) FORCE=1; shift ;;
         --print|-n) PRINT=1; shift ;;
@@ -141,7 +144,7 @@ submit_gpu() {  # submit_gpu <extract_mode> <dep> [array]  -> id
     case "${emode}" in
         smoke) time_limit="${SMOKE_TIME}" ;;
         calibrate) time_limit="${CALIBRATE_TIME}" ;;
-        shard) time_limit="${SHARD_TIME}"; extra=(--array="0-$((N_SHARDS - 1))") ;;
+        shard) time_limit="${SHARD_TIME}"; extra=(--array="${ARRAY_SPEC:-0-$((N_SHARDS - 1))}") ;;
     esac
     local out="${LOG_DIR}/${emode}_%j.out" err="${LOG_DIR}/${emode}_%j.err"
     if [ "${emode}" = "shard" ]; then out="${LOG_DIR}/shard_%A_%a.out"; err="${LOG_DIR}/shard_%A_%a.err"; fi
