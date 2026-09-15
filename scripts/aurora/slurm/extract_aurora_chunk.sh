@@ -31,6 +31,13 @@ cd "${REPO_ROOT}"
 export PYTHONUNBUFFERED=1
 export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-8}"
 export HF_HUB_OFFLINE="${HF_HUB_OFFLINE:-1}"  # checkpoints are prefetched by setup_csd3_env.sh
+# MIOpen (ROCm's convolution library) keeps a per-GPU-arch sqlite database of
+# tuned kernels; by default under /tmp of the node, shared by every user. A
+# task died with "Cannot open database file: /tmp/gfx950100.ukdb" on a node
+# where that file belonged to someone else. Give each job its own directory.
+export MIOPEN_USER_DB_PATH="${TMPDIR:-/tmp}/${USER}/miopen-${SLURM_JOB_ID:-$$}"
+export MIOPEN_CUSTOM_CACHE_DIR="${MIOPEN_USER_DB_PATH}"
+mkdir -p "${MIOPEN_USER_DB_PATH}"
 
 : "${CHUNK:?CHUNK is required}"
 EXTRACT_MODE="${EXTRACT_MODE:-shard}"
