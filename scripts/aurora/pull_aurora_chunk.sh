@@ -53,11 +53,25 @@ remote() { ssh -o BatchMode=yes "${CSD3_HOST}" "$@"; }
 log() { echo "[$(date '+%F %T')] $*"; }
 
 # ---- 1. wait for the marker ------------------------------------------------
-if [ "${WAIT}" = "1" ]; then
-    log "waiting for ${CSD3_HOST}:${MARKER_R} (poll ${POLL}s)"
-    until remote "test -f '${MARKER_R}'"; do
+# ssh exits 255 when the connection itself fails (BatchMode refuses the MFA
+# prompt once the ControlMaster socket is gone); anything else from `test -f`
+# means "not there yet". Fail closed on 255 instead of polling a dead link.
+wait_for_marker() {
+    local rc
+    while true; do
+        remote "test -f '${MARKER_R}'" && return 0
+        rc=$?
+        if [ "${rc}" -eq 255 ]; then
+            echo "ssh to ${CSD3_HOST} failed (multiplexed connection lost?); re-open it with" \
+                 "'ssh -fN ${CSD3_HOST}' (MFA) and re-run this script" >&2
+            return 1
+        fi
         sleep "${POLL}"
     done
+}
+if [ "${WAIT}" = "1" ]; then
+    log "waiting for ${CSD3_HOST}:${MARKER_R} (poll ${POLL}s)"
+    wait_for_marker
 fi
 remote "test -f '${MARKER_R}'" || { echo "marker ${MARKER_R} not present on ${CSD3_HOST}" >&2; exit 1; }
 log "marker present: $(remote "cat '${MARKER_R}'" | tr '\n' ' ')"
