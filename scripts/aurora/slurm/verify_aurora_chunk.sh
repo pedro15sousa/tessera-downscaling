@@ -58,15 +58,26 @@ fi
 echo "[$(date)] hashing the chunk's files"
 list="${marker_dir}/${CHUNK}.files"
 : > "${list}"
+
+# The three per-directory sidecars. printf with one '%s/%s\n' and four
+# arguments would reuse the format and emit "latent_lats.npy/latent_lons.npy",
+# a path that exists nowhere, so loop instead.
+sidecars() {
+    local d="$1" f
+    for f in latent_meta.json latent_lats.npy latent_lons.npy; do
+        printf '%s/%s\n' "${d}" "${f}"
+    done
+}
+
 for region in ${REGIONS}; do
     for lead in ${LEADS}; do
         d="ingest/aurora/lead${lead}h/${region}/latent_backbone"
         python3 scripts/aurora/chunks.py stems "${CHUNK}" --kind backbone | sed "s|^|${d}/|; s|$|.npy|" >> "${list}"
-        printf '%s/%s\n' "${d}" latent_meta.json latent_lats.npy latent_lons.npy >> "${list}"
+        sidecars "${d}" >> "${list}"
     done
     d="ingest/aurora/lead0h/${region}/latent_encoder"
     python3 scripts/aurora/chunks.py stems "${CHUNK}" --kind encoder | sed "s|^|${d}/|; s|$|.npy|" >> "${list}"
-    printf '%s/%s\n' "${d}" latent_meta.json latent_lats.npy latent_lons.npy >> "${list}"
+    sidecars "${d}" >> "${list}"
 done
 echo "ingest/aurora/latent_calibration.json" >> "${list}"
 # Decoded-field subset of the chunk (valid stems are lexicographically ordered).
@@ -75,8 +86,11 @@ if [ -d "${VERIFY_ROOT}" ]; then
         { n = split($0, p, "/"); stem = substr(p[n], 1, 13); if (stem >= lo && stem <= hi) print }' >> "${list}"
 fi
 # Only files that exist go into the manifest (the verifier already proved the
-# latent set complete; the physical subset is sparse by design).
-(cd "${RDS_ROOT}" && xargs -a "${list}" -d '\n' -r stat -c '%n' 2>/dev/null | sort -u) > "${list}.present"
+# latent set complete; the physical subset is sparse by design). stat exits
+# non-zero on a missing file and xargs then exits 123, which under
+# `set -o pipefail` would fail the whole job, so swallow that status here --
+# the count printed below is what tells us whether anything is missing.
+(cd "${RDS_ROOT}" && { xargs -a "${list}" -d '\n' -r stat -c '%n' 2>/dev/null || true; } | sort -u) > "${list}.present"
 n_listed=$(wc -l < "${list}")
 n_present=$(wc -l < "${list}.present")
 (cd "${RDS_ROOT}" && xargs -a "${list}.present" -d '\n' -r -P "${SLURM_CPUS_PER_TASK:-4}" -n 64 sha256sum) | sort -k2 > "${marker_dir}/${CHUNK}.sha256"
