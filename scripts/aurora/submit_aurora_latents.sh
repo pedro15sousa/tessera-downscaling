@@ -216,7 +216,9 @@ case "${MODE}" in
         echo "RDS_ROOT=${RDS_ROOT}"
         for m in staged done pulled cleaned; do
             f="${MARKER_DIR_ABS}/${CHUNK}.${m}"
-            if [ -f "${f}" ]; then echo "  [x] ${m}  ($(head -c 200 "${f}" | tr '\n' ' '))"; else echo "  [ ] ${m}"; fi
+            # Whole marker: they are ~200 bytes, and cutting at a byte count
+            # once shortened "files=12105" to "files=1210".
+            if [ -f "${f}" ]; then echo "  [x] ${m}  ($(tr '\n' ' ' < "${f}"))"; else echo "  [ ] ${m}"; fi
         done
         [ -f "${CALIBRATION}" ] && echo "  calibration: ${CALIBRATION}" || echo "  calibration: MISSING (run --mode calibrate on chunk $(python3 scripts/aurora/chunks.py list | sed -n 2p | cut -d' ' -f1))"
         echo "  env: $([ -x "${PY}" ] && echo "${ENV_DIR}" || echo 'MISSING (setup_csd3_env.sh)')"
