@@ -84,7 +84,10 @@ ensure_submitted() {
 # a marker that is never coming. Two consecutive idle polls (10 min at the
 # default) avoid tripping on the gap between submitting and squeue showing it.
 wait_for_marker() {
-    local id="$1" marker="${RDS_ROOT}/ingest/aurora/chunks/${id}.done" idle=0 queued rc
+    # Two statements: bash expands every word of a `local` line before
+    # assigning any, so ${id} would still be unset in the second assignment.
+    local id="$1"
+    local marker="${RDS_ROOT}/ingest/aurora/chunks/${id}.done" idle=0 queued rc
     log "waiting for chunk ${id} to be verified on ${CSD3_HOST}"
     while true; do
         if remote "test -f '${marker}'"; then
