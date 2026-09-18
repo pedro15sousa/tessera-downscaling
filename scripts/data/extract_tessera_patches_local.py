@@ -76,7 +76,7 @@ from rasterio.merge import merge
 from rasterio.transform import array_bounds, rowcol
 from rasterio.warp import Resampling, calculate_default_transform, reproject
 
-from tessera_downscaling.paths import data_root, staging_dir
+from tessera_downscaling.paths import data_root, ingest_dir
 
 LOGGER = logging.getLogger("extract_tessera_local")
 
@@ -87,7 +87,7 @@ MOUNT_DIR = Path(
 DEFAULT_LANDMASK_CACHE = (
     data_root() / "_cache" / "geotessera" / "global_0.1_degree_tiff_all"
 )
-DEFAULT_STATION_CSV = staging_dir("raw", "ghcnh", "station_list.csv")
+DEFAULT_STATION_CSV = ingest_dir("raw", "ghcnh", "station_list.csv")
 LANDMASK_V1_URL = "https://dl2.geotessera.org/v1/global_0.1_degree_tiff_all/{name}.tiff"
 TARGET_CRS = "EPSG:4326"
 PIXEL_RES_M = 10.0
